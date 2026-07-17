@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.21
+- Project website (GitHub Pages `docs/`): home + donate page
+- Donate button opens https://linuxbased79.github.io/FixItGarage/donate.html
+- `ACCOUNTS_SETUP.md` — Play Console, GitLab/F-Droid, Liberapay/Sponsors/Ko-fi
+
 ## 0.2.20
 - **Store-ready packaging**: `resources.arsc` stored uncompressed + page-aligned `.so` (fixes API 30+ install)
 - Production signing via `FIG_KEYSTORE` env; `create-upload-keystore.sh`

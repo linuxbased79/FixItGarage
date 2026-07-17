@@ -1430,7 +1430,8 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         open_url("https://github.com/linuxbased79/FixItGarage/issues");
     });
     ui.on_open_donate(|| {
-        open_url("https://github.com/linuxbased79/FixItGarage#donate");
+        // Project website donate page (Liberapay / Sponsors / Ko-fi / PayPal)
+        open_url("https://linuxbased79.github.io/FixItGarage/donate.html");
     });
 
     ui.run()

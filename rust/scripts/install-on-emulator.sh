@@ -10,8 +10,8 @@ export PATH="$ANDROID_HOME/platform-tools:$PATH"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # Emulator is x86_64; phones are usually arm64
-APK_X64="$ROOT/dist/FixItGarage-0.2.20-x86_64.apk"
-APK_ARM="$ROOT/dist/FixItGarage-0.2.20-arm64.apk"
+APK_X64="$ROOT/dist/FixItGarage-0.2.21-x86_64.apk"
+APK_ARM="$ROOT/dist/FixItGarage-0.2.21-arm64.apk"
 APK="${1:-}"
 
 if [[ -z "$APK" ]]; then

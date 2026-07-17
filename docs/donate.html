@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Donate — FixItGarage</title>
+  <meta name="description" content="Support FixItGarage development. Free and open source vehicle maintenance for Android." />
+  <link rel="icon" href="assets/icon.png" />
+  <link rel="stylesheet" href="css/site.css" />
+</head>
+<body>
+  <header>
+    <div class="wrap nav">
+      <a class="brand" href="./">
+        <img src="assets/icon.png" alt="" width="36" height="36" />
+        FixItGarage
+      </a>
+      <nav class="nav-links">
+        <a href="./">Home</a>
+        <a href="./#download">Download</a>
+        <a href="donate.html">Donate</a>
+        <a href="https://github.com/linuxbased79/FixItGarage">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero" style="padding-bottom:1.5rem">
+      <div class="wrap">
+        <h1>Support <span style="color:var(--green)">FixItGarage</span></h1>
+        <p class="lead">
+          The app is free forever (GPL-3). Donations fund maintenance, store fees, and new features.
+          Pick any option below — every bit helps.
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap donate-options">
+
+        <!-- Primary: Liberapay (FOSS-friendly, recurring OK) -->
+        <div class="donate-option" id="liberapay">
+          <div>
+            <h3>Liberapay <span class="tag">recommended · FOSS</span></h3>
+            <p>
+              Recurring or one-time tips with low fees. Great fit for open-source projects and Graphene users.
+              Create/claim the page once, then this button opens it directly.
+            </p>
+          </div>
+          <a class="btn btn-primary" id="btn-liberapay"
+             href="https://liberapay.com/linuxbased79"
+             rel="noopener">Donate on Liberapay</a>
+        </div>
+
+        <!-- GitHub Sponsors -->
+        <div class="donate-option" id="sponsors">
+          <div>
+            <h3>GitHub Sponsors</h3>
+            <p>
+              Monthly sponsorship via GitHub (needs Sponsors enabled on the
+              <span class="mono">linuxbased79</span> account + payout setup).
+            </p>
+          </div>
+          <a class="btn btn-secondary" id="btn-sponsors"
+             href="https://github.com/sponsors/linuxbased79"
+             rel="noopener">GitHub Sponsors</a>
+        </div>
+
+        <!-- Ko-fi: easy one-time -->
+        <div class="donate-option" id="kofi">
+          <div>
+            <h3>Ko-fi</h3>
+            <p>Simple one-time tips (coffee-sized or custom). Fast to set up.</p>
+          </div>
+          <a class="btn btn-secondary" id="btn-kofi"
+             href="https://ko-fi.com/linuxbased79"
+             rel="noopener">Tip on Ko-fi</a>
+        </div>
+
+        <!-- PayPal.me optional -->
+        <div class="donate-option" id="paypal">
+          <div>
+            <h3>PayPal</h3>
+            <p>One-time payments via PayPal.Me (optional; enable if you use PayPal).</p>
+          </div>
+          <a class="btn btn-secondary" id="btn-paypal"
+             href="https://paypal.me/linuxbased79"
+             rel="noopener">PayPal.Me</a>
+        </div>
+
+        <div class="note">
+          <strong style="color:var(--text)">App Donate button</strong> opens this page:
+          <span class="mono">https://linuxbased79.github.io/FixItGarage/donate.html</span>
+          so you can change providers later without shipping a new APK for every link update
+          (or bump the URL in a small release).
+        </div>
+
+        <div class="card">
+          <h3>Setup checklist (you · ~20 minutes)</h3>
+          <ol class="muted" style="margin:0.5rem 0 0; padding-left:1.2rem">
+            <li><a href="https://liberapay.com/sign-up">Create Liberapay</a> → claim username <span class="mono">linuxbased79</span> (or edit the link above).</li>
+            <li>Optional: <a href="https://github.com/sponsors">Enable GitHub Sponsors</a> on your profile.</li>
+            <li>Optional: <a href="https://ko-fi.com/">Ko-fi</a> and/or <a href="https://www.paypal.com/paypalme/">PayPal.Me</a>.</li>
+            <li>Test each button from a phone browser, then tap <strong>Donate</strong> in the app.</li>
+          </ol>
+          <p class="muted" style="margin-top:0.75rem">
+            Detailed steps: <a href="https://github.com/linuxbased79/FixItGarage/blob/main/ACCOUNTS_SETUP.md">ACCOUNTS_SETUP.md</a>
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap row">
+      <div>Thank you for supporting free software.</div>
+      <div><a href="./">← Back to FixItGarage</a></div>
+    </div>
+  </footer>
+</body>
+</html>

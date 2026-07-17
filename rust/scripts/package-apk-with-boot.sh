@@ -14,8 +14,8 @@ set -euo pipefail
 
 IN_APK="${1:?input apk}"
 OUT_APK="${2:?output apk}"
-VERSION_NAME="${3:-0.2.20}"
-VERSION_CODE="${4:-2020}"
+VERSION_NAME="${3:-0.2.21}"
+VERSION_CODE="${4:-2021}"
 
 export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}"
 if [[ ! -d "$ANDROID_HOME/platform-tools" && -d /root/Android/Sdk/platform-tools ]]; then

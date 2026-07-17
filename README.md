@@ -10,7 +10,7 @@ Planned distribution: **F-Droid** and **Google Play**. Designed for **GrapheneOS
 
 ## Status
 
-**0.2.20** — primary product is the **Rust + Slint** APK (`org.fixitgarage.app`).
+**0.2.21** — primary product is the **Rust + Slint** APK (`org.fixitgarage.app`).
 
 | Area | Status |
 |------|--------|
@@ -24,7 +24,7 @@ Planned distribution: **F-Droid** and **Google Play**. Designed for **GrapheneOS
 | Monthly / yearly costs (services + tires) | Done |
 | Dark mode | Done |
 | CSV + JSON backup; Proton / Drive / Dropbox / OneDrive / WebDAV | Done |
-| Donate + Send Feedback → GitHub Issues | Done |
+| Donate → [website donate page](https://linuxbased79.github.io/FixItGarage/donate.html); Feedback → Issues | Done |
 | Smart date/mileage reminders + **boot re-register** | Done |
 | Units (imperial / metric) | Done |
 | Languages (system + EN/ES/FR/DE/JA/KO/ZH) | Done |
@@ -50,7 +50,8 @@ Planned distribution: **F-Droid** and **Google Play**. Designed for **GrapheneOS
 - Export CSV  
 - Optional cloud backup providers listed above  
 - Full dark mode  
-- Donate button; Send Feedback opens [GitHub Issues](https://github.com/linuxbased79/FixItGarage/issues)
+- Donate button opens the [project donate page](https://linuxbased79.github.io/FixItGarage/donate.html); Send Feedback opens [GitHub Issues](https://github.com/linuxbased79/FixItGarage/issues)  
+- Project website: [linuxbased79.github.io/FixItGarage](https://linuxbased79.github.io/FixItGarage/)
 
 ## GrapheneOS & F-Droid notes
 
@@ -59,7 +60,8 @@ Planned distribution: **F-Droid** and **Google Play**. Designed for **GrapheneOS
 - Receipt OCR: **on-device** (ocrs, no GMS) with external OCR app fallback.  
 - Tread: **coin-gauge CV** estimate; always confirm before save.  
 - No proprietary trackers.  
-- See [`rust/F-Droid.md`](rust/F-DROID.md) and [`PLAY.md`](PLAY.md).
+- Store submit: [`STORE.md`](STORE.md), [`PLAY.md`](PLAY.md), [`F-DROID.md`](F-DROID.md).  
+- Accounts (Play, GitLab, donations, website): [`ACCOUNTS_SETUP.md`](ACCOUNTS_SETUP.md).
 
 ## Build
 

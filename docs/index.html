@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FixItGarage — local-first vehicle maintenance</title>
+  <meta name="description" content="FixItGarage is a free, open-source, local-first Android garage log. Track services, MPG, tires, reminders, OCR receipts. GrapheneOS-friendly. GPL-3." />
+  <meta property="og:title" content="FixItGarage" />
+  <meta property="og:description" content="Local-first vehicle maintenance tracker for Android. No account required." />
+  <meta property="og:image" content="assets/feature.png" />
+  <link rel="icon" href="assets/icon.png" />
+  <link rel="stylesheet" href="css/site.css" />
+</head>
+<body>
+  <header>
+    <div class="wrap nav">
+      <a class="brand" href="./">
+        <img src="assets/icon.png" alt="" width="36" height="36" />
+        FixItGarage
+      </a>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="#features">Features</a>
+        <a href="#download">Download</a>
+        <a href="#privacy">Privacy</a>
+        <a href="donate.html">Donate</a>
+        <a href="https://github.com/linuxbased79/FixItGarage">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap hero-grid">
+        <div>
+          <h1>Your garage log.<br /><span>On your phone.</span></h1>
+          <p class="lead">
+            Free, open-source vehicle maintenance tracker for Android.
+            Local-first, GrapheneOS-friendly, no account required.
+          </p>
+          <div class="actions">
+            <a class="btn btn-primary" href="#download">Download</a>
+            <a class="btn btn-secondary" href="donate.html">Support development</a>
+            <a class="btn btn-secondary" href="https://github.com/linuxbased79/FixItGarage/issues">Send feedback</a>
+          </div>
+        </div>
+        <div>
+          <img class="phone" src="assets/1-wizard.png" alt="FixItGarage setup wizard screenshot" />
+        </div>
+      </div>
+    </section>
+
+    <section id="features">
+      <div class="wrap">
+        <h2>What it does</h2>
+        <p class="muted">Built for DIY and shop users who want history, reminders, and costs without a cloud account.</p>
+        <div class="grid" style="margin-top:1.25rem">
+          <div class="card"><h3>Unlimited vehicles</h3><p>Wizard for DIY, shop, or both. Per-car history and dashboards.</p></div>
+          <div class="card"><h3>Services &amp; MPG</h3><p>Templates, notes, fuel economy (MPG or L/100km), shop + DIY.</p></div>
+          <div class="card"><h3>Tires &amp; tread</h3><p>Rotation diagrams, spare option, coin-gauge CV assist, purchases.</p></div>
+          <div class="card"><h3>On-device OCR</h3><p>Receipt scan without Google Play Services. External OCR fallback.</p></div>
+          <div class="card"><h3>Smart reminders</h3><p>Date &amp; mileage; boot-resilient local alarms. No push vendor.</p></div>
+          <div class="card"><h3>Backup your way</h3><p>CSV/JSON, share to Drive/Proton/Dropbox/OneDrive, or WebDAV.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screens">
+      <div class="wrap">
+        <h2>Screens</h2>
+        <div class="shots" style="margin-top:1rem">
+          <img src="assets/1-wizard.png" alt="Setup wizard" />
+          <img src="assets/3-service.png" alt="Service log" />
+          <img src="assets/4-maintenance.png" alt="Maintenance" />
+          <img src="assets/6-settings.png" alt="Settings" />
+        </div>
+      </div>
+    </section>
+
+    <section id="download">
+      <div class="wrap">
+        <h2>Download</h2>
+        <p class="muted">Latest release on GitHub. Prefer arm64 for phones (including GrapheneOS).</p>
+        <div class="actions" style="margin:1rem 0 1.25rem">
+          <a class="btn btn-primary" href="https://github.com/linuxbased79/FixItGarage/releases/latest">Latest release</a>
+          <a class="btn btn-secondary" href="https://github.com/linuxbased79/FixItGarage/releases/latest/download/FixItGarage-0.2.20-arm64.apk">APK (arm64)</a>
+          <a class="btn btn-secondary" href="https://f-droid.org/">F-Droid <span class="tag warn">pending</span></a>
+          <a class="btn btn-secondary" href="https://play.google.com/store">Google Play <span class="tag warn">pending</span></a>
+        </div>
+        <p class="note">
+          Sideload APKs are debug-signed for testing. Play builds use your upload keystore.
+          Source and build instructions: <a href="https://github.com/linuxbased79/FixItGarage">GitHub</a>.
+        </p>
+      </div>
+    </section>
+
+    <section id="privacy">
+      <div class="wrap">
+        <h2>Privacy</h2>
+        <p class="muted">
+          Local-first. No required accounts. No ads or tracking SDKs.
+          Optional cloud is only when you share or upload.
+        </p>
+        <p style="margin-top:0.75rem">
+          <a class="btn btn-secondary" href="https://raw.githubusercontent.com/linuxbased79/FixItGarage/main/PRIVACY.md">Privacy policy</a>
+          <a class="btn btn-secondary" href="https://github.com/linuxbased79/FixItGarage/blob/main/PRIVACY.md">On GitHub</a>
+        </p>
+      </div>
+    </section>
+
+    <section id="support">
+      <div class="wrap">
+        <h2>Support the project</h2>
+        <p class="muted">FixItGarage is free software (GPL-3). Donations keep development going.</p>
+        <div class="actions" style="margin-top:1rem">
+          <a class="btn btn-cyan" href="donate.html">Donate options</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap row">
+      <div>
+        <strong style="color:var(--text)">FixItGarage</strong><br />
+        GPL-3.0 · org.fixitgarage.app
+      </div>
+      <div>
+        <a href="https://github.com/linuxbased79/FixItGarage">Source</a> ·
+        <a href="https://github.com/linuxbased79/FixItGarage/issues">Issues</a> ·
+        <a href="donate.html">Donate</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

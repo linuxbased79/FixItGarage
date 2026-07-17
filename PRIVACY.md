@@ -23,7 +23,8 @@ Network use is **optional and user-initiated**:
 
 | Action | What leaves the device |
 |--------|-------------------------|
-| Send Feedback / Donate | Opens GitHub (or store) in a browser |
+| Send Feedback | Opens GitHub Issues in a browser |
+| Donate | Opens the project donate page (linuxbased79.github.io/FixItGarage/donate.html) |
 | Share backup / CSV | System share sheet — destination app you choose (Proton Drive, Drive, Dropbox, OneDrive, etc.) |
 | WebDAV / Nextcloud / ownCloud upload | Only when you configure a URL and tap upload |
 | On-device OCR model fallback download | Only if models are missing from the install and you run OCR (models are normally bundled offline) |
