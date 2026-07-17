@@ -57,6 +57,8 @@ Planned distribution: **F-Droid** and **Google Play**. Designed to run well on *
 
 ## Build
 
+### Android (Kotlin / Compose)
+
 Requirements: Android Studio Ladybug+ or JDK 17, Android SDK 35.
 
 ```bash
@@ -64,6 +66,20 @@ Requirements: Android Studio Ladybug+ or JDK 17, Android SDK 35.
 ```
 
 Install the debug APK from `app/build/outputs/apk/debug/`.
+
+### Rust (core logic + CLI)
+
+Domain logic also lives in pure Rust under [`rust/`](rust/) — builds with only `rustup` (no Android SDK).
+
+```bash
+cd rust
+cargo test
+cargo build --release
+./target/release/fixitgarage mpg 10000:10 10300:10 10580:10
+./target/release/fixitgarage rotate forward_cross
+```
+
+See [rust/README.md](rust/README.md).
 
 ## License
 

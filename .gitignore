@@ -45,3 +45,7 @@ Github Token.txt
 
 # Logs
 *.log
+
+# Rust
+rust/target/
+**/*.rs.bk

@@ -1,0 +1,17 @@
+[package]
+name = "fixitgarage-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "CLI tools for FixItGarage domain logic"
+
+[[bin]]
+name = "fixitgarage"
+path = "src/main.rs"
+
+[dependencies]
+fixitgarage-core = { workspace = true }
+clap = { workspace = true }
+chrono = { workspace = true }
