@@ -184,7 +184,7 @@ pub fn share_text(subject: &str, text: &str) {
     #[cfg(not(target_os = "android"))]
     {
         let path = write_share_fallback(subject, text);
-        eprintln!("Share saved to: {path}");
+        eprintln!("Share saved to: {}", path.display());
         let _ = std::process::Command::new("xdg-open")
             .arg(path.parent().unwrap_or(std::path::Path::new(".")))
             .spawn();

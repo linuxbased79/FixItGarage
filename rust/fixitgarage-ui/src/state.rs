@@ -685,7 +685,7 @@ impl AppState {
     pub fn tread_warning(&self) -> String {
         let t = self.tread_for_selected();
         let mut low = Vec::new();
-        let check = |label: &str, v: Option<f64>| {
+        let mut check = |label: &str, v: Option<f64>| {
             if let Some(mm) = v {
                 if mm < Self::TREAD_MIN_MM {
                     low.push(format!("{label} {mm:.1} mm"));
