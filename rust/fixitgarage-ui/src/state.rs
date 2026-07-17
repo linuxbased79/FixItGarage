@@ -165,7 +165,9 @@ pub struct PartEntry {
     pub installed_mileage: Option<u32>,
 }
 
-/// BATTERY | WIPER_FRONT | WIPER_REAR | BRAKE_PADS_FRONT | BRAKE_PADS_REAR | BRAKE_FLUID
+/// BATTERY | WIPER_DRIVER (left) | WIPER_PASSENGER (right) | WIPER_REAR
+/// | BRAKE_PADS_FRONT | BRAKE_PADS_REAR | BRAKE_FLUID
+/// Legacy: WIPER_FRONT may exist in old saves (shown under driver if present).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComponentEntry {
     pub id: u64,
@@ -836,11 +838,21 @@ impl AppState {
         let Some(vid) = self.selected_vehicle_id else {
             return "Select a vehicle first.".into();
         };
-        match self
+        // Prefer exact type; fall back to legacy WIPER_FRONT for driver side.
+        let entry = self
             .components
             .iter()
             .find(|c| c.vehicle_id == vid && c.component_type == component_type)
-        {
+            .or_else(|| {
+                if component_type == "WIPER_DRIVER" {
+                    self.components.iter().find(|c| {
+                        c.vehicle_id == vid && c.component_type == "WIPER_FRONT"
+                    })
+                } else {
+                    None
+                }
+            });
+        match entry {
             Some(c) => {
                 let date = c
                     .installed_epoch_ms
@@ -850,9 +862,14 @@ impl AppState {
                     .installed_mileage
                     .map(|m| format!("{m} mi"))
                     .unwrap_or_else(|| "—".into());
-                format!("Installed: {date} · {mi}\n{}", c.notes)
+                let size = if c.notes.trim().is_empty() {
+                    "size not set".into()
+                } else {
+                    c.notes.trim().to_string()
+                };
+                format!("Installed: {date} · {mi}\nSize / notes: {size}")
             }
-            None => "No entry yet.".into(),
+            None => "No entry yet — set size (inches) if different from other sides.".into(),
         }
     }
 

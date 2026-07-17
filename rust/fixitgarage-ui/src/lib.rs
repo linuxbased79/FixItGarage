@@ -472,8 +472,10 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     ui.set_part_oil_filter(state.part_summary("OIL_FILTER").into());
     ui.set_part_oil_type(state.part_summary("OIL_TYPE").into());
     ui.set_sum_battery(state.component_summary("BATTERY").into());
-    ui.set_sum_wiper_f(state.component_summary("WIPER_FRONT").into());
-    ui.set_sum_wiper_r(state.component_summary("WIPER_REAR").into());
+    // LHD convention: driver = left, passenger = right (most US / GrapheneOS devices)
+    ui.set_sum_wiper_driver(state.component_summary("WIPER_DRIVER").into());
+    ui.set_sum_wiper_passenger(state.component_summary("WIPER_PASSENGER").into());
+    ui.set_sum_wiper_rear(state.component_summary("WIPER_REAR").into());
     ui.set_sum_brake_f(state.component_summary("BRAKE_PADS_FRONT").into());
     ui.set_sum_brake_r(state.component_summary("BRAKE_PADS_REAR").into());
     ui.set_sum_brake_fluid(state.component_summary("BRAKE_FLUID").into());

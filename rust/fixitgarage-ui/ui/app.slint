@@ -213,8 +213,10 @@ export component MainWindow inherits Window {
     in-out property <string> comp-mileage: "";
     in-out property <string> comp-notes: "";
     in-out property <string> sum-battery: "No entry yet.";
-    in-out property <string> sum-wiper-f: "No entry yet.";
-    in-out property <string> sum-wiper-r: "No entry yet.";
+    // Wipers: many cars use different blade sizes per corner
+    in-out property <string> sum-wiper-driver: "No entry yet.";
+    in-out property <string> sum-wiper-passenger: "No entry yet.";
+    in-out property <string> sum-wiper-rear: "No entry yet.";
     in-out property <string> sum-brake-f: "No entry yet.";
     in-out property <string> sum-brake-r: "No entry yet.";
     in-out property <string> sum-brake-fluid: "No entry yet.";
@@ -585,25 +587,51 @@ export component MainWindow inherits Window {
                 }
             }
 
-            // WIPERS
+            // WIPERS — driver (left) / passenger (right) / rear often different sizes
             if page == 8: ScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 10px;
                     PageTitle { label: "Wiper blades"; }
                     VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
-                    Card { title: "Front"; body: sum-wiper-f; }
-                    Card { title: "Rear"; body: sum-wiper-r; }
+                    Text {
+                        text: "Many vehicles need different blade sizes. Labels use left/right as when sitting in the car (driver = left, passenger = right).";
+                        font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
+                    }
                     Card {
-                        title: "Update"; body: "Date as YYYY-MM-DD";
-                        HorizontalBox {
-                            ChoiceBtn { label: "Front"; active: root.comp-type == "WIPER_FRONT"; clicked => { root.comp-type = "WIPER_FRONT"; } }
-                            ChoiceBtn { label: "Rear"; active: root.comp-type == "WIPER_REAR"; clicked => { root.comp-type = "WIPER_REAR"; } }
+                        title: "Driver side (left)";
+                        body: sum-wiper-driver;
+                    }
+                    Card {
+                        title: "Passenger side (right)";
+                        body: sum-wiper-passenger;
+                    }
+                    Card {
+                        title: "Rear";
+                        body: sum-wiper-rear;
+                    }
+                    Card {
+                        title: "Update blade";
+                        body: "Pick which side, then enter size (e.g. 26 in) and install date.";
+                        ChoiceBtn {
+                            label: "Driver (left)";
+                            active: root.comp-type == "WIPER_DRIVER";
+                            clicked => { root.comp-type = "WIPER_DRIVER"; }
                         }
+                        ChoiceBtn {
+                            label: "Passenger (right)";
+                            active: root.comp-type == "WIPER_PASSENGER";
+                            clicked => { root.comp-type = "WIPER_PASSENGER"; }
+                        }
+                        ChoiceBtn {
+                            label: "Rear";
+                            active: root.comp-type == "WIPER_REAR";
+                            clicked => { root.comp-type = "WIPER_REAR"; }
+                        }
+                        LineEdit { placeholder-text: "Blade size (e.g. 26 in / 650 mm)"; text <=> root.comp-notes; }
                         LineEdit { placeholder-text: "Install date YYYY-MM-DD"; text <=> root.comp-date; }
-                        LineEdit { placeholder-text: "Mileage"; text <=> root.comp-mileage; }
-                        LineEdit { placeholder-text: "Notes / size"; text <=> root.comp-notes; }
-                        Button { text: "Save wipers"; primary: true; clicked => { root.save-component(); } }
+                        LineEdit { placeholder-text: "Mileage at install"; text <=> root.comp-mileage; }
+                        Button { text: "Save this blade"; primary: true; clicked => { root.save-component(); } }
                     }
                     Button { text: "Back"; clicked => { root.navigate(5); } }
                 }
