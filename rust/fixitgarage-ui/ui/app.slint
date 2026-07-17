@@ -1,5 +1,5 @@
 // FixItGarage — touch-friendly mobile UI (Slint)
-// GPL-3.0. Light + dark themes (toggle in Settings / More).
+// GPL-3.0. Multi-vehicle, trackers, reminders, notes, mode filtering.
 
 import { Button, LineEdit, ScrollView, VerticalBox, HorizontalBox } from "std-widgets.slint";
 
@@ -22,10 +22,20 @@ export struct CostLine {
     value: string,
 }
 
-// Shared palette — flipped by MainWindow when dark-mode changes
+export struct NoteRow {
+    id: int,
+    title: string,
+    body: string,
+}
+
+export struct ReminderRow {
+    id: int,
+    title: string,
+    detail: string,
+}
+
 export global Theme {
     in-out property <bool> dark: false;
-
     out property <color> bg: dark ? #0D1117 : #FAFAFA;
     out property <color> surface: dark ? #161B22 : #F5F5F5;
     out property <color> surface-border: dark ? #30363D : #E0E0E0;
@@ -47,66 +57,42 @@ export global Theme {
 
 component TireCorner inherits Rectangle {
     in property <string> label;
-    width: 56px;
-    height: 48px;
-    border-radius: 8px;
-    border-width: 2px;
-    border-color: Theme.tire-border;
-    background: Theme.tire-bg;
+    width: 56px; height: 48px; border-radius: 8px; border-width: 2px;
+    border-color: Theme.tire-border; background: Theme.tire-bg;
     Text {
-        text: root.label;
-        color: Theme.accent-on;
-        font-size: 16px;
-        font-weight: 700;
-        horizontal-alignment: center;
-        vertical-alignment: center;
-        width: 100%;
-        height: 100%;
+        text: root.label; color: Theme.accent-on; font-size: 16px; font-weight: 700;
+        horizontal-alignment: center; vertical-alignment: center; width: 100%; height: 100%;
     }
 }
 
 component NavBtn inherits TouchArea {
     in property <string> label;
     in property <bool> active;
-    height: 52px;
-    min-width: 56px;
+    height: 52px; min-width: 48px;
     Rectangle {
-        background: root.active ? Theme.accent-soft : transparent;
-        border-radius: 8px;
+        background: root.active ? Theme.accent-soft : transparent; border-radius: 8px;
         Text {
             text: root.label;
             color: root.active ? Theme.accent-on : Theme.text-muted;
-            font-size: 12px;
-            font-weight: root.active ? 700 : 500;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-            width: 100%;
-            height: 100%;
+            font-size: 11px; font-weight: root.active ? 700 : 500;
+            horizontal-alignment: center; vertical-alignment: center; width: 100%; height: 100%;
         }
     }
 }
 
-// High-contrast choice chip (std-widgets Button is unreadable when not primary)
 component ChoiceBtn inherits TouchArea {
     in property <string> label;
     in property <bool> active;
-    min-height: 44px;
-    min-width: 88px;
-    horizontal-stretch: 1;
+    min-height: 44px; min-width: 72px; horizontal-stretch: 1;
     Rectangle {
-        border-radius: 10px;
-        border-width: 2px;
+        border-radius: 10px; border-width: 2px;
         border-color: root.active ? Theme.accent : Theme.surface-border;
         background: root.active ? Theme.accent : Theme.surface;
         Text {
             text: root.label;
             color: root.active ? #FFFFFF : Theme.text;
-            font-size: 15px;
-            font-weight: 700;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-            width: 100%;
-            height: 100%;
+            font-size: 14px; font-weight: 700;
+            horizontal-alignment: center; vertical-alignment: center; width: 100%; height: 100%;
         }
     }
 }
@@ -114,47 +100,54 @@ component ChoiceBtn inherits TouchArea {
 component Card inherits Rectangle {
     in-out property <string> title;
     in-out property <string> body;
-    background: Theme.surface;
-    border-radius: 12px;
-    border-width: 1px;
-    border-color: Theme.surface-border;
+    background: Theme.surface; border-radius: 12px; border-width: 1px; border-color: Theme.surface-border;
     VerticalBox {
-        padding: 14px;
-        spacing: 6px;
-        Text {
-            text: root.title;
-            font-size: 16px;
-            font-weight: 700;
-            color: Theme.text;
-            wrap: word-wrap;
-        }
-        if root.body != "": Text {
-            text: root.body;
-            font-size: 13px;
-            color: Theme.text-soft;
-            wrap: word-wrap;
-        }
+        padding: 14px; spacing: 6px;
+        Text { text: root.title; font-size: 16px; font-weight: 700; color: Theme.text; wrap: word-wrap; }
+        if root.body != "": Text { text: root.body; font-size: 13px; color: Theme.text-soft; wrap: word-wrap; }
         @children
     }
 }
 
+component PageTitle inherits Text {
+    in property <string> label;
+    text: root.label; font-size: 24px; font-weight: 800; color: Theme.title;
+}
+
+component VehicleBar inherits HorizontalBox {
+    in property <string> label;
+    callback open-vehicles();
+    spacing: 8px;
+    Text {
+        text: "Vehicle: " + root.label;
+        font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
+        vertical-alignment: center; horizontal-stretch: 1;
+    }
+    Button { text: "Switch"; clicked => { root.open-vehicles(); } }
+}
+
 export component MainWindow inherits Window {
     title: "FixItGarage";
-    preferred-width: 390px;
-    preferred-height: 780px;
-    min-width: 320px;
-    min-height: 560px;
+    preferred-width: 390px; preferred-height: 780px; min-width: 320px; min-height: 560px;
     background: Theme.bg;
 
-    // --- App state (bound from Rust) ---
     in-out property <bool> wizard-done: false;
     in-out property <string> user-mode: "BOTH";
-    in-out property <int> page: 0; // 0 home 1 vehicles 2 service 3 tires 4 costs 5 settings
+    // 0 home 1 vehicles 2 service 3 tires 4 costs 5 settings
+    // 6 parts 7 battery 8 wipers 9 brakes 10 notes 11 reminders
+    in-out property <int> page: 0;
+
+    in-out property <bool> show-tires: true;
+    in-out property <bool> show-parts: true;
+    in-out property <bool> show-diy-trackers: true;
+    in-out property <bool> show-shop-emphasis: true;
 
     in-out property <string> last-service-title: "No services logged yet";
-    in-out property <string> last-service-detail: "Scan a receipt or add a service.";
+    in-out property <string> last-service-detail: "Add a service for the selected vehicle.";
     in-out property <string> mode-label: "Full garage toolkit";
     in-out property <string> vehicle-count-label: "0 vehicles";
+    in-out property <string> selected-vehicle-label: "No vehicle selected";
+    in-out property <int> selected-vehicle-id: 0;
 
     in-out property <[VehicleRow]> vehicles: [];
     in-out property <[ServiceRow]> services: [];
@@ -163,6 +156,8 @@ export component MainWindow inherits Window {
         { label: "This year", value: "$0.00" },
         { label: "All time", value: "$0.00" },
     ];
+    in-out property <[NoteRow]> notes: [];
+    in-out property <[ReminderRow]> reminders: [];
 
     in-out property <string> form-name: "";
     in-out property <string> form-make: "";
@@ -182,15 +177,43 @@ export component MainWindow inherits Window {
     in-out property <string> tire-rl: "C";
     in-out property <string> tire-rr: "D";
     in-out property <string> tire-pattern: "forward_cross";
-    in-out property <string> tire-preview: "Preview: C D / B A";
+    in-out property <string> tire-preview: "Preview";
+
+    in-out property <string> part-type: "ENGINE_AIR_FILTER";
+    in-out property <string> part-brand: "";
+    in-out property <string> part-number: "";
+    in-out property <string> part-oil: "";
+    in-out property <string> part-notes: "";
+    in-out property <string> part-mileage: "";
+    in-out property <string> part-air: "No entry yet.";
+    in-out property <string> part-cabin: "No entry yet.";
+    in-out property <string> part-oil-filter: "No entry yet.";
+    in-out property <string> part-oil-type: "No entry yet.";
+
+    in-out property <string> comp-type: "BATTERY";
+    in-out property <string> comp-date: "";
+    in-out property <string> comp-mileage: "";
+    in-out property <string> comp-notes: "";
+    in-out property <string> sum-battery: "No entry yet.";
+    in-out property <string> sum-wiper-f: "No entry yet.";
+    in-out property <string> sum-wiper-r: "No entry yet.";
+    in-out property <string> sum-brake-f: "No entry yet.";
+    in-out property <string> sum-brake-r: "No entry yet.";
+    in-out property <string> sum-brake-fluid: "No entry yet.";
+
+    in-out property <string> note-title: "";
+    in-out property <string> note-body: "";
+    in-out property <string> rem-title: "";
+    in-out property <string> rem-date: "";
+    in-out property <string> rem-mileage: "";
 
     in-out property <string> status-message: "";
     in-out property <string> csv-preview: "";
-    // LIGHT or DARK (persisted)
     in-out property <string> dark-mode: "LIGHT";
 
     callback finish-wizard(string);
     callback navigate(int);
+    callback select-vehicle(int);
     callback add-vehicle();
     callback add-service();
     callback apply-rotation();
@@ -198,578 +221,391 @@ export component MainWindow inherits Window {
     callback set-source(string);
     callback set-user-mode(string);
     callback set-dark-mode(string);
+    callback save-part();
+    callback save-component();
+    callback add-note();
+    callback add-reminder();
+    callback complete-reminder(int);
     callback export-csv();
     callback open-feedback();
     callback open-donate();
 
-    // Keep Theme.dark in sync with property
-    changed dark-mode => {
-        Theme.dark = (root.dark-mode == "DARK");
-    }
+    changed dark-mode => { Theme.dark = (root.dark-mode == "DARK"); }
 
     // ===== Wizard =====
     if !wizard-done: Rectangle {
-        width: 100%;
-        height: 100%;
-        background: Theme.bg;
+        width: 100%; height: 100%; background: Theme.bg;
         VerticalBox {
-            padding: 24px;
-            spacing: 16px;
-            alignment: start;
-
+            padding: 24px; spacing: 14px; alignment: start;
+            Text { text: "Welcome to FixItGarage"; font-size: 26px; font-weight: 800; color: Theme.title; wrap: word-wrap; }
             Text {
-                text: "Welcome to FixItGarage";
-                font-size: 26px;
-                font-weight: 800;
-                color: Theme.title;
-                wrap: word-wrap;
+                text: "How do you mostly maintain your vehicles? We'll show the tools that fit you.";
+                font-size: 15px; color: Theme.text-muted; wrap: word-wrap;
             }
-            Text {
-                text: "How do you mostly maintain your vehicles? We'll highlight the right tools. Change this anytime in Settings.";
-                font-size: 15px;
-                color: Theme.text-muted;
-                wrap: word-wrap;
-            }
-
-            Button {
-                text: "Mostly DIY";
-                primary: true;
-                clicked => { root.finish-wizard("DIY"); }
-            }
-            Text {
-                text: "Oil changes, filters, tread checks first.";
-                font-size: 12px;
-                color: Theme.text-muted;
-                wrap: word-wrap;
-            }
-
-            Button {
-                text: "Mostly shop";
-                primary: true;
-                clicked => { root.finish-wizard("SHOP"); }
-            }
-            Text {
-                text: "Receipts, shop history, labor/parts costs.";
-                font-size: 12px;
-                color: Theme.text-muted;
-                wrap: word-wrap;
-            }
-
-            ChoiceBtn {
-                label: "Both DIY and shop";
-                active: false;
-                clicked => { root.finish-wizard("BOTH"); }
-            }
-            Text {
-                text: "Full feature set — unlimited vehicles.";
-                font-size: 12px;
-                color: Theme.text-muted;
-                wrap: word-wrap;
-            }
-
-            // Theme on first run — ChoiceBtn keeps label readable always
+            Button { text: "Mostly DIY"; primary: true; clicked => { root.finish-wizard("DIY"); } }
+            Text { text: "Parts, oil, tires, DIY logging first."; font-size: 12px; color: Theme.text-muted; wrap: word-wrap; }
+            Button { text: "Mostly shop"; primary: true; clicked => { root.finish-wizard("SHOP"); } }
+            Text { text: "Shop history, costs, service focus."; font-size: 12px; color: Theme.text-muted; wrap: word-wrap; }
+            ChoiceBtn { label: "Both DIY and shop"; active: false; clicked => { root.finish-wizard("BOTH"); } }
             HorizontalBox {
                 spacing: 8px;
-                ChoiceBtn {
-                    label: "Light";
-                    active: root.dark-mode == "LIGHT";
-                    clicked => { root.set-dark-mode("LIGHT"); }
-                }
-                ChoiceBtn {
-                    label: "Dark";
-                    active: root.dark-mode == "DARK";
-                    clicked => { root.set-dark-mode("DARK"); }
-                }
+                ChoiceBtn { label: "Light"; active: root.dark-mode == "LIGHT"; clicked => { root.set-dark-mode("LIGHT"); } }
+                ChoiceBtn { label: "Dark"; active: root.dark-mode == "DARK"; clicked => { root.set-dark-mode("DARK"); } }
             }
         }
     }
 
-    // ===== Main shell =====
     if wizard-done: VerticalLayout {
         spacing: 0;
         Rectangle {
-            vertical-stretch: 1;
-            background: Theme.bg;
+            vertical-stretch: 1; background: Theme.bg;
 
             // HOME
             if page == 0: ScrollView {
-                width: 100%;
-                height: 100%;
+                width: 100%; height: 100%;
                 VerticalBox {
-                    padding: 16px;
-                    spacing: 12px;
-
-                    Text {
-                        text: "FixItGarage";
-                        font-size: 28px;
-                        font-weight: 800;
-                        color: Theme.title;
-                    }
-                    Text {
-                        text: mode-label;
-                        font-size: 14px;
-                        color: Theme.text-muted;
-                    }
-
+                    padding: 16px; spacing: 12px;
+                    Text { text: "FixItGarage"; font-size: 28px; font-weight: 800; color: Theme.title; }
+                    Text { text: mode-label; font-size: 14px; color: Theme.text-muted; }
+                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Card {
-                        title: "Last service";
-                        body: "";
-                        Text {
-                            text: last-service-title;
-                            font-size: 15px;
-                            font-weight: 600;
-                            color: Theme.text;
-                            wrap: word-wrap;
-                        }
-                        Text {
-                            text: last-service-detail;
-                            font-size: 13px;
-                            color: Theme.text-soft;
-                            wrap: word-wrap;
-                        }
+                        title: "Last service"; body: "";
+                        Text { text: last-service-title; font-size: 15px; font-weight: 600; color: Theme.text; wrap: word-wrap; }
+                        Text { text: last-service-detail; font-size: 13px; color: Theme.text-soft; wrap: word-wrap; }
                     }
-
                     Card {
-                        title: "Vehicles";
-                        body: vehicle-count-label;
-                        Button {
-                            text: "Manage vehicles";
-                            clicked => { root.navigate(1); }
-                        }
+                        title: "Vehicles"; body: vehicle-count-label;
+                        Button { text: "Manage vehicles"; clicked => { root.navigate(1); } }
                     }
-
                     Card {
-                        title: "Quick actions";
-                        body: "";
-                        Button {
-                            text: "Log service";
-                            primary: true;
-                            clicked => { root.navigate(2); }
-                        }
-                        Button {
-                            text: "Tire rotation diagram";
-                            clicked => { root.navigate(3); }
-                        }
+                        title: "Quick actions"; body: "";
+                        Button { text: "Log service"; primary: true; clicked => { root.navigate(2); } }
+                        if show-tires: Button { text: "Tire rotation"; clicked => { root.navigate(3); } }
+                        if show-parts: Button { text: "Parts log"; clicked => { root.navigate(6); } }
+                        Button { text: "Reminders"; clicked => { root.navigate(11); } }
+                        Button { text: "Notes"; clicked => { root.navigate(10); } }
                     }
-
-                    if status-message != "": Text {
-                        text: status-message;
-                        color: Theme.ok;
-                        font-size: 12px;
-                        wrap: word-wrap;
-                    }
+                    if status-message != "": Text { text: status-message; color: Theme.ok; font-size: 12px; wrap: word-wrap; }
                 }
             }
 
             // VEHICLES
             if page == 1: ScrollView {
-                width: 100%;
-                height: 100%;
+                width: 100%; height: 100%;
                 VerticalBox {
-                    padding: 16px;
-                    spacing: 10px;
-                    Text {
-                        text: "Vehicles";
-                        font-size: 24px;
-                        font-weight: 800;
-                        color: Theme.title;
-                    }
-                    Text {
-                        text: "Unlimited vehicles. Data stays on this device.";
-                        font-size: 13px;
-                        color: Theme.text-muted;
-                        wrap: word-wrap;
-                    }
-
+                    padding: 16px; spacing: 10px;
+                    PageTitle { label: "Vehicles"; }
+                    Text { text: "Tap a vehicle to select it for services, costs, and trackers."; font-size: 13px; color: Theme.text-muted; wrap: word-wrap; }
                     Card {
-                        title: "Add vehicle";
-                        body: "";
-                        LineEdit {
-                            placeholder-text: "Name / nickname";
-                            text <=> root.form-name;
-                        }
-                        LineEdit {
-                            placeholder-text: "Make";
-                            text <=> root.form-make;
-                        }
-                        LineEdit {
-                            placeholder-text: "Model";
-                            text <=> root.form-model;
-                        }
+                        title: "Add vehicle"; body: "";
+                        LineEdit { placeholder-text: "Name / nickname"; text <=> root.form-name; }
+                        LineEdit { placeholder-text: "Make"; text <=> root.form-make; }
+                        LineEdit { placeholder-text: "Model"; text <=> root.form-model; }
                         HorizontalBox {
-                            LineEdit {
-                                placeholder-text: "Year";
-                                text <=> root.form-year;
-                                horizontal-stretch: 1;
-                            }
-                            LineEdit {
-                                placeholder-text: "Mileage";
-                                text <=> root.form-mileage;
-                                horizontal-stretch: 1;
-                            }
+                            LineEdit { placeholder-text: "Year"; text <=> root.form-year; horizontal-stretch: 1; }
+                            LineEdit { placeholder-text: "Mileage"; text <=> root.form-mileage; horizontal-stretch: 1; }
                         }
-                        Button {
-                            text: "Save vehicle";
-                            primary: true;
-                            clicked => { root.add-vehicle(); }
-                        }
+                        Button { text: "Save vehicle"; primary: true; clicked => { root.add-vehicle(); } }
                     }
-
-                    for v in vehicles: Card {
-                        title: v.name;
-                        body: v.subtitle + " · " + v.mileage;
+                    for v in vehicles: TouchArea {
+                        clicked => { root.select-vehicle(v.id); }
+                        Card {
+                            title: v.name;
+                            body: v.subtitle + " · " + v.mileage + (v.id == root.selected-vehicle-id ? " · SELECTED" : "");
+                        }
                     }
                 }
             }
 
             // SERVICE
             if page == 2: ScrollView {
-                width: 100%;
-                height: 100%;
+                width: 100%; height: 100%;
                 VerticalBox {
-                    padding: 16px;
-                    spacing: 10px;
-                    Text {
-                        text: "Maintenance";
-                        font-size: 24px;
-                        font-weight: 800;
-                        color: Theme.title;
-                    }
-                    Text {
-                        text: "Shop work and DIY oil changes. " + mpg-label;
-                        font-size: 13px;
-                        color: Theme.text-muted;
-                        wrap: word-wrap;
-                    }
-
+                    padding: 16px; spacing: 10px;
+                    PageTitle { label: "Maintenance"; }
+                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    Text { text: mpg-label; font-size: 13px; color: Theme.text-muted; wrap: word-wrap; }
                     Card {
-                        title: "Log service";
-                        body: "";
-                        LineEdit {
-                            placeholder-text: "Title (e.g. Oil change)";
-                            text <=> root.svc-title;
-                        }
-                        LineEdit {
-                            placeholder-text: "Mileage";
-                            text <=> root.svc-mileage;
-                        }
+                        title: "Log service"; body: show-shop-emphasis ? "Shop & DIY history for this vehicle." : "DIY-focused logging.";
+                        LineEdit { placeholder-text: "Title (e.g. Oil change)"; text <=> root.svc-title; }
+                        LineEdit { placeholder-text: "Mileage"; text <=> root.svc-mileage; }
                         HorizontalBox {
                             spacing: 8px;
-                            ChoiceBtn {
-                                label: "DIY";
-                                active: root.svc-source == "DIY";
-                                clicked => { root.set-source("DIY"); }
-                            }
-                            ChoiceBtn {
-                                label: "Shop";
-                                active: root.svc-source == "SHOP";
-                                clicked => { root.set-source("SHOP"); }
-                            }
+                            ChoiceBtn { label: "DIY"; active: root.svc-source == "DIY"; clicked => { root.set-source("DIY"); } }
+                            ChoiceBtn { label: "Shop"; active: root.svc-source == "SHOP"; clicked => { root.set-source("SHOP"); } }
                         }
-                        LineEdit {
-                            placeholder-text: "Parts + labor cost";
-                            text <=> root.svc-cost;
-                        }
-                        LineEdit {
-                            placeholder-text: "Gallons (fuel, optional)";
-                            text <=> root.svc-gallons;
-                        }
-                        Button {
-                            text: "Save service";
-                            primary: true;
-                            clicked => { root.add-service(); }
-                        }
+                        LineEdit { placeholder-text: "Parts + labor cost"; text <=> root.svc-cost; }
+                        LineEdit { placeholder-text: "Gallons (fuel, optional)"; text <=> root.svc-gallons; }
+                        Button { text: "Save service"; primary: true; clicked => { root.add-service(); } }
                     }
-
-                    for s in services: Card {
-                        title: s.title;
-                        body: s.subtitle + (s.cost != "" ? " · " + s.cost : "");
-                    }
+                    for s in services: Card { title: s.title; body: s.subtitle + (s.cost != "" ? " · " + s.cost : ""); }
                 }
             }
 
             // TIRES
             if page == 3: ScrollView {
-                width: 100%;
-                height: 100%;
+                width: 100%; height: 100%;
                 VerticalBox {
-                    padding: 16px;
-                    spacing: 12px;
-                    Text {
-                        text: "Tire tracker";
-                        font-size: 24px;
-                        font-weight: 800;
-                        color: Theme.title;
-                    }
-                    Text {
-                        text: "Top-down diagram, rotation patterns, before/after preview.";
-                        font-size: 13px;
-                        color: Theme.text-muted;
-                        wrap: word-wrap;
-                    }
-
-                    Card {
-                        title: "Current positions";
-                        body: "FRONT";
+                    padding: 16px; spacing: 12px;
+                    PageTitle { label: "Tire tracker"; }
+                    if !show-tires: Text { text: "Hidden in shop-only mode. Switch feature focus in Settings."; color: Theme.text-muted; wrap: word-wrap; }
+                    if show-tires: VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    if show-tires: Card {
+                        title: "Current positions"; body: "FRONT";
                         Rectangle {
-                            height: 220px;
-                            background: transparent;
+                            height: 220px; background: transparent;
                             Rectangle {
-                                x: (parent.width - 140px) / 2;
-                                y: 20px;
-                                width: 140px;
-                                height: 180px;
-                                border-radius: 28px;
-                                background: Theme.car-body;
-                                border-width: 2px;
-                                border-color: Theme.car-outline;
+                                x: (parent.width - 140px) / 2; y: 20px; width: 140px; height: 180px;
+                                border-radius: 28px; background: Theme.car-body; border-width: 2px; border-color: Theme.car-outline;
                             }
-                            TireCorner {
-                                x: 12px;
-                                y: 12px;
-                                label: root.tire-fl;
-                            }
-                            TireCorner {
-                                x: parent.width - 68px;
-                                y: 12px;
-                                label: root.tire-fr;
-                            }
-                            TireCorner {
-                                x: 12px;
-                                y: parent.height - 60px;
-                                label: root.tire-rl;
-                            }
-                            TireCorner {
-                                x: parent.width - 68px;
-                                y: parent.height - 60px;
-                                label: root.tire-rr;
-                            }
+                            TireCorner { x: 12px; y: 12px; label: root.tire-fl; }
+                            TireCorner { x: parent.width - 68px; y: 12px; label: root.tire-fr; }
+                            TireCorner { x: 12px; y: parent.height - 60px; label: root.tire-rl; }
+                            TireCorner { x: parent.width - 68px; y: parent.height - 60px; label: root.tire-rr; }
                         }
-                        Text {
-                            text: tire-preview;
-                            font-size: 13px;
-                            color: Theme.text;
-                            wrap: word-wrap;
-                        }
+                        Text { text: tire-preview; font-size: 13px; color: Theme.text; wrap: word-wrap; }
                     }
-
-                    Card {
-                        title: "Rotation pattern";
-                        body: "";
+                    if show-tires: Card {
+                        title: "Rotation pattern"; body: "";
                         HorizontalBox {
                             spacing: 6px;
-                            ChoiceBtn {
-                                label: "Fwd cross";
-                                active: root.tire-pattern == "forward_cross";
-                                clicked => { root.set-pattern("forward_cross"); }
-                            }
-                            ChoiceBtn {
-                                label: "X";
-                                active: root.tire-pattern == "x_pattern";
-                                clicked => { root.set-pattern("x_pattern"); }
-                            }
+                            ChoiceBtn { label: "Fwd cross"; active: root.tire-pattern == "forward_cross"; clicked => { root.set-pattern("forward_cross"); } }
+                            ChoiceBtn { label: "X"; active: root.tire-pattern == "x_pattern"; clicked => { root.set-pattern("x_pattern"); } }
                         }
                         HorizontalBox {
                             spacing: 6px;
-                            ChoiceBtn {
-                                label: "Rear cross";
-                                active: root.tire-pattern == "rearward_cross";
-                                clicked => { root.set-pattern("rearward_cross"); }
-                            }
-                            ChoiceBtn {
-                                label: "Side";
-                                active: root.tire-pattern == "side_to_side";
-                                clicked => { root.set-pattern("side_to_side"); }
-                            }
+                            ChoiceBtn { label: "Rear cross"; active: root.tire-pattern == "rearward_cross"; clicked => { root.set-pattern("rearward_cross"); } }
+                            ChoiceBtn { label: "Side"; active: root.tire-pattern == "side_to_side"; clicked => { root.set-pattern("side_to_side"); } }
                         }
-                        Button {
-                            text: "Apply rotation to log";
-                            primary: true;
-                            clicked => { root.apply-rotation(); }
-                        }
+                        Button { text: "Apply rotation"; primary: true; clicked => { root.apply-rotation(); } }
                     }
                 }
             }
 
             // COSTS
             if page == 4: ScrollView {
-                width: 100%;
-                height: 100%;
+                width: 100%; height: 100%;
                 VerticalBox {
-                    padding: 16px;
-                    spacing: 12px;
-                    Text {
-                        text: "Operational costs";
-                        font-size: 24px;
-                        font-weight: 800;
-                        color: Theme.title;
-                    }
-                    Text {
-                        text: "Monthly and yearly totals from maintenance and fuel.";
-                        font-size: 13px;
-                        color: Theme.text-muted;
-                        wrap: word-wrap;
-                    }
-                    for c in cost-lines: Card {
-                        title: c.label;
-                        body: c.value;
-                    }
+                    padding: 16px; spacing: 12px;
+                    PageTitle { label: "Operational costs"; }
+                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    Text { text: "Totals for the selected vehicle."; font-size: 13px; color: Theme.text-muted; wrap: word-wrap; }
+                    for c in cost-lines: Card { title: c.label; body: c.value; }
                 }
             }
 
-            // SETTINGS (More)
+            // SETTINGS
             if page == 5: ScrollView {
-                width: 100%;
-                height: 100%;
+                width: 100%; height: 100%;
                 VerticalBox {
-                    padding: 16px;
-                    spacing: 12px;
-                    Text {
-                        text: "Settings";
-                        font-size: 24px;
-                        font-weight: 800;
-                        color: Theme.title;
-                    }
-
+                    padding: 16px; spacing: 12px;
+                    PageTitle { label: "Settings"; }
                     Card {
-                        title: "Appearance";
-                        body: "Dark mode changes the whole app. Choice is saved on this device.";
+                        title: "Appearance"; body: "Theme is saved on this device.";
                         HorizontalBox {
                             spacing: 8px;
-                            ChoiceBtn {
-                                label: "Light";
-                                active: root.dark-mode == "LIGHT";
-                                clicked => { root.set-dark-mode("LIGHT"); }
-                            }
-                            ChoiceBtn {
-                                label: "Dark";
-                                active: root.dark-mode == "DARK";
-                                clicked => { root.set-dark-mode("DARK"); }
-                            }
-                        }
-                        Text {
-                            text: root.dark-mode == "DARK" ? "Currently: Dark" : "Currently: Light";
-                            font-size: 12px;
-                            color: Theme.text-muted;
+                            ChoiceBtn { label: "Light"; active: root.dark-mode == "LIGHT"; clicked => { root.set-dark-mode("LIGHT"); } }
+                            ChoiceBtn { label: "Dark"; active: root.dark-mode == "DARK"; clicked => { root.set-dark-mode("DARK"); } }
                         }
                     }
-
                     Card {
-                        title: "Feature focus";
-                        body: "Current: " + user-mode;
+                        title: "Feature focus"; body: "Hides DIY-only or shop-only tools.";
                         HorizontalBox {
                             spacing: 6px;
-                            ChoiceBtn {
-                                label: "DIY";
-                                active: root.user-mode == "DIY";
-                                clicked => { root.set-user-mode("DIY"); }
-                            }
-                            ChoiceBtn {
-                                label: "SHOP";
-                                active: root.user-mode == "SHOP";
-                                clicked => { root.set-user-mode("SHOP"); }
-                            }
-                            ChoiceBtn {
-                                label: "BOTH";
-                                active: root.user-mode == "BOTH";
-                                clicked => { root.set-user-mode("BOTH"); }
-                            }
+                            ChoiceBtn { label: "DIY"; active: root.user-mode == "DIY"; clicked => { root.set-user-mode("DIY"); } }
+                            ChoiceBtn { label: "SHOP"; active: root.user-mode == "SHOP"; clicked => { root.set-user-mode("SHOP"); } }
+                            ChoiceBtn { label: "BOTH"; active: root.user-mode == "BOTH"; clicked => { root.set-user-mode("BOTH"); } }
                         }
                     }
-
                     Card {
-                        title: "Data";
-                        body: "Local-first. Cloud backup (Proton, Drive, Dropbox, OneDrive, ownCloud, Nextcloud) planned.";
-                        Button {
-                            text: "Export CSV";
-                            primary: true;
-                            clicked => { root.export-csv(); }
-                        }
-                        if csv-preview != "": Text {
-                            text: csv-preview;
-                            font-size: 11px;
-                            color: Theme.mono;
-                            wrap: word-wrap;
-                            font-family: "monospace";
-                        }
+                        title: "Trackers"; body: "Per selected vehicle.";
+                        if show-parts: Button { text: "Parts log"; clicked => { root.navigate(6); } }
+                        Button { text: "Battery"; clicked => { root.navigate(7); } }
+                        Button { text: "Wipers"; clicked => { root.navigate(8); } }
+                        Button { text: "Brakes"; clicked => { root.navigate(9); } }
+                        Button { text: "Notes"; clicked => { root.navigate(10); } }
+                        Button { text: "Reminders"; clicked => { root.navigate(11); } }
                     }
-
                     Card {
-                        title: "Support";
-                        body: "GPL-3.0 · GrapheneOS friendly · F-Droid & Play planned";
-                        Button {
-                            text: "Donate";
-                            clicked => { root.open-donate(); }
-                        }
-                        Button {
-                            text: "Send feedback (GitHub Issues)";
-                            clicked => { root.open-feedback(); }
-                        }
+                        title: "Data"; body: "Local-first. Cloud backup planned.";
+                        Button { text: "Export CSV"; primary: true; clicked => { root.export-csv(); } }
+                        if csv-preview != "": Text { text: csv-preview; font-size: 11px; color: Theme.mono; wrap: word-wrap; font-family: "monospace"; }
                     }
-
                     Card {
-                        title: "About";
-                        body: "FixItGarage 0.1.0 — pure Rust UI (Slint) + fixitgarage-core.";
+                        title: "Support"; body: "GPL-3.0 · GrapheneOS friendly";
+                        Button { text: "Donate"; clicked => { root.open-donate(); } }
+                        Button { text: "Send feedback (GitHub Issues)"; clicked => { root.open-feedback(); } }
                     }
+                    Card { title: "About"; body: "FixItGarage 0.1.1 — Rust + Slint. Multi-vehicle trackers."; }
+                    if status-message != "": Text { text: status-message; color: Theme.ok; wrap: word-wrap; }
+                }
+            }
 
-                    if status-message != "": Text {
-                        text: status-message;
-                        color: Theme.ok;
-                        wrap: word-wrap;
+            // PARTS
+            if page == 6: ScrollView {
+                width: 100%; height: 100%;
+                VerticalBox {
+                    padding: 16px; spacing: 10px;
+                    PageTitle { label: "Parts log"; }
+                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    Card {
+                        title: "Current"; body: "";
+                        Text { text: "Air: " + part-air; color: Theme.text; wrap: word-wrap; font-size: 13px; }
+                        Text { text: "Cabin: " + part-cabin; color: Theme.text; wrap: word-wrap; font-size: 13px; }
+                        Text { text: "Oil filter: " + part-oil-filter; color: Theme.text; wrap: word-wrap; font-size: 13px; }
+                        Text { text: "Oil type: " + part-oil-type; color: Theme.text; wrap: word-wrap; font-size: 13px; }
                     }
+                    Card {
+                        title: "Save / update"; body: "";
+                        HorizontalBox {
+                            spacing: 4px;
+                            ChoiceBtn { label: "Air"; active: root.part-type == "ENGINE_AIR_FILTER"; clicked => { root.part-type = "ENGINE_AIR_FILTER"; } }
+                            ChoiceBtn { label: "Cabin"; active: root.part-type == "CABIN_FILTER"; clicked => { root.part-type = "CABIN_FILTER"; } }
+                        }
+                        HorizontalBox {
+                            spacing: 4px;
+                            ChoiceBtn { label: "Oil filt"; active: root.part-type == "OIL_FILTER"; clicked => { root.part-type = "OIL_FILTER"; } }
+                            ChoiceBtn { label: "Oil type"; active: root.part-type == "OIL_TYPE"; clicked => { root.part-type = "OIL_TYPE"; } }
+                        }
+                        LineEdit { placeholder-text: "Brand"; text <=> root.part-brand; }
+                        LineEdit { placeholder-text: "Part number"; text <=> root.part-number; }
+                        LineEdit { placeholder-text: "Oil viscosity (if oil type)"; text <=> root.part-oil; }
+                        LineEdit { placeholder-text: "Installed mileage"; text <=> root.part-mileage; }
+                        LineEdit { placeholder-text: "Notes"; text <=> root.part-notes; }
+                        Button { text: "Save part"; primary: true; clicked => { root.save-part(); } }
+                    }
+                    Button { text: "Back to settings"; clicked => { root.navigate(5); } }
+                }
+            }
+
+            // BATTERY
+            if page == 7: ScrollView {
+                width: 100%; height: 100%;
+                VerticalBox {
+                    padding: 16px; spacing: 10px;
+                    PageTitle { label: "Battery age"; }
+                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    Card { title: "Current"; body: sum-battery; }
+                    Card {
+                        title: "Update"; body: "Date as YYYY-MM-DD";
+                        LineEdit { placeholder-text: "Install date YYYY-MM-DD"; text <=> root.comp-date; }
+                        LineEdit { placeholder-text: "Mileage at install"; text <=> root.comp-mileage; }
+                        LineEdit { placeholder-text: "Notes (brand, CCA…)"; text <=> root.comp-notes; }
+                        Button {
+                            text: "Save battery"; primary: true;
+                            clicked => { root.comp-type = "BATTERY"; root.save-component(); }
+                        }
+                    }
+                    Button { text: "Back"; clicked => { root.navigate(5); } }
+                }
+            }
+
+            // WIPERS
+            if page == 8: ScrollView {
+                width: 100%; height: 100%;
+                VerticalBox {
+                    padding: 16px; spacing: 10px;
+                    PageTitle { label: "Wiper blades"; }
+                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    Card { title: "Front"; body: sum-wiper-f; }
+                    Card { title: "Rear"; body: sum-wiper-r; }
+                    Card {
+                        title: "Update"; body: "Date as YYYY-MM-DD";
+                        HorizontalBox {
+                            ChoiceBtn { label: "Front"; active: root.comp-type == "WIPER_FRONT"; clicked => { root.comp-type = "WIPER_FRONT"; } }
+                            ChoiceBtn { label: "Rear"; active: root.comp-type == "WIPER_REAR"; clicked => { root.comp-type = "WIPER_REAR"; } }
+                        }
+                        LineEdit { placeholder-text: "Install date YYYY-MM-DD"; text <=> root.comp-date; }
+                        LineEdit { placeholder-text: "Mileage"; text <=> root.comp-mileage; }
+                        LineEdit { placeholder-text: "Notes / size"; text <=> root.comp-notes; }
+                        Button { text: "Save wipers"; primary: true; clicked => { root.save-component(); } }
+                    }
+                    Button { text: "Back"; clicked => { root.navigate(5); } }
+                }
+            }
+
+            // BRAKES
+            if page == 9: ScrollView {
+                width: 100%; height: 100%;
+                VerticalBox {
+                    padding: 16px; spacing: 10px;
+                    PageTitle { label: "Brakes"; }
+                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    Card { title: "Front pads"; body: sum-brake-f; }
+                    Card { title: "Rear pads"; body: sum-brake-r; }
+                    Card { title: "Brake fluid"; body: sum-brake-fluid; }
+                    Card {
+                        title: "Update"; body: "";
+                        HorizontalBox {
+                            ChoiceBtn { label: "Fr pads"; active: root.comp-type == "BRAKE_PADS_FRONT"; clicked => { root.comp-type = "BRAKE_PADS_FRONT"; } }
+                            ChoiceBtn { label: "Rr pads"; active: root.comp-type == "BRAKE_PADS_REAR"; clicked => { root.comp-type = "BRAKE_PADS_REAR"; } }
+                        }
+                        ChoiceBtn { label: "Fluid"; active: root.comp-type == "BRAKE_FLUID"; clicked => { root.comp-type = "BRAKE_FLUID"; } }
+                        LineEdit { placeholder-text: "Service date YYYY-MM-DD"; text <=> root.comp-date; }
+                        LineEdit { placeholder-text: "Mileage"; text <=> root.comp-mileage; }
+                        LineEdit { placeholder-text: "Notes"; text <=> root.comp-notes; }
+                        Button { text: "Save brakes"; primary: true; clicked => { root.save-component(); } }
+                    }
+                    Button { text: "Back"; clicked => { root.navigate(5); } }
+                }
+            }
+
+            // NOTES
+            if page == 10: ScrollView {
+                width: 100%; height: 100%;
+                VerticalBox {
+                    padding: 16px; spacing: 10px;
+                    PageTitle { label: "Notes"; }
+                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    Card {
+                        title: "New note"; body: "";
+                        LineEdit { placeholder-text: "Title"; text <=> root.note-title; }
+                        LineEdit { placeholder-text: "Body"; text <=> root.note-body; }
+                        Button { text: "Save note"; primary: true; clicked => { root.add-note(); } }
+                    }
+                    for n in notes: Card { title: n.title; body: n.body; }
+                    Button { text: "Back"; clicked => { root.navigate(5); } }
+                }
+            }
+
+            // REMINDERS
+            if page == 11: ScrollView {
+                width: 100%; height: 100%;
+                VerticalBox {
+                    padding: 16px; spacing: 10px;
+                    PageTitle { label: "Reminders"; }
+                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    Text {
+                        text: "Oil level checks every 3 months are auto-created for new vehicles. Mark complete to reschedule.";
+                        font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
+                    }
+                    Card {
+                        title: "Add reminder"; body: "Date YYYY-MM-DD and/or mileage";
+                        LineEdit { placeholder-text: "Title"; text <=> root.rem-title; }
+                        LineEdit { placeholder-text: "Due date YYYY-MM-DD"; text <=> root.rem-date; }
+                        LineEdit { placeholder-text: "Due mileage"; text <=> root.rem-mileage; }
+                        Button { text: "Save reminder"; primary: true; clicked => { root.add-reminder(); } }
+                    }
+                    for r in reminders: Card {
+                        title: r.title; body: r.detail;
+                        Button { text: "Mark done"; clicked => { root.complete-reminder(r.id); } }
+                    }
+                    Button { text: "Back"; clicked => { root.navigate(5); } }
                 }
             }
         }
 
-        // Bottom navigation
+        // Bottom nav
         Rectangle {
-            height: 60px;
-            background: Theme.nav-bg;
-            border-width: 1px;
-            border-color: Theme.surface-border;
-
+            height: 60px; background: Theme.nav-bg; border-width: 1px; border-color: Theme.surface-border;
             HorizontalBox {
-                padding-left: 4px;
-                padding-right: 4px;
-                padding-top: 4px;
-                padding-bottom: 4px;
-                spacing: 2px;
-                NavBtn {
-                    label: "Home";
-                    active: root.page == 0;
-                    horizontal-stretch: 1;
-                    clicked => { root.navigate(0); }
-                }
-                NavBtn {
-                    label: "Cars";
-                    active: root.page == 1;
-                    horizontal-stretch: 1;
-                    clicked => { root.navigate(1); }
-                }
-                NavBtn {
-                    label: "Service";
-                    active: root.page == 2;
-                    horizontal-stretch: 1;
-                    clicked => { root.navigate(2); }
-                }
-                NavBtn {
-                    label: "Tires";
-                    active: root.page == 3;
-                    horizontal-stretch: 1;
-                    clicked => { root.navigate(3); }
-                }
-                NavBtn {
-                    label: "Costs";
-                    active: root.page == 4;
-                    horizontal-stretch: 1;
-                    clicked => { root.navigate(4); }
-                }
-                NavBtn {
-                    label: "More";
-                    active: root.page == 5;
-                    horizontal-stretch: 1;
-                    clicked => { root.navigate(5); }
-                }
+                padding: 4px; spacing: 2px;
+                NavBtn { label: "Home"; active: root.page == 0; horizontal-stretch: 1; clicked => { root.navigate(0); } }
+                NavBtn { label: "Cars"; active: root.page == 1; horizontal-stretch: 1; clicked => { root.navigate(1); } }
+                NavBtn { label: "Service"; active: root.page == 2; horizontal-stretch: 1; clicked => { root.navigate(2); } }
+                if show-tires: NavBtn { label: "Tires"; active: root.page == 3; horizontal-stretch: 1; clicked => { root.navigate(3); } }
+                NavBtn { label: "Costs"; active: root.page == 4; horizontal-stretch: 1; clicked => { root.navigate(4); } }
+                NavBtn { label: "More"; active: root.page >= 5; horizontal-stretch: 1; clicked => { root.navigate(5); } }
             }
         }
     }

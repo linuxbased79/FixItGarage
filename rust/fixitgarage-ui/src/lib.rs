@@ -1,26 +1,15 @@
 //! FixItGarage Slint UI — shared library for desktop binary and Android cdylib.
 
+mod platform;
 mod state;
 
 use chrono::{TimeZone, Utc};
-use state::AppState;
+use platform::open_url;
+use state::{reminder_status_line, AppState};
 use std::cell::RefCell;
 use std::rc::Rc;
 
 slint::include_modules!();
-
-fn open_url(url: &str) {
-    // Best-effort: xdg-open on Linux, ignored if unavailable (e.g. pure Android later).
-    #[cfg(target_os = "android")]
-    {
-        let _ = url;
-        // Android URL open can be wired via JNI later.
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        let _ = std::process::Command::new("xdg-open").arg(url).spawn();
-    }
-}
 
 fn format_service_date(epoch_ms: i64) -> String {
     match Utc.timestamp_millis_opt(epoch_ms) {
@@ -65,6 +54,18 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
     {
         let ui_weak = ui.as_weak();
         let state = state.clone();
+        ui.on_select_vehicle(move |id| {
+            let mut s = state.borrow_mut();
+            s.select_vehicle(id as u64);
+            if let Some(ui) = ui_weak.upgrade() {
+                refresh_ui(&ui, &s);
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
         ui.on_add_vehicle(move || {
             if let Some(ui) = ui_weak.upgrade() {
                 let mut s = state.borrow_mut();
@@ -79,7 +80,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                 ui.set_form_model("".into());
                 ui.set_form_year("".into());
                 ui.set_form_mileage("".into());
-                ui.set_status_message("Vehicle saved.".into());
+                ui.set_status_message("Vehicle saved (oil-level reminder in 3 months).".into());
                 refresh_ui(&ui, &s);
             }
         });
@@ -190,10 +191,95 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
     {
         let ui_weak = ui.as_weak();
         let state = state.clone();
+        ui.on_save_part(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let mut s = state.borrow_mut();
+                s.upsert_part(
+                    ui.get_part_type().to_string(),
+                    ui.get_part_brand().to_string(),
+                    ui.get_part_number().to_string(),
+                    ui.get_part_oil().to_string(),
+                    ui.get_part_notes().to_string(),
+                    ui.get_part_mileage().parse().ok(),
+                );
+                ui.set_status_message("Part saved.".into());
+                refresh_ui(&ui, &s);
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_save_component(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let mut s = state.borrow_mut();
+                s.upsert_component(
+                    ui.get_comp_type().to_string(),
+                    ui.get_comp_notes().to_string(),
+                    ui.get_comp_mileage().parse().ok(),
+                    &ui.get_comp_date().to_string(),
+                );
+                ui.set_status_message("Component saved.".into());
+                refresh_ui(&ui, &s);
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_add_note(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let mut s = state.borrow_mut();
+                s.add_note(ui.get_note_title().to_string(), ui.get_note_body().to_string());
+                ui.set_note_title("".into());
+                ui.set_note_body("".into());
+                ui.set_status_message("Note saved.".into());
+                refresh_ui(&ui, &s);
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_add_reminder(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let mut s = state.borrow_mut();
+                s.add_reminder(
+                    ui.get_rem_title().to_string(),
+                    &ui.get_rem_date().to_string(),
+                    ui.get_rem_mileage().parse().ok(),
+                );
+                ui.set_rem_title("".into());
+                ui.set_rem_date("".into());
+                ui.set_rem_mileage("".into());
+                ui.set_status_message("Reminder saved.".into());
+                refresh_ui(&ui, &s);
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_complete_reminder(move |id| {
+            let mut s = state.borrow_mut();
+            s.complete_reminder(id as u64);
+            if let Some(ui) = ui_weak.upgrade() {
+                ui.set_status_message("Reminder completed.".into());
+                refresh_ui(&ui, &s);
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
         ui.on_export_csv(move || {
             let s = state.borrow();
             let csv = s.export_csv();
-            // Also write next to data dir
             let path = AppState::data_path().with_file_name("export.csv");
             let _ = std::fs::write(&path, &csv);
             if let Some(ui) = ui_weak.upgrade() {
@@ -220,10 +306,24 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     ui.set_user_mode(state.user_mode.clone().into());
     let dark = state.dark_mode.eq_ignore_ascii_case("DARK");
     ui.set_dark_mode(if dark { "DARK" } else { "LIGHT" }.into());
-    // Keep global Theme in sync (also driven by Slint changed handler)
     Theme::get(ui).set_dark(dark);
+
+    let flags = state.feature_flags();
+    ui.set_show_tires(flags.show_tires);
+    ui.set_show_parts(flags.show_parts);
+    ui.set_show_diy_trackers(flags.show_diy_trackers);
+    ui.set_show_shop_emphasis(flags.show_shop_emphasis);
+
     ui.set_mode_label(state.mode_label().into());
     ui.set_vehicle_count_label(format!("{} vehicles", state.vehicles.len()).into());
+
+    let sel_name = state
+        .selected_vehicle()
+        .map(|v| v.name.clone())
+        .unwrap_or_else(|| "No vehicle selected".into());
+    ui.set_selected_vehicle_label(sel_name.into());
+    ui.set_selected_vehicle_id(state.selected_vehicle_id.unwrap_or(0) as i32);
+
     ui.set_mpg_label(state.mpg_label().into());
     ui.set_tire_fl(state.tire_layout.fl.clone().into());
     ui.set_tire_fr(state.tire_layout.fr.clone().into());
@@ -231,6 +331,18 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     ui.set_tire_rr(state.tire_layout.rr.clone().into());
     ui.set_tire_pattern(state.tire_pattern.clone().into());
     ui.set_tire_preview(state.tire_preview().into());
+
+    // Tracker summaries
+    ui.set_part_air(state.part_summary("ENGINE_AIR_FILTER").into());
+    ui.set_part_cabin(state.part_summary("CABIN_FILTER").into());
+    ui.set_part_oil_filter(state.part_summary("OIL_FILTER").into());
+    ui.set_part_oil_type(state.part_summary("OIL_TYPE").into());
+    ui.set_sum_battery(state.component_summary("BATTERY").into());
+    ui.set_sum_wiper_f(state.component_summary("WIPER_FRONT").into());
+    ui.set_sum_wiper_r(state.component_summary("WIPER_REAR").into());
+    ui.set_sum_brake_f(state.component_summary("BRAKE_PADS_FRONT").into());
+    ui.set_sum_brake_r(state.component_summary("BRAKE_PADS_REAR").into());
+    ui.set_sum_brake_fluid(state.component_summary("BRAKE_FLUID").into());
 
     if let Some(last) = state.last_service() {
         ui.set_last_service_title(last.title.clone().into());
@@ -245,13 +357,14 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
         );
     } else {
         ui.set_last_service_title("No services logged yet".into());
-        ui.set_last_service_detail("Scan a receipt or add a service.".into());
+        ui.set_last_service_detail("Add a service for the selected vehicle.".into());
     }
 
     let vehicles: Vec<VehicleRow> = state
         .vehicles
         .iter()
         .map(|v| {
+            let selected = state.selected_vehicle_id == Some(v.id);
             let subtitle = format!(
                 "{} {} {}",
                 v.year.map(|y| y.to_string()).unwrap_or_default(),
@@ -262,7 +375,11 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
             .to_string();
             VehicleRow {
                 id: v.id as i32,
-                name: v.name.clone().into(),
+                name: if selected {
+                    format!("✓ {}", v.name).into()
+                } else {
+                    v.name.clone().into()
+                },
                 subtitle: subtitle.into(),
                 mileage: format!("{} mi", v.current_mileage).into(),
             }
@@ -270,7 +387,11 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
         .collect();
     ui.set_vehicles(slint::ModelRc::new(slint::VecModel::from(vehicles)));
 
-    let mut services: Vec<_> = state.services.clone();
+    let mut services: Vec<_> = state
+        .services_for_selected()
+        .into_iter()
+        .cloned()
+        .collect();
     services.sort_by(|a, b| b.date_epoch_ms.cmp(&a.date_epoch_ms).then(b.id.cmp(&a.id)));
     let services: Vec<ServiceRow> = services
         .into_iter()
@@ -305,6 +426,33 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
         })
         .collect();
     ui.set_cost_lines(slint::ModelRc::new(slint::VecModel::from(costs)));
+
+    let mileage = state
+        .selected_vehicle()
+        .map(|v| v.current_mileage)
+        .unwrap_or(0);
+    let notes: Vec<NoteRow> = state
+        .notes
+        .iter()
+        .filter(|n| state.selected_vehicle_id == Some(n.vehicle_id))
+        .map(|n| NoteRow {
+            id: n.id as i32,
+            title: n.title.clone().into(),
+            body: n.body.clone().into(),
+        })
+        .collect();
+    ui.set_notes(slint::ModelRc::new(slint::VecModel::from(notes)));
+
+    let reminders: Vec<ReminderRow> = state
+        .open_reminders_for_selected()
+        .into_iter()
+        .map(|r| ReminderRow {
+            id: r.id as i32,
+            title: r.title.clone().into(),
+            detail: reminder_status_line(r, mileage).into(),
+        })
+        .collect();
+    ui.set_reminders(slint::ModelRc::new(slint::VecModel::from(reminders)));
 }
 
 /// Android entry point (NativeActivity / android-activity).

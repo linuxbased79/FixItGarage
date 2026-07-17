@@ -1517,6 +1517,8 @@ dependencies = [
  "chrono",
  "dirs",
  "fixitgarage-core",
+ "jni 0.21.1",
+ "ndk-context",
  "serde",
  "serde_json",
  "slint",
