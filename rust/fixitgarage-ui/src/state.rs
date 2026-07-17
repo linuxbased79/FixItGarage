@@ -4,8 +4,8 @@ use chrono::{Datelike, TimeZone, Utc};
 use fixitgarage_core::models::{ServiceRecord, ServiceSource, UserMode, Vehicle};
 use fixitgarage_core::reminders::{is_due_by_date, is_due_by_mileage, oil_level_due_after};
 use fixitgarage_core::{
-    apply_rotation, average_mpg, map_corners, services_to_csv, summarize_costs, RotationPattern,
-    TireLayout,
+    apply_rotation, average_mpg, map_corners, map_corners5, services_to_csv, summarize_costs,
+    RotationPattern, TireLayout,
 };
 use crate::units::{
     display_oil_level, format_distance, format_economy, format_fuel, format_tread,
@@ -63,6 +63,9 @@ pub struct AppState {
     pub tire_rotations: Vec<TireRotationLog>,
     pub tire_layout: TireLayoutStored,
     pub tire_pattern: String,
+    /// When true, rotation includes the full-size spare (most people leave this off).
+    #[serde(default)]
+    pub include_spare_in_rotation: bool,
     /// Tread depth in mm per corner, per vehicle (manual or future camera).
     #[serde(default)]
     pub tread_by_vehicle: Vec<VehicleTread>,
@@ -87,6 +90,8 @@ pub struct TreadDepths {
     pub fr: Option<f64>,
     pub rl: Option<f64>,
     pub rr: Option<f64>,
+    #[serde(default)]
+    pub spare: Option<f64>,
     pub measured_epoch_ms: Option<i64>,
 }
 
@@ -102,6 +107,8 @@ pub struct TireCornerMiles {
     pub fr: Option<u32>,
     pub rl: Option<u32>,
     pub rr: Option<u32>,
+    #[serde(default)]
+    pub spare: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -143,10 +150,17 @@ pub struct TireRotationLog {
     pub before_fr: String,
     pub before_rl: String,
     pub before_rr: String,
+    #[serde(default)]
+    pub before_spare: String,
     pub after_fl: String,
     pub after_fr: String,
     pub after_rl: String,
     pub after_rr: String,
+    #[serde(default)]
+    pub after_spare: String,
+    /// True when this rotation included the full-size spare.
+    #[serde(default)]
+    pub included_spare: bool,
     pub mileage: Option<u32>,
     pub date_epoch_ms: i64,
 }
@@ -209,6 +223,13 @@ pub struct TireLayoutStored {
     pub fr: String,
     pub rl: String,
     pub rr: String,
+    /// Full-size spare ID (default "E"). Empty string = no spare tracked.
+    #[serde(default = "default_spare_label")]
+    pub spare: String,
+}
+
+fn default_spare_label() -> String {
+    "E".into()
 }
 
 /// ENGINE_AIR_FILTER | CABIN_FILTER | OIL_FILTER | OIL_TYPE | OTHER
@@ -264,6 +285,7 @@ impl From<&TireLayoutStored> for TireLayout {
             fr: t.fr.clone(),
             rl: t.rl.clone(),
             rr: t.rr.clone(),
+            spare: t.spare.clone(),
         }
     }
 }
@@ -275,6 +297,7 @@ impl From<&TireLayout> for TireLayoutStored {
             fr: t.fr.clone(),
             rl: t.rl.clone(),
             rr: t.rr.clone(),
+            spare: t.spare.clone(),
         }
     }
 }
@@ -311,8 +334,10 @@ impl Default for AppState {
                 fr: "B".into(),
                 rl: "C".into(),
                 rr: "D".into(),
+                spare: "E".into(),
             },
             tire_pattern: "forward_cross".into(),
+            include_spare_in_rotation: false,
             tread_by_vehicle: Vec::new(),
             tire_mileage_by_vehicle: Vec::new(),
             cloud_webdav_url: String::new(),
@@ -609,14 +634,19 @@ impl AppState {
         let after = self.preview_after_layout();
         let pattern =
             RotationPattern::from_str(&self.tire_pattern).unwrap_or(RotationPattern::ForwardCross);
-        format!(
+        let mut s = format!(
             "After {}: {} {} / {} {}",
             pattern.label(),
             after.fl,
             after.fr,
             after.rl,
             after.rr
-        )
+        );
+        if self.include_spare_in_rotation {
+            s.push_str(&format!(" · SP {}", after.spare));
+            s.push_str(" (incl. spare)");
+        }
+        s
     }
 
     /// Positions after applying the currently selected pattern (preview only).
@@ -624,7 +654,22 @@ impl AppState {
         let layout = TireLayout::from(&self.tire_layout);
         let pattern =
             RotationPattern::from_str(&self.tire_pattern).unwrap_or(RotationPattern::ForwardCross);
-        apply_rotation(&layout, pattern)
+        apply_rotation(&layout, pattern, self.include_spare_in_rotation)
+    }
+
+    pub fn set_include_spare(&mut self, include: bool) {
+        self.include_spare_in_rotation = include;
+        self.save();
+    }
+
+    pub fn set_spare_label(&mut self, label: String) {
+        let t = label.trim();
+        self.tire_layout.spare = if t.is_empty() {
+            "E".into()
+        } else {
+            t.to_string()
+        };
+        self.save();
     }
 
     pub fn apply_tire_rotation(&mut self) {
@@ -632,64 +677,117 @@ impl AppState {
         let layout = TireLayout::from(&self.tire_layout);
         let pattern =
             RotationPattern::from_str(&self.tire_pattern).unwrap_or(RotationPattern::ForwardCross);
-        let after = apply_rotation(&layout, pattern);
+        let include = self.include_spare_in_rotation;
+        let after = apply_rotation(&layout, pattern, include);
         let after_stored = TireLayoutStored::from(&after);
         if let Some(vid) = self.selected_vehicle_id {
             let id = self.next_rotation_id;
             self.next_rotation_id += 1;
             let mileage = self.selected_vehicle().map(|v| v.current_mileage);
+            let mut pattern_label = pattern.label().to_string();
+            if include {
+                pattern_label.push_str(" + spare");
+            }
             self.tire_rotations.push(TireRotationLog {
                 id,
                 vehicle_id: vid,
-                pattern: pattern.label().into(),
+                pattern: pattern_label,
                 before_fl: before.fl,
                 before_fr: before.fr,
                 before_rl: before.rl,
                 before_rr: before.rr,
+                before_spare: before.spare.clone(),
                 after_fl: after_stored.fl.clone(),
                 after_fr: after_stored.fr.clone(),
                 after_rl: after_stored.rl.clone(),
                 after_rr: after_stored.rr.clone(),
+                after_spare: after_stored.spare.clone(),
+                included_spare: include,
                 mileage,
                 date_epoch_ms: Utc::now().timestamp_millis(),
             });
             // Spec: mileage per tire + tread follow the rubber through rotation
-            self.remap_corner_data_for_vehicle(vid, pattern);
+            self.remap_corner_data_for_vehicle(vid, pattern, include);
         }
         self.tire_layout = after_stored;
     }
 
-    fn remap_corner_data_for_vehicle(&mut self, vehicle_id: u64, pattern: RotationPattern) {
+    fn remap_corner_data_for_vehicle(
+        &mut self,
+        vehicle_id: u64,
+        pattern: RotationPattern,
+        include_spare: bool,
+    ) {
         if let Some(slot) = self
             .tire_mileage_by_vehicle
             .iter_mut()
             .find(|t| t.vehicle_id == vehicle_id)
         {
-            let (fl, fr, rl, rr) = map_corners(
-                &slot.miles.fl,
-                &slot.miles.fr,
-                &slot.miles.rl,
-                &slot.miles.rr,
-                pattern,
-            );
-            slot.miles = TireCornerMiles { fl, fr, rl, rr };
+            if include_spare {
+                let (fl, fr, rl, rr, spare) = map_corners5(
+                    &slot.miles.fl,
+                    &slot.miles.fr,
+                    &slot.miles.rl,
+                    &slot.miles.rr,
+                    &slot.miles.spare,
+                    pattern,
+                );
+                slot.miles = TireCornerMiles {
+                    fl,
+                    fr,
+                    rl,
+                    rr,
+                    spare,
+                };
+            } else {
+                let (fl, fr, rl, rr) = map_corners(
+                    &slot.miles.fl,
+                    &slot.miles.fr,
+                    &slot.miles.rl,
+                    &slot.miles.rr,
+                    pattern,
+                );
+                slot.miles = TireCornerMiles {
+                    fl,
+                    fr,
+                    rl,
+                    rr,
+                    spare: slot.miles.spare,
+                };
+            }
         }
         if let Some(slot) = self
             .tread_by_vehicle
             .iter_mut()
             .find(|t| t.vehicle_id == vehicle_id)
         {
-            let (fl, fr, rl, rr) = map_corners(
-                &slot.depths.fl,
-                &slot.depths.fr,
-                &slot.depths.rl,
-                &slot.depths.rr,
-                pattern,
-            );
-            slot.depths.fl = fl;
-            slot.depths.fr = fr;
-            slot.depths.rl = rl;
-            slot.depths.rr = rr;
+            if include_spare {
+                let (fl, fr, rl, rr, spare) = map_corners5(
+                    &slot.depths.fl,
+                    &slot.depths.fr,
+                    &slot.depths.rl,
+                    &slot.depths.rr,
+                    &slot.depths.spare,
+                    pattern,
+                );
+                slot.depths.fl = fl;
+                slot.depths.fr = fr;
+                slot.depths.rl = rl;
+                slot.depths.rr = rr;
+                slot.depths.spare = spare;
+            } else {
+                let (fl, fr, rl, rr) = map_corners(
+                    &slot.depths.fl,
+                    &slot.depths.fr,
+                    &slot.depths.rl,
+                    &slot.depths.rr,
+                    pattern,
+                );
+                slot.depths.fl = fl;
+                slot.depths.fr = fr;
+                slot.depths.rl = rl;
+                slot.depths.rr = rr;
+            }
         }
     }
 
@@ -863,7 +961,14 @@ impl AppState {
         self.save();
     }
 
-    pub fn set_tread_depths(&mut self, fl: Option<f64>, fr: Option<f64>, rl: Option<f64>, rr: Option<f64>) {
+    pub fn set_tread_depths(
+        &mut self,
+        fl: Option<f64>,
+        fr: Option<f64>,
+        rl: Option<f64>,
+        rr: Option<f64>,
+        spare: Option<f64>,
+    ) {
         let Some(vid) = self.selected_vehicle_id else {
             return;
         };
@@ -872,6 +977,7 @@ impl AppState {
             fr,
             rl,
             rr,
+            spare,
             measured_epoch_ms: Some(Utc::now().timestamp_millis()),
         };
         if let Some(slot) = self.tread_by_vehicle.iter_mut().find(|t| t.vehicle_id == vid) {
@@ -907,14 +1013,18 @@ impl AppState {
             .measured_epoch_ms
             .map(format_epoch)
             .unwrap_or_else(|| "never".into());
-        format!(
-            "FL {} · FR {} · RL {} · RR {} (measured {})",
+        let mut s = format!(
+            "FL {} · FR {} · RL {} · RR {}",
             fmt(t.fl),
             fmt(t.fr),
             fmt(t.rl),
             fmt(t.rr),
-            when
-        )
+        );
+        if self.include_spare_in_rotation || t.spare.is_some() {
+            s.push_str(&format!(" · SP {}", fmt(t.spare)));
+        }
+        s.push_str(&format!(" (measured {when})"));
+        s
     }
 
     /// Due / overdue open reminders for selected vehicle (for home banner).
@@ -1641,11 +1751,18 @@ impl AppState {
         fr: Option<u32>,
         rl: Option<u32>,
         rr: Option<u32>,
+        spare: Option<u32>,
     ) {
         let Some(vid) = self.selected_vehicle_id else {
             return;
         };
-        let miles = TireCornerMiles { fl, fr, rl, rr };
+        let miles = TireCornerMiles {
+            fl,
+            fr,
+            rl,
+            rr,
+            spare,
+        };
         if let Some(slot) = self
             .tire_mileage_by_vehicle
             .iter_mut()
@@ -1679,13 +1796,17 @@ impl AppState {
             v.map(|x| format_distance(x, u))
                 .unwrap_or_else(|| "—".into())
         };
-        format!(
+        let mut s = format!(
             "FL {} · FR {} · RL {} · RR {}",
             f(m.fl),
             f(m.fr),
             f(m.rl),
             f(m.rr)
-        )
+        );
+        if self.include_spare_in_rotation || m.spare.is_some() {
+            s.push_str(&format!(" · SP {}", f(m.spare)));
+        }
+        s
     }
 
     pub fn add_note(&mut self, title: String, body: String) {
@@ -1988,7 +2109,7 @@ mod tests {
     fn rotation_moves_mileage_with_tires() {
         let mut s = AppState::default();
         s.add_vehicle("Daily".into(), "".into(), "".into(), None, 10000);
-        s.set_tire_corner_miles(Some(1), Some(2), Some(3), Some(4));
+        s.set_tire_corner_miles(Some(1), Some(2), Some(3), Some(4), Some(5));
         s.tire_pattern = "side_to_side".into();
         s.apply_tire_rotation();
         let m = s.tire_miles_for_selected();
@@ -1996,6 +2117,25 @@ mod tests {
         assert_eq!(m.fr, Some(1));
         assert_eq!(m.rl, Some(4));
         assert_eq!(m.rr, Some(3));
+        assert_eq!(m.spare, Some(5)); // spare not rotated when option off
+    }
+
+    #[test]
+    fn rotation_with_spare_moves_five() {
+        let mut s = AppState::default();
+        s.add_vehicle("Daily".into(), "".into(), "".into(), None, 10000);
+        s.set_include_spare(true);
+        s.set_tire_corner_miles(Some(1), Some(2), Some(3), Some(4), Some(5));
+        s.tire_pattern = "forward_cross".into();
+        s.apply_tire_rotation();
+        // FL←RL(3), FR←RR(4), RL←FR(2), RR←SP(5), SP←FL(1)
+        let m = s.tire_miles_for_selected();
+        assert_eq!(m.fl, Some(3));
+        assert_eq!(m.fr, Some(4));
+        assert_eq!(m.rl, Some(2));
+        assert_eq!(m.rr, Some(5));
+        assert_eq!(m.spare, Some(1));
+        assert_eq!(s.tire_layout.spare, "A");
     }
 
     #[test]

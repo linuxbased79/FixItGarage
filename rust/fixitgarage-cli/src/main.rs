@@ -95,8 +95,14 @@ fn main() {
                     std::process::exit(1);
                 }
             };
-            let before = TireLayout { fl, fr, rl, rr };
-            let after = apply_rotation(&before, pattern);
+            let before = TireLayout {
+                fl,
+                fr,
+                rl,
+                rr,
+                spare: String::new(),
+            };
+            let after = apply_rotation(&before, pattern, false);
             println!("Pattern: {}", pattern.label());
             println!("Before:\n{before}");
             println!("After:\n{after}");

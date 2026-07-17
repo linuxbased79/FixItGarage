@@ -218,13 +218,17 @@ export component MainWindow inherits Window {
     in-out property <string> tire-fr: "B";
     in-out property <string> tire-rl: "C";
     in-out property <string> tire-rr: "D";
+    in-out property <string> tire-spare: "E";
     // Live after-rotation preview corners (spec: before/after graphical display)
     in-out property <string> tire-after-fl: "C";
     in-out property <string> tire-after-fr: "D";
     in-out property <string> tire-after-rl: "B";
     in-out property <string> tire-after-rr: "A";
+    in-out property <string> tire-after-spare: "E";
     in-out property <string> tire-pattern: "forward_cross";
     in-out property <string> tire-preview: "Preview";
+    /// Most people leave spare out of rotation (donut / temporary spare).
+    in-out property <bool> include-spare: false;
 
     in-out property <string> part-type: "ENGINE_AIR_FILTER";
     in-out property <string> part-brand: "";
@@ -307,6 +311,8 @@ export component MainWindow inherits Window {
     in-out property <string> mi-fr: "";
     in-out property <string> mi-rl: "";
     in-out property <string> mi-rr: "";
+    in-out property <string> mi-spare: "";
+    in-out property <string> tread-spare: "";
     in-out property <string> tread-photo-path: "";
     in-out property <string> cloud-url: "";
     in-out property <string> cloud-user: "";
@@ -340,6 +346,8 @@ export component MainWindow inherits Window {
     callback fill-service-template(string);
     callback apply-rotation();
     callback set-pattern(string);
+    callback set-include-spare(bool);
+    callback set-spare-label();
     callback set-source(string);
     callback set-user-mode(string);
     callback set-dark-mode(string);
@@ -608,29 +616,39 @@ export component MainWindow inherits Window {
                     if show-tires: Card {
                         title: "Current positions (before)"; body: "FRONT · top-down view";
                         Rectangle {
-                            height: 220px; background: transparent;
+                            height: root.include-spare ? 280px : 220px; background: transparent;
                             Rectangle {
                                 x: (parent.width - 140px) / 2; y: 20px; width: 140px; height: 180px;
                                 border-radius: 28px; background: Theme.car-body; border-width: 2px; border-color: Theme.car-outline;
                             }
                             TireCorner { x: 12px; y: 12px; label: root.tire-fl; }
                             TireCorner { x: parent.width - 68px; y: 12px; label: root.tire-fr; }
-                            TireCorner { x: 12px; y: parent.height - 60px; label: root.tire-rl; }
-                            TireCorner { x: parent.width - 68px; y: parent.height - 60px; label: root.tire-rr; }
+                            TireCorner { x: 12px; y: parent.height - (root.include-spare ? 120px : 60px); label: root.tire-rl; }
+                            TireCorner { x: parent.width - 68px; y: parent.height - (root.include-spare ? 120px : 60px); label: root.tire-rr; }
+                            if root.include-spare: TireCorner {
+                                x: (parent.width - 56px) / 2;
+                                y: parent.height - 56px;
+                                label: "SP " + root.tire-spare;
+                            }
                         }
                     }
                     if show-tires: Card {
                         title: "After rotation (preview)"; body: tire-preview;
                         Rectangle {
-                            height: 220px; background: transparent;
+                            height: root.include-spare ? 280px : 220px; background: transparent;
                             Rectangle {
                                 x: (parent.width - 140px) / 2; y: 20px; width: 140px; height: 180px;
                                 border-radius: 28px; background: Theme.car-body; border-width: 2px; border-color: Theme.ok;
                             }
                             TireCorner { x: 12px; y: 12px; label: root.tire-after-fl; }
                             TireCorner { x: parent.width - 68px; y: 12px; label: root.tire-after-fr; }
-                            TireCorner { x: 12px; y: parent.height - 60px; label: root.tire-after-rl; }
-                            TireCorner { x: parent.width - 68px; y: parent.height - 60px; label: root.tire-after-rr; }
+                            TireCorner { x: 12px; y: parent.height - (root.include-spare ? 120px : 60px); label: root.tire-after-rl; }
+                            TireCorner { x: parent.width - 68px; y: parent.height - (root.include-spare ? 120px : 60px); label: root.tire-after-rr; }
+                            if root.include-spare: TireCorner {
+                                x: (parent.width - 56px) / 2;
+                                y: parent.height - 56px;
+                                label: "SP " + root.tire-after-spare;
+                            }
                         }
                         Text {
                             text: "Tread depths and mileage per tire move with each corner when you apply.";
@@ -638,7 +656,32 @@ export component MainWindow inherits Window {
                         }
                     }
                     if show-tires: Card {
-                        title: "Rotation pattern"; body: "";
+                        title: "Spare tire"; body: "Most people leave a temporary/donut spare out of rotation. Enable only if you have a full-size matching spare.";
+                        HorizontalBox {
+                            spacing: 6px;
+                            ChoiceBtn {
+                                label: "4 tires only";
+                                active: !root.include-spare;
+                                clicked => { root.set-include-spare(false); }
+                            }
+                            ChoiceBtn {
+                                label: "Include spare";
+                                active: root.include-spare;
+                                clicked => { root.set-include-spare(true); }
+                            }
+                        }
+                        if root.include-spare: LineEdit {
+                            placeholder-text: "Spare tire ID (e.g. E)";
+                            text <=> root.tire-spare;
+                            edited => { root.set-spare-label(); }
+                        }
+                        if root.include-spare: Text {
+                            text: "5-tire patterns cycle the spare into the corners so rubber wears evenly.";
+                            font-size: 12px; color: Theme.text-muted; wrap: word-wrap;
+                        }
+                    }
+                    if show-tires: Card {
+                        title: "Rotation pattern"; body: root.include-spare ? "5-tire patterns (spare included)" : "4-tire patterns (spare stays put)";
                         HorizontalBox {
                             spacing: 6px;
                             ChoiceBtn { label: "Fwd cross"; active: root.tire-pattern == "forward_cross"; clicked => { root.set-pattern("forward_cross"); } }
@@ -675,6 +718,10 @@ export component MainWindow inherits Window {
                             LineEdit { placeholder-text: "RL " + root.label-tread; text <=> root.tread-rl; horizontal-stretch: 1; }
                             LineEdit { placeholder-text: "RR " + root.label-tread; text <=> root.tread-rr; horizontal-stretch: 1; }
                         }
+                        if root.include-spare: LineEdit {
+                            placeholder-text: "SP " + root.label-tread;
+                            text <=> root.tread-spare;
+                        }
                         Button { text: "Save tread depths"; primary: true; clicked => { root.save-tread(); } }
                     }
                     if show-tires: Card {
@@ -691,6 +738,10 @@ export component MainWindow inherits Window {
                         HorizontalBox {
                             LineEdit { placeholder-text: "RL " + root.unit-distance; text <=> root.mi-rl; horizontal-stretch: 1; }
                             LineEdit { placeholder-text: "RR " + root.unit-distance; text <=> root.mi-rr; horizontal-stretch: 1; }
+                        }
+                        if root.include-spare: LineEdit {
+                            placeholder-text: "SP " + root.unit-distance;
+                            text <=> root.mi-spare;
                         }
                         Button { text: "Save tire distance"; primary: true; clicked => { root.save-tire-miles(); } }
                     }
@@ -878,7 +929,7 @@ export component MainWindow inherits Window {
                         Button { text: "Donate"; clicked => { root.open-donate(); } }
                         Button { text: "Send feedback (GitHub Issues)"; clicked => { root.open-feedback(); } }
                     }
-                    Card { title: "About"; body: "FixItGarage 0.2.9 — service templates, parts reminders, full cost rollup (tires + services)."; }
+                    Card { title: "About"; body: "FixItGarage 0.2.10 — optional spare in tire rotation (off by default)."; }
                     if status-message != "": Text { text: status-message; color: Theme.ok; wrap: word-wrap; }
                 }
             }

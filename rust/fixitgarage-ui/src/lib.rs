@@ -233,6 +233,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     parse(ui.get_tread_fr()),
                     parse(ui.get_tread_rl()),
                     parse(ui.get_tread_rr()),
+                    parse(ui.get_tread_spare()),
                 );
                 ui.set_status_message("Tread depths saved.".into());
                 refresh_ui(&ui, &s);
@@ -317,6 +318,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     parse(ui.get_mi_fr()),
                     parse(ui.get_mi_rl()),
                     parse(ui.get_mi_rr()),
+                    parse(ui.get_mi_spare()),
                 );
                 ui.set_status_message("Distance per tire saved.".into());
                 refresh_ui(&ui, &s);
@@ -475,12 +477,52 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
     {
         let ui_weak = ui.as_weak();
         let state = state.clone();
+        ui.on_set_include_spare(move |include| {
+            let mut s = state.borrow_mut();
+            s.set_include_spare(include);
+            if let Some(ui) = ui_weak.upgrade() {
+                ui.set_status_message(
+                    if include {
+                        "Spare included in rotation (full-size spare only)."
+                    } else {
+                        "4-tire rotation — spare stays put (default)."
+                    }
+                    .into(),
+                );
+                refresh_ui(&ui, &s);
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_set_spare_label(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let mut s = state.borrow_mut();
+                s.set_spare_label(ui.get_tire_spare().to_string());
+                refresh_ui(&ui, &s);
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
         ui.on_apply_rotation(move || {
             let mut s = state.borrow_mut();
+            let with_spare = s.include_spare_in_rotation;
             s.apply_tire_rotation();
             s.save();
             if let Some(ui) = ui_weak.upgrade() {
-                ui.set_status_message("Rotation applied.".into());
+                ui.set_status_message(
+                    if with_spare {
+                        "5-tire rotation applied (spare included)."
+                    } else {
+                        "4-tire rotation applied."
+                    }
+                    .into(),
+                );
                 refresh_ui(&ui, &s);
             }
         });
@@ -1137,11 +1179,14 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     ui.set_tire_fr(state.tire_layout.fr.clone().into());
     ui.set_tire_rl(state.tire_layout.rl.clone().into());
     ui.set_tire_rr(state.tire_layout.rr.clone().into());
+    ui.set_tire_spare(state.tire_layout.spare.clone().into());
+    ui.set_include_spare(state.include_spare_in_rotation);
     let after = state.preview_after_layout();
     ui.set_tire_after_fl(after.fl.into());
     ui.set_tire_after_fr(after.fr.into());
     ui.set_tire_after_rl(after.rl.into());
     ui.set_tire_after_rr(after.rr.into());
+    ui.set_tire_after_spare(after.spare.into());
     ui.set_tire_pattern(state.tire_pattern.clone().into());
     ui.set_tire_preview(state.tire_preview().into());
 
@@ -1421,6 +1466,12 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
             .unwrap_or_default()
             .into(),
     );
+    ui.set_mi_spare(
+        tm.spare
+            .map(|v| miles_to_display(v, u).to_string())
+            .unwrap_or_default()
+            .into(),
+    );
     ui.set_cloud_url(state.cloud_webdav_url.clone().into());
     ui.set_cloud_user(state.cloud_username.clone().into());
     // Do not push password into UI on every refresh if user is typing — only seed when empty
@@ -1430,16 +1481,13 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     let t = state.tread_for_selected();
     let fmt_t = |v: f64| {
         let d = mm_to_display(v, u);
-        if u.is_metric() {
-            format!("{d:.1}")
-        } else {
-            format!("{d:.1}")
-        }
+        format!("{d:.1}")
     };
     ui.set_tread_fl(t.fl.map(fmt_t).unwrap_or_default().into());
     ui.set_tread_fr(t.fr.map(fmt_t).unwrap_or_default().into());
     ui.set_tread_rl(t.rl.map(fmt_t).unwrap_or_default().into());
     ui.set_tread_rr(t.rr.map(fmt_t).unwrap_or_default().into());
+    ui.set_tread_spare(t.spare.map(fmt_t).unwrap_or_default().into());
 }
 
 /// Push due notifications (throttled) for all vehicles + selected component alerts.

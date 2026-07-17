@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.10
+- Tire rotation: optional **Include spare** (off by default — most leave temporary spares out)
+- 5-tire patterns when spare is on; spare shown on diagram; tread/mileage track spare
+
 ## 0.2.9
 - Service quick templates: oil change, fuel fill, tire rotation, shop visit
 - Parts log schedules smart reminders (air/cabin ~12 mo/15k; oil filter ~6 mo/5k)
