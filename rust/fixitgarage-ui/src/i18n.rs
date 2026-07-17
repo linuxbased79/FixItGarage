@@ -18,6 +18,12 @@ pub enum LanguagePref {
     Es,
     Fr,
     De,
+    /// Japanese 日本語
+    Ja,
+    /// Korean 한국어
+    Ko,
+    /// Chinese Simplified 简体中文
+    Zh,
 }
 
 impl LanguagePref {
@@ -27,6 +33,9 @@ impl LanguagePref {
             "ES" | "SPANISH" | "ES_ES" | "ES_MX" => Self::Es,
             "FR" | "FRENCH" | "FR_FR" => Self::Fr,
             "DE" | "GERMAN" | "DE_DE" => Self::De,
+            "JA" | "JP" | "JAPANESE" | "JA_JP" => Self::Ja,
+            "KO" | "KR" | "KOREAN" | "KO_KR" => Self::Ko,
+            "ZH" | "ZH_CN" | "ZH_HANS" | "CHINESE" | "CN" => Self::Zh,
             _ => Self::System,
         }
     }
@@ -38,6 +47,9 @@ impl LanguagePref {
             Self::Es => "ES",
             Self::Fr => "FR",
             Self::De => "DE",
+            Self::Ja => "JA",
+            Self::Ko => "KO",
+            Self::Zh => "ZH",
         }
     }
 
@@ -48,6 +60,9 @@ impl LanguagePref {
             Self::Es => "Español",
             Self::Fr => "Français",
             Self::De => "Deutsch",
+            Self::Ja => "日本語",
+            Self::Ko => "한국어",
+            Self::Zh => "简体中文",
         }
     }
 }
@@ -59,6 +74,9 @@ pub enum Lang {
     Es,
     Fr,
     De,
+    Ja,
+    Ko,
+    Zh,
 }
 
 impl Lang {
@@ -68,16 +86,23 @@ impl Lang {
             Self::Es => "es",
             Self::Fr => "fr",
             Self::De => "de",
+            Self::Ja => "ja",
+            Self::Ko => "ko",
+            Self::Zh => "zh",
         }
     }
 
     pub fn from_locale_tag(tag: &str) -> Self {
         let t = tag.trim().to_ascii_lowercase();
+        // BCP-47 style: ja-JP, zh-Hans-CN, ko_KR
         let primary = t.split(['_', '-', '.']).next().unwrap_or("en");
         match primary {
             "es" => Self::Es,
             "fr" => Self::Fr,
             "de" => Self::De,
+            "ja" => Self::Ja,
+            "ko" => Self::Ko,
+            "zh" => Self::Zh, // simplified pack for zh / zh-Hans / zh-CN
             _ => Self::En,
         }
     }
@@ -91,6 +116,9 @@ pub fn resolve_lang(pref: LanguagePref, system_locale: &str) -> Lang {
         LanguagePref::Es => Lang::Es,
         LanguagePref::Fr => Lang::Fr,
         LanguagePref::De => Lang::De,
+        LanguagePref::Ja => Lang::Ja,
+        LanguagePref::Ko => Lang::Ko,
+        LanguagePref::Zh => Lang::Zh,
     }
 }
 
@@ -113,6 +141,9 @@ fn pack(lang: Lang) -> &'static HashMap<&'static str, &'static str> {
         Lang::Es => es_map(),
         Lang::Fr => fr_map(),
         Lang::De => de_map(),
+        Lang::Ja => ja_map(),
+        Lang::Ko => ko_map(),
+        Lang::Zh => zh_map(),
     }
 }
 
@@ -153,6 +184,9 @@ fn en_map() -> &'static HashMap<&'static str, &'static str> {
             ("settings.lang_es", "Español"),
             ("settings.lang_fr", "Français"),
             ("settings.lang_de", "Deutsch"),
+            ("settings.lang_ja", "日本語"),
+            ("settings.lang_ko", "한국어"),
+            ("settings.lang_zh", "简体中文"),
             ("settings.feature_focus", "Feature focus"),
             ("settings.feature_body", "Hides DIY-only or shop-only tools on the main tabs and More."),
             ("settings.data", "Data & backup"),
@@ -366,6 +400,198 @@ fn de_map() -> &'static HashMap<&'static str, &'static str> {
     })
 }
 
+fn ja_map() -> &'static HashMap<&'static str, &'static str> {
+    static M: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
+    M.get_or_init(|| {
+        HashMap::from([
+            ("nav.home", "ホーム"),
+            ("nav.cars", "車両"),
+            ("nav.service", "整備"),
+            ("nav.tires", "タイヤ"),
+            ("nav.costs", "費用"),
+            ("nav.more", "その他"),
+            ("nav.settings", "設定"),
+            ("app.title", "FixItGarage"),
+            ("common.save", "保存"),
+            ("common.delete", "削除"),
+            ("common.back", "戻る"),
+            ("common.back_more", "その他へ戻る"),
+            ("common.switch", "切替"),
+            ("settings.title", "⚙ 設定"),
+            ("settings.intro", "アプリの設定。追跡とツールは「その他」にあります。"),
+            ("settings.appearance", "外観"),
+            ("settings.appearance_body", "ダークが既定です。この端末に保存されます。"),
+            ("settings.dark", "ダーク"),
+            ("settings.light", "ライト"),
+            ("settings.units", "単位"),
+            ("settings.units_body", "ヤード・ポンド法またはメートル法を選択。表示時に換算します。"),
+            ("settings.imperial", "ヤード・ポンド"),
+            ("settings.metric", "メートル法"),
+            ("settings.language", "言語"),
+            ("settings.language_body", "システム既定は端末の言語に従います。または FixItGarage だけの言語パックを選べます。"),
+            ("settings.lang_system", "システム既定"),
+            ("settings.lang_en", "English"),
+            ("settings.lang_es", "Español"),
+            ("settings.lang_fr", "Français"),
+            ("settings.lang_de", "Deutsch"),
+            ("settings.lang_ja", "日本語"),
+            ("settings.lang_ko", "한국어"),
+            ("settings.lang_zh", "简体中文"),
+            ("settings.feature_focus", "機能フォーカス"),
+            ("settings.feature_body", "DIY 専用またはショップ専用のツールを非表示にします。"),
+            ("settings.data", "データとバックアップ"),
+            ("settings.data_body", "端末優先。JSON バックアップを作成してクラウドへ送れます。"),
+            ("settings.cloud", "クラウドアプリ（推奨）"),
+            ("settings.webdav", "Nextcloud / ownCloud / WebDAV"),
+            ("settings.support", "サポート"),
+            ("settings.about", "情報"),
+            ("settings.donate", "寄付"),
+            ("settings.feedback", "フィードバック（GitHub Issues）"),
+            ("more.title", "その他"),
+            ("more.intro", "選択中の車両の追跡とツール。設定は歯車から。"),
+            ("more.trackers", "メンテナンストラッカー"),
+            ("more.logs", "記録とリマインダー"),
+            ("more.quick", "クイックリンク"),
+            ("more.open_settings", "⚙ 設定を開く"),
+            ("home.last_service", "前回の整備"),
+            ("home.vehicles", "車両"),
+            ("home.quick_actions", "クイック操作"),
+            ("home.at_a_glance", "概要"),
+            ("home.upcoming", "予定（90日 / 5k）"),
+            ("status.language_set", "言語を保存しました。"),
+            ("status.language_system", "システム言語を使用します。"),
+        ])
+    })
+}
+
+fn ko_map() -> &'static HashMap<&'static str, &'static str> {
+    static M: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
+    M.get_or_init(|| {
+        HashMap::from([
+            ("nav.home", "홈"),
+            ("nav.cars", "차량"),
+            ("nav.service", "정비"),
+            ("nav.tires", "타이어"),
+            ("nav.costs", "비용"),
+            ("nav.more", "더보기"),
+            ("nav.settings", "설정"),
+            ("app.title", "FixItGarage"),
+            ("common.save", "저장"),
+            ("common.delete", "삭제"),
+            ("common.back", "뒤로"),
+            ("common.back_more", "더보기로 돌아가기"),
+            ("common.switch", "전환"),
+            ("settings.title", "⚙ 설정"),
+            ("settings.intro", "앱 환경설정. 추적 도구는 더보기에 있습니다."),
+            ("settings.appearance", "화면"),
+            ("settings.appearance_body", "어두운 모드가 기본입니다. 이 기기에 저장됩니다."),
+            ("settings.dark", "어두움"),
+            ("settings.light", "밝음"),
+            ("settings.units", "단위"),
+            ("settings.units_body", "야드파운드 또는 미터법을 선택하세요. 표시 시 변환됩니다."),
+            ("settings.imperial", "야드파운드"),
+            ("settings.metric", "미터법"),
+            ("settings.language", "언어"),
+            ("settings.language_body", "시스템 기본은 휴대폰 언어를 따릅니다. 또는 FixItGarage 전용 언어 팩을 고를 수 있습니다."),
+            ("settings.lang_system", "시스템 기본"),
+            ("settings.lang_en", "English"),
+            ("settings.lang_es", "Español"),
+            ("settings.lang_fr", "Français"),
+            ("settings.lang_de", "Deutsch"),
+            ("settings.lang_ja", "日本語"),
+            ("settings.lang_ko", "한국어"),
+            ("settings.lang_zh", "简体中文"),
+            ("settings.feature_focus", "기능 초점"),
+            ("settings.feature_body", "DIY 전용 또는 정비소 전용 도구를 숨깁니다."),
+            ("settings.data", "데이터 및 백업"),
+            ("settings.data_body", "로컬 우선. JSON 백업을 만든 뒤 클라우드로 보낼 수 있습니다."),
+            ("settings.cloud", "클라우드 앱 (권장)"),
+            ("settings.webdav", "Nextcloud / ownCloud / WebDAV"),
+            ("settings.support", "지원"),
+            ("settings.about", "정보"),
+            ("settings.donate", "후원"),
+            ("settings.feedback", "피드백 (GitHub Issues)"),
+            ("more.title", "더보기"),
+            ("more.intro", "선택한 차량의 추적 도구. 설정은 톱니바퀴에서."),
+            ("more.trackers", "정비 추적"),
+            ("more.logs", "기록 및 알림"),
+            ("more.quick", "바로가기"),
+            ("more.open_settings", "⚙ 설정 열기"),
+            ("home.last_service", "최근 정비"),
+            ("home.vehicles", "차량"),
+            ("home.quick_actions", "빠른 작업"),
+            ("home.at_a_glance", "한눈에"),
+            ("home.upcoming", "예정 (90일 / 5k)"),
+            ("status.language_set", "언어가 저장되었습니다."),
+            ("status.language_system", "시스템 언어를 사용합니다."),
+        ])
+    })
+}
+
+fn zh_map() -> &'static HashMap<&'static str, &'static str> {
+    static M: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
+    M.get_or_init(|| {
+        HashMap::from([
+            ("nav.home", "主页"),
+            ("nav.cars", "车辆"),
+            ("nav.service", "保养"),
+            ("nav.tires", "轮胎"),
+            ("nav.costs", "费用"),
+            ("nav.more", "更多"),
+            ("nav.settings", "设置"),
+            ("app.title", "FixItGarage"),
+            ("common.save", "保存"),
+            ("common.delete", "删除"),
+            ("common.back", "返回"),
+            ("common.back_more", "返回更多"),
+            ("common.switch", "切换"),
+            ("settings.title", "⚙ 设置"),
+            ("settings.intro", "应用偏好。跟踪与工具在“更多”中。"),
+            ("settings.appearance", "外观"),
+            ("settings.appearance_body", "默认深色。选择会保存在本设备。"),
+            ("settings.dark", "深色"),
+            ("settings.light", "浅色"),
+            ("settings.units", "计量单位"),
+            ("settings.units_body", "选择英制或公制。显示时会换算。"),
+            ("settings.imperial", "英制"),
+            ("settings.metric", "公制"),
+            ("settings.language", "语言"),
+            ("settings.language_body", "系统默认跟随手机语言。也可只为 FixItGarage 选择语言包。"),
+            ("settings.lang_system", "系统默认"),
+            ("settings.lang_en", "English"),
+            ("settings.lang_es", "Español"),
+            ("settings.lang_fr", "Français"),
+            ("settings.lang_de", "Deutsch"),
+            ("settings.lang_ja", "日本語"),
+            ("settings.lang_ko", "한국어"),
+            ("settings.lang_zh", "简体中文"),
+            ("settings.feature_focus", "功能侧重"),
+            ("settings.feature_body", "隐藏仅 DIY 或仅修车厂相关工具。"),
+            ("settings.data", "数据与备份"),
+            ("settings.data_body", "本地优先。创建 JSON 备份并发送到云应用。"),
+            ("settings.cloud", "云应用（推荐）"),
+            ("settings.webdav", "Nextcloud / ownCloud / WebDAV"),
+            ("settings.support", "支持"),
+            ("settings.about", "关于"),
+            ("settings.donate", "捐赠"),
+            ("settings.feedback", "发送反馈（GitHub Issues）"),
+            ("more.title", "更多"),
+            ("more.intro", "当前车辆的跟踪与工具。偏好在设置（齿轮）中。"),
+            ("more.trackers", "保养跟踪"),
+            ("more.logs", "记录与提醒"),
+            ("more.quick", "快捷入口"),
+            ("more.open_settings", "⚙ 打开设置"),
+            ("home.last_service", "上次保养"),
+            ("home.vehicles", "车辆"),
+            ("home.quick_actions", "快捷操作"),
+            ("home.at_a_glance", "总览"),
+            ("home.upcoming", "即将到期（90天 / 5k）"),
+            ("status.language_set", "语言已保存。"),
+            ("status.language_system", "使用系统语言。"),
+        ])
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -375,17 +601,28 @@ mod tests {
         assert_eq!(resolve_lang(LanguagePref::System, "es_MX"), Lang::Es);
         assert_eq!(resolve_lang(LanguagePref::System, "de-DE"), Lang::De);
         assert_eq!(resolve_lang(LanguagePref::System, "en_US"), Lang::En);
+        assert_eq!(resolve_lang(LanguagePref::System, "ja_JP"), Lang::Ja);
+        assert_eq!(resolve_lang(LanguagePref::System, "ko-KR"), Lang::Ko);
+        assert_eq!(resolve_lang(LanguagePref::System, "zh-Hans-CN"), Lang::Zh);
     }
 
     #[test]
     fn override_ignores_os() {
         assert_eq!(resolve_lang(LanguagePref::Fr, "en_US"), Lang::Fr);
+        assert_eq!(resolve_lang(LanguagePref::Ja, "en_US"), Lang::Ja);
     }
 
     #[test]
     fn spanish_nav() {
         assert_eq!(t(Lang::Es, "nav.home"), "Inicio");
         assert_eq!(t(Lang::Es, "nav.settings"), "Ajustes");
+    }
+
+    #[test]
+    fn asian_nav() {
+        assert_eq!(t(Lang::Ja, "nav.home"), "ホーム");
+        assert_eq!(t(Lang::Ko, "nav.settings"), "설정");
+        assert_eq!(t(Lang::Zh, "nav.more"), "更多");
     }
 
     #[test]

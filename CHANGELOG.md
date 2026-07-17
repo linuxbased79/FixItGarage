@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.13
+- Asian language packs: **日本語**, **한국어**, **简体中文**
+- System default detects ja / ko / zh locales
+- Settings language picker lists the new packs
+
 ## 0.2.12
 - Language packs: **System default** (follows phone OS) or override EN / ES / FR / DE
 - Settings → Language; bottom nav, Settings, More, and key Home titles are translated
