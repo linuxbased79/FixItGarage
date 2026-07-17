@@ -814,14 +814,14 @@ export component MainWindow inherits Window {
                         Button { text: "Save tire distance"; primary: true; clicked => { root.save-tire-miles(); } }
                     }
                     if show-tires: Card {
-                        title: "Tire purchase"; body: "Log a new set. Paste receipt text (OCR / email / clipboard) to auto-fill.";
+                        title: "Tire purchase"; body: "Log a new set. Paste & fill from OCR / email clipboard (one tap).";
                         LineEdit { placeholder-text: "Paste tire receipt text"; text <=> root.tire-rcp-paste; }
                         HorizontalBox {
                             spacing: 6px;
-                            Button { text: "From clipboard"; clicked => { root.paste-tire-clipboard(); } }
+                            Button { text: "Paste & fill"; primary: true; clicked => { root.paste-tire-clipboard(); } }
                             Button { text: "OCR helper"; clicked => { root.open-ocr-helper(); } }
                         }
-                        Button { text: "Parse receipt text"; clicked => { root.parse-tire-receipt(); } }
+                        Button { text: "Parse text above"; clicked => { root.parse-tire-receipt(); } }
                         LineEdit { placeholder-text: "Brand"; text <=> root.tire-brand; }
                         LineEdit { placeholder-text: "Model"; text <=> root.tire-model; }
                         LineEdit { placeholder-text: "Size (e.g. 225/65R17)"; text <=> root.tire-size; }
@@ -1056,7 +1056,7 @@ export component MainWindow inherits Window {
                     }
                     Card {
                         title: root.tr-settings-about;
-                        body: "FixItGarage 0.2.16 — release packaging for F-Droid/Play; boot-resilient reminders; OpenDyslexic; multi-language.";
+                        body: "FixItGarage 0.2.17 — paste & fill OCR, metric receipts (km/L/€), F-Droid OCR apps; boot-resilient reminders; OpenDyslexic.";
                     }
                     Card {
                         title: "Reminders after reboot";
@@ -1343,7 +1343,7 @@ export component MainWindow inherits Window {
                     PageTitle { label: "Receipt log"; }
                     VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text {
-                        text: "Photo the receipt, run an OCR app (or Open OCR helper), copy text, then Paste from clipboard and Auto-fill.";
+                        text: "1) Take photo or open OCR helper  2) Copy text in that app  3) Paste & fill here (one tap). Metric receipts (km, L, €) supported.";
                         font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
                     }
                     Card {
@@ -1356,10 +1356,10 @@ export component MainWindow inherits Window {
                         HorizontalBox {
                             spacing: 6px;
                             Button { text: "Open OCR helper"; clicked => { root.open-ocr-helper(); } }
-                            Button { text: "Paste clipboard"; clicked => { root.paste-receipt-clipboard(); } }
+                            Button { text: "Paste & fill"; primary: true; clicked => { root.paste-receipt-clipboard(); } }
                         }
                         LineEdit { placeholder-text: "Paste receipt text (from OCR app or email)"; text <=> root.rcp-paste; }
-                        Button { text: "Auto-fill from pasted text"; primary: true; clicked => { root.parse-receipt-text(); } }
+                        Button { text: "Auto-fill from text above"; clicked => { root.parse-receipt-text(); } }
                         LineEdit { placeholder-text: "Title (e.g. Oil change shop)"; text <=> root.rcp-title; }
                         LineEdit { placeholder-text: "Date YYYY-MM-DD"; text <=> root.rcp-date; }
                         LineEdit { placeholder-text: root.label-distance; text <=> root.rcp-mileage; }

@@ -259,6 +259,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
 
     {
         let ui_weak = ui.as_weak();
+        let state = state.clone();
         ui.on_parse_tire_receipt(move || {
             if let Some(ui) = ui_weak.upgrade() {
                 let paste = ui.get_tire_rcp_paste().to_string();
@@ -267,6 +268,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     return;
                 }
                 let p = parse_tire_receipt_text(&paste);
+                let u = state.borrow().unit_system();
                 let mut filled = 0u32;
                 if let Some(b) = p.brand {
                     ui.set_tire_brand(b.into());
@@ -285,7 +287,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     filled += 1;
                 }
                 if let Some(mi) = p.mileage {
-                    ui.set_tire_buy_mileage(mi.to_string().into());
+                    ui.set_tire_buy_mileage(miles_to_display(mi, u).to_string().into());
                     filled += 1;
                 }
                 if let Some(n) = p.notes {
@@ -1088,14 +1090,56 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
 
     {
         let ui_weak = ui.as_weak();
+        let state = state.clone();
         ui.on_paste_receipt_clipboard(move || {
             if let Some(ui) = ui_weak.upgrade() {
                 match read_clipboard() {
                     Some(text) => {
-                        ui.set_rcp_paste(text.into());
-                        ui.set_status_message(
-                            "Clipboard pasted — tap Auto-fill from pasted text.".into(),
-                        );
+                        ui.set_rcp_paste(text.clone().into());
+                        // One-tap: paste + auto-fill in the same action
+                        let p = parse_receipt_text(&text);
+                        let u = state.borrow().unit_system();
+                        let mut filled = 0u32;
+                        if let Some(d) = p.date {
+                            ui.set_rcp_date(d.into());
+                            filled += 1;
+                        }
+                        if let Some(m) = p.mileage {
+                            ui.set_rcp_mileage(miles_to_display(m, u).to_string().into());
+                            filled += 1;
+                        }
+                        if let Some(g) = p.gallons {
+                            let shown = gallons_to_display(g, u);
+                            ui.set_rcp_gallons(format!("{shown:.3}").into());
+                            filled += 1;
+                        }
+                        if let Some(v) = p.parts_cost {
+                            ui.set_rcp_parts(format!("{v:.2}").into());
+                            filled += 1;
+                        }
+                        if let Some(v) = p.labor_cost {
+                            ui.set_rcp_labor(format!("{v:.2}").into());
+                            filled += 1;
+                        }
+                        if let Some(v) = p.fuel_cost {
+                            ui.set_rcp_fuel(format!("{v:.2}").into());
+                            filled += 1;
+                        }
+                        if let Some(s) = p.shop_name {
+                            ui.set_rcp_shop(s.into());
+                            filled += 1;
+                        }
+                        if let Some(t) = p.title {
+                            if ui.get_rcp_title().is_empty() {
+                                ui.set_rcp_title(t.into());
+                                filled += 1;
+                            }
+                        } else if ui.get_rcp_title().is_empty() {
+                            ui.set_rcp_title("Receipt import".into());
+                        }
+                        ui.set_status_message(format!(
+                            "Clipboard → {filled} field(s) filled. Review and save."
+                        ).into());
                     }
                     None => ui.set_status_message("Clipboard empty or unavailable.".into()),
                 }
@@ -1105,14 +1149,43 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
 
     {
         let ui_weak = ui.as_weak();
+        let state = state.clone();
         ui.on_paste_tire_clipboard(move || {
             if let Some(ui) = ui_weak.upgrade() {
                 match read_clipboard() {
                     Some(text) => {
-                        ui.set_tire_rcp_paste(text.into());
-                        ui.set_status_message(
-                            "Clipboard pasted — tap Parse receipt text.".into(),
-                        );
+                        ui.set_tire_rcp_paste(text.clone().into());
+                        let p = parse_tire_receipt_text(&text);
+                        let u = state.borrow().unit_system();
+                        let mut filled = 0u32;
+                        if let Some(b) = p.brand {
+                            ui.set_tire_brand(b.into());
+                            filled += 1;
+                        }
+                        if let Some(m) = p.model {
+                            ui.set_tire_model(m.into());
+                            filled += 1;
+                        }
+                        if let Some(sz) = p.size {
+                            ui.set_tire_size(sz.into());
+                            filled += 1;
+                        }
+                        if let Some(c) = p.cost {
+                            ui.set_tire_cost(format!("{c:.2}").into());
+                            filled += 1;
+                        }
+                        if let Some(mi) = p.mileage {
+                            ui.set_tire_buy_mileage(miles_to_display(mi, u).to_string().into());
+                            filled += 1;
+                        }
+                        if let Some(n) = p.notes {
+                            if ui.get_tire_buy_notes().is_empty() {
+                                ui.set_tire_buy_notes(n.into());
+                            }
+                        }
+                        ui.set_status_message(format!(
+                            "Clipboard → tire receipt ({filled} fields). Review and Save."
+                        ).into());
                     }
                     None => ui.set_status_message("Clipboard empty or unavailable.".into()),
                 }

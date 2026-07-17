@@ -21,81 +21,141 @@ pub struct ParsedReceipt {
 pub fn parse_receipt_text(text: &str) -> ParsedReceipt {
     let mut out = ParsedReceipt::default();
 
-    // Dates: 2024-07-16, 07/16/2024, 7/16/24
+    // Dates: 2024-07-16, 07/16/2024, 16/07/2024 (EU), 7/16/24
     if let Ok(re) = Regex::new(
-        r"(?i)\b(20\d{2})[-/](\d{1,2})[-/](\d{1,2})\b|\b(\d{1,2})[/\-](\d{1,2})[/\-](20\d{2}|\d{2})\b",
+        r"(?i)\b(20\d{2})[-/](\d{1,2})[-/](\d{1,2})\b|\b(\d{1,2})[/\-.](\d{1,2})[/\-.](20\d{2}|\d{2})\b",
     ) {
         if let Some(c) = re.captures(text) {
             if let (Some(y), Some(m), Some(d)) = (c.get(1), c.get(2), c.get(3)) {
-                out.date = Some(format!(
-                    "{:04}-{:02}-{:02}",
-                    y.as_str().parse::<u32>().unwrap_or(0),
-                    m.as_str().parse::<u32>().unwrap_or(0),
-                    d.as_str().parse::<u32>().unwrap_or(0)
-                ));
-            } else if let (Some(m), Some(d), Some(y)) = (c.get(4), c.get(5), c.get(6)) {
+                let year = y.as_str().parse::<u32>().unwrap_or(0);
+                let month = m.as_str().parse::<u32>().unwrap_or(0);
+                let day = d.as_str().parse::<u32>().unwrap_or(0);
+                if (1..=12).contains(&month) && (1..=31).contains(&day) {
+                    out.date = Some(format!("{year:04}-{month:02}-{day:02}"));
+                }
+            } else if let (Some(a), Some(b), Some(y)) = (c.get(4), c.get(5), c.get(6)) {
                 let mut year = y.as_str().parse::<u32>().unwrap_or(0);
                 if year < 100 {
                     year += 2000;
                 }
-                out.date = Some(format!(
-                    "{:04}-{:02}-{:02}",
-                    year,
-                    m.as_str().parse::<u32>().unwrap_or(0),
-                    d.as_str().parse::<u32>().unwrap_or(0)
-                ));
+                let n1 = a.as_str().parse::<u32>().unwrap_or(0);
+                let n2 = b.as_str().parse::<u32>().unwrap_or(0);
+                // Prefer DMY when first number > 12 (16/07/2024); else MDY (US)
+                let (month, day) = if n1 > 12 && n2 <= 12 {
+                    (n2, n1)
+                } else if n2 > 12 && n1 <= 12 {
+                    (n1, n2)
+                } else {
+                    (n1, n2) // ambiguous → MDY
+                };
+                if (1..=12).contains(&month) && (1..=31).contains(&day) {
+                    out.date = Some(format!("{year:04}-{month:02}-{day:02}"));
+                }
             }
         }
     }
 
-    // Mileage: 123,456 mi / ODO 123456 / mileage: 98000
+    // Mileage / odometer — store as **miles** always.
+    // Patterns: 98,432 mi · ODO 123456 · 158200 km · mileage: 98000
     if let Ok(re) = Regex::new(
-        r"(?i)(?:odo(?:meter)?|mileage|miles?|mi\.?)\s*[:=]?\s*([\d,]{3,7})\b|\b([\d,]{4,7})\s*(?:mi|miles)\b",
+        r"(?i)(?:odo(?:meter)?|mileage|kilomet(?:er|re)?s?|km|miles?|mi\.?)\s*[:=]?\s*([\d,]{3,7})\s*(km|mi|miles?)?\b|\b([\d,]{4,7})\s*(km|mi|miles)\b",
     ) {
         if let Some(c) = re.captures(text) {
-            let raw = c.get(1).or_else(|| c.get(2)).map(|m| m.as_str()).unwrap_or("");
+            let raw = c
+                .get(1)
+                .or_else(|| c.get(3))
+                .map(|m| m.as_str())
+                .unwrap_or("");
+            let unit = c
+                .get(2)
+                .or_else(|| c.get(4))
+                .map(|m| m.as_str().to_ascii_lowercase())
+                .unwrap_or_default();
             let digits: String = raw.chars().filter(|ch| ch.is_ascii_digit()).collect();
             if let Ok(n) = digits.parse::<u32>() {
-                if (1_000..=2_000_000).contains(&n) {
-                    out.mileage = Some(n);
+                if (1_000..=3_000_000).contains(&n) {
+                    let miles = if unit == "km" {
+                        ((f64::from(n) / 1.609_344).round() as u32).max(1)
+                    } else {
+                        // bare "odo" number or mi → treat as miles (legacy NA receipts)
+                        n
+                    };
+                    // If label was kilometre without unit group, detect from full match text
+                    let miles = if unit.is_empty() {
+                        let snip = c.get(0).map(|m| m.as_str().to_ascii_lowercase()).unwrap_or_default();
+                        if snip.contains("km") || snip.contains("kilomet") {
+                            ((f64::from(n) / 1.609_344).round() as u32).max(1)
+                        } else {
+                            miles
+                        }
+                    } else {
+                        miles
+                    };
+                    out.mileage = Some(miles);
                 }
             }
         }
     }
 
-    // Gallons
-    if let Ok(re) = Regex::new(r"(?i)\b(\d{1,3}(?:\.\d{1,3})?)\s*(?:gal|gallons?)\b") {
+    // Fuel volume — store as **gallons** always.
+    // 12.4 gal · 45.2 L · 45,2 l (EU comma) · 12 liters
+    if let Ok(re) = Regex::new(
+        r"(?i)\b(\d{1,3}(?:[.,]\d{1,3})?)\s*(?:gal|gallons?|l|liters?|litres?)\b",
+    ) {
         if let Some(c) = re.captures(text) {
-            if let Ok(g) = c[1].parse::<f64>() {
-                if g > 0.0 && g < 100.0 {
-                    out.gallons = Some(g);
+            let raw = c[1].replace(',', ".");
+            if let Ok(v) = raw.parse::<f64>() {
+                if v > 0.0 && v < 200.0 {
+                    let match_l = c.get(0).map(|m| m.as_str().to_ascii_lowercase()).unwrap_or_default();
+                    let gallons = if match_l.contains("gal") {
+                        v
+                    } else {
+                        // liters → gallons
+                        v / 3.785_411_784
+                    };
+                    if gallons > 0.0 && gallons < 100.0 {
+                        out.gallons = Some(gallons);
+                    }
                 }
             }
         }
     }
 
-    // Money amounts — classify using the full line for context
+    // Money amounts — $, €, £, USD/EUR/GBP — classify using the full line for context
     let mut amounts: Vec<f64> = Vec::new();
     for line in text.lines() {
         let lower = line.to_ascii_lowercase();
-        let Ok(re) = Regex::new(r"(?i)(?:\$|usd\s*)(\d{1,5}(?:\.\d{2})?)") else {
+        // Amounts like $42.50, €42,50, 42.50 €, 60 EUR (no \b after currency symbols)
+        let Ok(re) = Regex::new(
+            r"(?i)(?:\$|usd\s*|€|eur\s*|£|gbp\s*)(\d{1,5}(?:[.,]\d{2})?)|(\d{1,5}(?:[.,]\d{2})?)\s*(?:€|eur\b|usd\b|gbp\b|\$)",
+        ) else {
             continue;
         };
         for c in re.captures_iter(line) {
-            if let Ok(v) = c[1].parse::<f64>() {
+            let raw = c
+                .get(1)
+                .or_else(|| c.get(2))
+                .map(|m| m.as_str().replace(',', "."))
+                .unwrap_or_default();
+            if let Ok(v) = raw.parse::<f64>() {
                 amounts.push(v);
-                if lower.contains("labor") || lower.contains("labour") {
+                if lower.contains("labor") || lower.contains("labour") || lower.contains("main d'") {
                     out.labor_cost = Some(v);
-                } else if lower.contains("part") {
+                } else if lower.contains("part") || lower.contains("pièce") || lower.contains("pieza")
+                {
                     out.parts_cost = Some(v);
                 } else if lower.contains("fuel")
                     || lower.contains("gas")
                     || lower.contains("petrol")
+                    || lower.contains("diesel")
+                    || lower.contains("essence")
                 {
                     out.fuel_cost = Some(v);
                 } else if lower.contains("total")
                     || lower.contains("amount due")
                     || lower.contains("balance")
+                    || lower.contains("summe")
+                    || lower.contains("gesamt")
                 {
                     out.total_cost = Some(v);
                 }
@@ -195,6 +255,30 @@ mod tests {
     fn parses_gallons() {
         let p = parse_receipt_text("Fuel stop 12.4 gal $45.00");
         assert_eq!(p.gallons, Some(12.4));
+    }
+
+    #[test]
+    fn parses_metric_fuel_and_odometer() {
+        // 45.2 L ≈ 11.94 gal; 158200 km ≈ 98326 mi
+        let text = "Tankstelle Muster\nKm-Stand: 158200 km\n45.2 L\nTotal €72.50\n";
+        let p = parse_receipt_text(text);
+        assert!(p.gallons.is_some());
+        let g = p.gallons.unwrap();
+        assert!((g - 11.94).abs() < 0.05, "gallons={g}");
+        assert!(p.mileage.is_some());
+        let mi = p.mileage.unwrap();
+        assert!((98_000..=99_000).contains(&mi), "miles={mi}");
+        assert_eq!(p.total_cost, Some(72.50));
+    }
+
+    #[test]
+    fn parses_euro_parts_labor() {
+        let text = "Garage Lyon\nDate: 16/07/2024\nPièces 42,50 €\nMain d'oeuvre 60,00 €\nTotal 102,50 €\n";
+        let p = parse_receipt_text(text);
+        assert_eq!(p.date.as_deref(), Some("2024-07-16"));
+        assert_eq!(p.parts_cost, Some(42.50));
+        assert_eq!(p.labor_cost, Some(60.00));
+        assert_eq!(p.total_cost, Some(102.50));
     }
 
     #[test]

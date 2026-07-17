@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.17
+- Receipt OCR assist: **Paste & fill** (clipboard + auto-parse in one tap) for service and tire receipts
+- Metric receipts: km→mi, L→gal storage; €/£ amounts; EU DD/MM/YYYY dates
+- OCR helper prefers installed apps (Text Fairy on F-Droid first) before Lens/web
+
 ## 0.2.16
 - Release packaging: `scripts/release-apks.sh` builds both arches with BootReceiver
 - F-Droid draft metadata (`metadata/org.fixitgarage.app.yml`) + updated listing text

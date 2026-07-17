@@ -19,11 +19,11 @@ RepoType: git
 Repo: https://github.com/linuxbased79/FixItGarage.git
 
 Builds:
-  - versionName: 0.2.16
-    versionCode: 2016
+  - versionName: 0.2.17
+    versionCode: 2017
     commit: REPLACE_WITH_TAG_OR_COMMIT
     subdir: rust
-    output: dist/FixItGarage-0.2.16-arm64.apk
+    output: dist/FixItGarage-0.2.17-arm64.apk
     # Maintainer notes: requires Android NDK, rustup targets, xbuild (`x`),
     # OpenJDK, and Android SDK build-tools (aapt2, d8, zipalign, apksigner).
     # See rust/F-DROID.md for the exact recipe.
@@ -39,8 +39,8 @@ Builds:
       - export PATH="$$PATH$$:$$HOME$$/.cargo/bin:$$ANDROID_HOME$$/build-tools/$$BUILD_TOOLS$$"
       - mkdir -p dist
       - x build -p fixitgarage-ui --platform android --arch arm64 --format apk --release
-      - cp target/x/release/android/fixitgarage-ui.apk dist/FixItGarage-0.2.16-arm64-raw.apk
-      - bash scripts/package-apk-with-boot.sh dist/FixItGarage-0.2.16-arm64-raw.apk dist/FixItGarage-0.2.16-arm64.apk 0.2.16 2016
+      - cp target/x/release/android/fixitgarage-ui.apk dist/FixItGarage-0.2.17-arm64-raw.apk
+      - bash scripts/package-apk-with-boot.sh dist/FixItGarage-0.2.17-arm64-raw.apk dist/FixItGarage-0.2.17-arm64.apk 0.2.17 2016
 
 # AntiFeatures:
 #  - NonFreeNet  # only if user enables WebDAV to a third-party host (opt-in)
@@ -48,5 +48,5 @@ Builds:
 ArchivePolicy: 4 versions
 AutoUpdateMode: None
 UpdateCheckMode: Tags
-CurrentVersion: 0.2.16
-CurrentVersionCode: 2016
+CurrentVersion: 0.2.17
+CurrentVersionCode: 2017

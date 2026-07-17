@@ -8,8 +8,8 @@ set -euo pipefail
 
 IN_APK="${1:?input apk}"
 OUT_APK="${2:?output apk}"
-VERSION_NAME="${3:-0.2.15}"
-VERSION_CODE="${4:-2015}"
+VERSION_NAME="${3:-0.2.17}"
+VERSION_CODE="${4:-2017}"
 
 export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}"
 if [[ ! -d "$ANDROID_HOME/platform-tools" && -d /root/Android/Sdk/platform-tools ]]; then

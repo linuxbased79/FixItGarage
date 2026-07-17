@@ -548,16 +548,106 @@ pub fn cancel_app_wake(request_code: i32) {
     }
 }
 
-/// Open a text-from-image / OCR helper (Lens / store search).
+/// Open a text-from-image / OCR helper.
+/// Prefers an installed OCR app (GrapheneOS / F-Droid friendly), then store
+/// search, then Lens web as last resort.
 pub fn open_ocr_helper() {
     #[cfg(target_os = "android")]
     {
+        // Text Fairy is on F-Droid and works without Google Play Services.
+        const OCR_APP_PACKAGES: &[&str] = &[
+            "com.renard.ocr",                          // Text Fairy (F-Droid)
+            "com.google.android.apps.lens",            // Google Lens
+            "com.google.ar.lens",                      // Lens alternate id
+            "com.google.android.googlequicksearchbox", // Google app (Lens entry)
+            "com.microsoft.office.officehubrow",       // Microsoft Office / Lens
+            "com.microsoft.office.officelens",
+        ];
+        for pkg in OCR_APP_PACKAGES {
+            if try_launch_package(pkg) {
+                return;
+            }
+        }
+        // F-Droid listing for Text Fairy, then Play search, then Lens web
+        open_url("https://f-droid.org/packages/com.renard.ocr/");
+        open_url("market://search?q=OCR%20text%20scanner&c=apps");
         open_url("https://lens.google.com/");
     }
     #[cfg(not(target_os = "android"))]
     {
         eprintln!("OCR helper: paste text from any OCR tool into FixItGarage");
     }
+}
+
+/// Launch an app by package name if installed. Returns true on success.
+#[cfg(target_os = "android")]
+fn try_launch_package(package: &str) -> bool {
+    match try_launch_package_android(package) {
+        Ok(()) => true,
+        Err(e) => {
+            eprintln!("launch {package}: {e}");
+            false
+        }
+    }
+}
+
+#[cfg(target_os = "android")]
+fn try_launch_package_android(package: &str) -> Result<(), String> {
+    use jni::objects::{JObject, JValue};
+    use jni::JavaVM;
+
+    let ctx = ndk_context::android_context();
+    let vm =
+        unsafe { JavaVM::from_raw(ctx.vm().cast()) }.map_err(|e| format!("JavaVM: {e}"))?;
+    let mut env = vm
+        .attach_current_thread()
+        .map_err(|e| format!("attach: {e}"))?;
+    let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+
+    let pm = env
+        .call_method(
+            &context,
+            "getPackageManager",
+            "()Landroid/content/pm/PackageManager;",
+            &[],
+        )
+        .map_err(|e| format!("getPackageManager: {e}"))?
+        .l()
+        .map_err(|e| format!("pm: {e}"))?;
+
+    let pkg = env
+        .new_string(package)
+        .map_err(|e| format!("pkg str: {e}"))?;
+    let launch = env
+        .call_method(
+            &pm,
+            "getLaunchIntentForPackage",
+            "(Ljava/lang/String;)Landroid/content/Intent;",
+            &[JValue::Object(&pkg)],
+        )
+        .map_err(|e| format!("getLaunchIntentForPackage: {e}"))?
+        .l()
+        .map_err(|e| format!("launch: {e}"))?;
+    if launch.is_null() {
+        return Err("not installed".into());
+    }
+
+    env.call_method(
+        &launch,
+        "addFlags",
+        "(I)Landroid/content/Intent;",
+        &[JValue::Int(0x1000_0000)], // FLAG_ACTIVITY_NEW_TASK
+    )
+    .map_err(|e| format!("addFlags: {e}"))?;
+
+    env.call_method(
+        &context,
+        "startActivity",
+        "(Landroid/content/Intent;)V",
+        &[JValue::Object(&launch)],
+    )
+    .map_err(|e| format!("startActivity: {e}"))?;
+    Ok(())
 }
 
 #[cfg(target_os = "android")]
