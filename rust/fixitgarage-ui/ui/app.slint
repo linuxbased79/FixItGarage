@@ -148,7 +148,7 @@ export component MainWindow inherits Window {
     in-out property <bool> wizard-done: false;
     in-out property <string> user-mode: "BOTH";
     // 0 home 1 vehicles 2 service 3 tires 4 costs 5 settings
-    // 6 parts 7 battery 8 wipers 9 brakes 10 notes 11 reminders 12 photos 13 receipt
+    // 6 parts 7 battery 8 wipers 9 brakes 10 notes 11 reminders 12 photos 13 receipt 14 fuel
     in-out property <int> page: 0;
 
     in-out property <bool> show-tires: true;
@@ -175,6 +175,12 @@ export component MainWindow inherits Window {
     in-out property <[PhotoRow]> photos: [];
     in-out property <[HistoryRow]> tire-purchases: [];
     in-out property <[HistoryRow]> tire-rotations: [];
+    in-out property <[HistoryRow]> fuel-history: [];
+    in-out property <string> service-search: "";
+    in-out property <string> dash-mpg: "MPG: —";
+    in-out property <string> dash-month: "This month: $0";
+    in-out property <string> dash-year: "This year: $0";
+    in-out property <string> dash-dues: "Reminders: all clear";
 
     in-out property <string> form-name: "";
     in-out property <string> form-make: "";
@@ -308,6 +314,7 @@ export component MainWindow inherits Window {
     callback save-cloud-settings();
     callback upload-cloud-backup();
     callback update-selected-vehicle();
+    callback set-service-search(string);
     callback open-feedback();
     callback open-donate();
 
@@ -349,6 +356,16 @@ export component MainWindow inherits Window {
                     Text { text: "FixItGarage"; font-size: 28px; font-weight: 800; color: Theme.title; }
                     Text { text: mode-label; font-size: 14px; color: Theme.text-muted; }
                     VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    Card {
+                        title: "At a glance";
+                        body: "";
+                        Text { text: dash-mpg; font-size: 16px; font-weight: 700; color: Theme.text; }
+                        Text { text: dash-month; font-size: 14px; color: Theme.text; }
+                        Text { text: dash-year; font-size: 14px; color: Theme.text; }
+                        Text { text: dash-dues; font-size: 13px; color: Theme.text-muted; wrap: word-wrap; }
+                        Button { text: "Fuel / MPG history"; clicked => { root.navigate(14); } }
+                        Button { text: "Costs"; clicked => { root.navigate(4); } }
+                    }
                     if has-due-reminders: Card {
                         title: "Due reminders";
                         body: due-reminders-banner;
@@ -375,6 +392,7 @@ export component MainWindow inherits Window {
                         Button { text: "Scan / log receipt"; clicked => { root.navigate(13); } }
                         Button { text: "Issue photos"; clicked => { root.navigate(12); } }
                         Button { text: "Log service"; clicked => { root.navigate(2); } }
+                        Button { text: "Fuel / MPG history"; clicked => { root.navigate(14); } }
                         if show-tires: Button { text: "Tire rotation"; clicked => { root.navigate(3); } }
                         if show-parts: Button { text: "Parts log"; clicked => { root.navigate(6); } }
                         Button { text: "Reminders"; clicked => { root.navigate(11); } }
@@ -434,6 +452,11 @@ export component MainWindow inherits Window {
                     PageTitle { label: "Maintenance"; }
                     VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text { text: mpg-label; font-size: 13px; color: Theme.text-muted; wrap: word-wrap; }
+                    LineEdit {
+                        placeholder-text: "Search history (title, shop, DIY/shop, mileage)";
+                        text <=> root.service-search;
+                        edited => { root.set-service-search(root.service-search); }
+                    }
                     Card {
                         title: "Log service"; body: show-shop-emphasis ? "Shop & DIY history for this vehicle." : "DIY-focused logging.";
                         LineEdit { placeholder-text: "Title (e.g. Oil change)"; text <=> root.svc-title; }
@@ -614,7 +637,7 @@ export component MainWindow inherits Window {
                         Button { text: "Donate"; clicked => { root.open-donate(); } }
                         Button { text: "Send feedback (GitHub Issues)"; clicked => { root.open-feedback(); } }
                     }
-                    Card { title: "About"; body: "FixItGarage 0.2.1 — notifications, WebDAV backup, receipt text parse, edit vehicle."; }
+                    Card { title: "About"; body: "FixItGarage 0.2.2 — dashboard, service search, fuel/MPG history, F-Droid metadata."; }
                     if status-message != "": Text { text: status-message; color: Theme.ok; wrap: word-wrap; }
                 }
             }
@@ -914,6 +937,25 @@ export component MainWindow inherits Window {
                         Button { text: "Save receipt to history"; primary: true; clicked => { root.save-receipt(); } }
                     }
                     Button { text: "Back to service"; clicked => { root.navigate(2); } }
+                }
+            }
+
+
+            // FUEL / MPG HISTORY
+            if page == 14: ScrollView {
+                width: 100%; height: 100%;
+                VerticalBox {
+                    padding: 16px; spacing: 10px;
+                    PageTitle { label: "Fuel / MPG history"; }
+                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    Text { text: mpg-label; font-size: 15px; font-weight: 700; color: Theme.title; }
+                    Text {
+                        text: "Each fuel fill with gallons logged. Per-fill MPG uses miles since the previous fill (full-tank method).";
+                        font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
+                    }
+                    for f in fuel-history: Card { title: f.title; body: f.detail; }
+                    Button { text: "Log fuel in service"; primary: true; clicked => { root.navigate(2); } }
+                    Button { text: "Back home"; clicked => { root.navigate(0); } }
                 }
             }
 

@@ -1,0 +1,1 @@
+Dashboard, service search, fuel/MPG history. Backup/share and WebDAV still available.

@@ -732,6 +732,17 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         });
     }
 
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_set_service_search(move |q| {
+            if let Some(ui) = ui_weak.upgrade() {
+                ui.set_service_search(q);
+                refresh_ui(&ui, &state.borrow());
+            }
+        });
+    }
+
     ui.on_open_feedback(|| {
         open_url("https://github.com/linuxbased79/FixItGarage/issues");
     });
@@ -830,19 +841,15 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
         .collect();
     ui.set_vehicles(slint::ModelRc::new(slint::VecModel::from(vehicles)));
 
-    let mut services: Vec<_> = state
-        .services_for_selected()
-        .into_iter()
-        .cloned()
-        .collect();
-    services.sort_by(|a, b| b.date_epoch_ms.cmp(&a.date_epoch_ms).then(b.id.cmp(&a.id)));
-    let services: Vec<ServiceRow> = services
+    let query = ui.get_service_search().to_string();
+    let services: Vec<ServiceRow> = state
+        .filtered_services(&query)
         .into_iter()
         .map(|s| {
             let total = s.total_cost();
             ServiceRow {
                 id: s.id as i32,
-                title: s.title.into(),
+                title: s.title.clone().into(),
                 subtitle: format!(
                     "{} · {} mi · {}",
                     format_service_date(s.date_epoch_ms),
@@ -859,6 +866,24 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
         })
         .collect();
     ui.set_services(slint::ModelRc::new(slint::VecModel::from(services)));
+
+    let (dash_mpg, dash_month, dash_year, dash_dues) = state.dashboard_lines();
+    ui.set_dash_mpg(dash_mpg.into());
+    ui.set_dash_month(dash_month.into());
+    ui.set_dash_year(dash_year.into());
+    ui.set_dash_dues(dash_dues.into());
+
+    let fuel: Vec<HistoryRow> = state
+        .fuel_history_lines()
+        .into_iter()
+        .enumerate()
+        .map(|(i, (title, detail))| HistoryRow {
+            id: i as i32,
+            title: title.into(),
+            detail: detail.into(),
+        })
+        .collect();
+    ui.set_fuel_history(slint::ModelRc::new(slint::VecModel::from(fuel)));
 
     let costs: Vec<CostLine> = state
         .cost_labels()

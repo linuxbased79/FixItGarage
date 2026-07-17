@@ -1,1 +1,1 @@
-Local-first vehicle maintenance tracker: services, tires, costs, and more.
+Local-first vehicle maintenance: services, MPG, tires, oil checks, backups.

@@ -398,9 +398,20 @@ impl AppState {
     }
 
     pub fn mpg_label(&self) -> String {
-        let Some(vid) = self.selected_vehicle_id else {
-            return "MPG: select a vehicle".into();
-        };
+        match self.average_mpg() {
+            Some(mpg) => format!("MPG: {mpg:.1}"),
+            None => {
+                if self.selected_vehicle_id.is_none() {
+                    "MPG: select a vehicle".into()
+                } else {
+                    "MPG: need 2+ fuel fill-ups".into()
+                }
+            }
+        }
+    }
+
+    pub fn average_mpg(&self) -> Option<f64> {
+        let vid = self.selected_vehicle_id?;
         let mut fills: Vec<(u32, f64)> = self
             .services
             .iter()
@@ -408,10 +419,73 @@ impl AppState {
             .filter_map(|s| s.gallons.map(|g| (s.mileage, g)))
             .collect();
         fills.sort_by_key(|(m, _)| *m);
-        match average_mpg(&fills) {
-            Some(mpg) => format!("MPG: {mpg:.1}"),
-            None => "MPG: need 2+ fuel fill-ups".into(),
+        average_mpg(&fills)
+    }
+
+    /// Dashboard numbers for the home screen.
+    pub fn dashboard_lines(&self) -> (String, String, String, String) {
+        let mpg = self
+            .average_mpg()
+            .map(|m| format!("{m:.1} MPG avg"))
+            .unwrap_or_else(|| "MPG: —".into());
+        let costs = self.cost_labels();
+        let month = format!("This month: {}", costs[0].1);
+        let year = format!("This year: {}", costs[1].1);
+        let dues = if self.has_due_reminders() {
+            self.due_reminders_summary()
+        } else {
+            "Reminders: all clear".into()
+        };
+        (mpg, month, year, dues)
+    }
+
+    /// Fuel fill-up history with per-leg MPG where possible.
+    pub fn fuel_history_lines(&self) -> Vec<(String, String)> {
+        let Some(vid) = self.selected_vehicle_id else {
+            return Vec::new();
+        };
+        let mut fills: Vec<&ServiceRecord> = self
+            .services
+            .iter()
+            .filter(|s| s.vehicle_id == vid && s.gallons.map(|g| g > 0.0).unwrap_or(false))
+            .collect();
+        fills.sort_by_key(|s| s.mileage);
+        let mut out = Vec::new();
+        for i in 0..fills.len() {
+            let s = fills[i];
+            let date = format_epoch(s.date_epoch_ms);
+            let gal = s.gallons.unwrap_or(0.0);
+            let mut detail = format!("{} mi · {gal:.2} gal", s.mileage);
+            if let Some(fc) = s.fuel_cost {
+                detail.push_str(&format!(" · ${fc:.2}"));
+            }
+            if i > 0 {
+                let prev = fills[i - 1];
+                let miles = s.mileage.saturating_sub(prev.mileage);
+                if miles > 0 && gal > 0.0 {
+                    let leg = f64::from(miles) / gal;
+                    detail.push_str(&format!(" · {leg:.1} MPG this fill"));
+                }
+            }
+            out.push((format!("{date} — {}", s.title), detail));
         }
+        out.reverse();
+        out
+    }
+
+    pub fn filtered_services(&self, query: &str) -> Vec<&ServiceRecord> {
+        let q = query.trim().to_ascii_lowercase();
+        let mut list = self.services_for_selected();
+        if !q.is_empty() {
+            list.retain(|s| {
+                s.title.to_ascii_lowercase().contains(&q)
+                    || s.shop_name.to_ascii_lowercase().contains(&q)
+                    || s.source.as_str().to_ascii_lowercase().contains(&q)
+                    || s.mileage.to_string().contains(&q)
+            });
+        }
+        list.sort_by(|a, b| b.date_epoch_ms.cmp(&a.date_epoch_ms).then(b.id.cmp(&a.id)));
+        list
     }
 
     pub fn cost_labels(&self) -> [(String, String); 3] {
