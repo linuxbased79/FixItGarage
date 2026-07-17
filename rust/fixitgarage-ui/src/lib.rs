@@ -588,6 +588,26 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
     {
         let ui_weak = ui.as_weak();
         let state = state.clone();
+        ui.on_set_dyslexia_font(move |enabled| {
+            let mut s = state.borrow_mut();
+            s.set_dyslexia_font(enabled);
+            if let Some(ui) = ui_weak.upgrade() {
+                ui.set_status_message(
+                    if enabled {
+                        "OpenDyslexic font on — easier reading for many dyslexic folks."
+                    } else {
+                        "Back to the default system font."
+                    }
+                    .into(),
+                );
+                refresh_ui(&ui, &s);
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
         ui.on_set_dark_mode(move |mode| {
             let mut s = state.borrow_mut();
             let mode = mode.to_string();
@@ -1182,6 +1202,8 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     let dark = state.dark_mode.eq_ignore_ascii_case("DARK");
     ui.set_dark_mode(if dark { "DARK" } else { "LIGHT" }.into());
     Theme::get(ui).set_dark(dark);
+    ui.set_dyslexia_font(state.dyslexia_font);
+    Theme::get(ui).set_dyslexia_font(state.dyslexia_font);
 
     let flags = state.feature_flags();
     ui.set_show_tires(flags.show_tires);

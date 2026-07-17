@@ -3,6 +3,10 @@
 
 import { Button, LineEdit, ScrollView, VerticalBox, HorizontalBox } from "std-widgets.slint";
 
+// OpenDyslexic (SIL OFL) — optional accessibility font for dyslexia-friendly reading
+import "./fonts/OpenDyslexic-Regular.otf";
+import "./fonts/OpenDyslexic-Bold.otf";
+
 export struct VehicleRow {
     id: int,
     name: string,
@@ -50,6 +54,10 @@ export struct HistoryRow {
 
 export global Theme {
     in-out property <bool> dark: false;
+    /// When true, UI uses OpenDyslexic (accessibility).
+    in-out property <bool> dyslexia-font: false;
+    /// Active UI font family (empty string = platform default).
+    out property <string> ui-font: dyslexia-font ? "OpenDyslexic" : "";
     out property <color> bg: dark ? #0D1117 : #FAFAFA;
     out property <color> surface: dark ? #161B22 : #F5F5F5;
     out property <color> surface-border: dark ? #30363D : #E0E0E0;
@@ -156,9 +164,13 @@ export component MainWindow inherits Window {
     title: "FixItGarage";
     preferred-width: 390px; preferred-height: 780px; min-width: 320px; min-height: 560px;
     background: Theme.bg;
+    // Empty = system/default UI font; "OpenDyslexic" when accessibility option is on
+    default-font-family: Theme.ui-font;
 
     in-out property <bool> wizard-done: false;
     in-out property <string> user-mode: "BOTH";
+    /// OpenDyslexic accessibility font (saved on device)
+    in-out property <bool> dyslexia-font: false;
     // 0 home 1 vehicles 2 service 3 tires 4 costs
     // 5 more (tools hub) 6 parts 7 battery 8 wipers 9 brakes 10 notes
     // 11 reminders 12 photos 13 receipt 14 fuel 15 settings
@@ -400,6 +412,7 @@ export component MainWindow inherits Window {
     callback set-dark-mode(string);
     callback set-units(string);
     callback set-language(string);
+    callback set-dyslexia-font(bool);
     callback save-part();
     callback save-component();
     callback add-note();
@@ -439,6 +452,7 @@ export component MainWindow inherits Window {
     callback open-donate();
 
     changed dark-mode => { Theme.dark = (root.dark-mode == "DARK"); }
+    changed dyslexia-font => { Theme.dyslexia-font = root.dyslexia-font; }
 
     // ===== Wizard =====
     if !wizard-done: Rectangle {
@@ -912,6 +926,29 @@ export component MainWindow inherits Window {
                         }
                     }
                     Card {
+                        title: "Accessibility · reading";
+                        body: "OpenDyslexic is a free font designed to make reading easier for people with dyslexia. Optional — saved on this device.";
+                        HorizontalBox {
+                            spacing: 6px;
+                            ChoiceBtn {
+                                label: "Default font";
+                                active: !root.dyslexia-font;
+                                clicked => { root.set-dyslexia-font(false); }
+                            }
+                            ChoiceBtn {
+                                label: "OpenDyslexic";
+                                active: root.dyslexia-font;
+                                clicked => { root.set-dyslexia-font(true); }
+                            }
+                        }
+                        Text {
+                            text: root.dyslexia-font
+                                ? "OpenDyslexic is on. Sample: oil filter 1 qt · 30,000 mi"
+                                : "Using the system default UI font.";
+                            font-size: 14px; color: Theme.text; wrap: word-wrap;
+                        }
+                    }
+                    Card {
                         title: root.tr-settings-units;
                         body: root.tr-settings-units-body;
                         HorizontalBox {
@@ -1017,7 +1054,7 @@ export component MainWindow inherits Window {
                         Button { text: root.tr-settings-donate; clicked => { root.open-donate(); } }
                         Button { text: root.tr-settings-feedback; clicked => { root.open-feedback(); } }
                     }
-                    Card { title: root.tr-settings-about; body: "FixItGarage 0.2.13 — languages: System, EN, ES, FR, DE, 日本語, 한국어, 简体中文."; }
+                    Card { title: root.tr-settings-about; body: "FixItGarage 0.2.14 — OpenDyslexic accessibility font option (SIL OFL)."; }
                     if status-message != "": Text { text: status-message; color: Theme.ok; wrap: word-wrap; }
                 }
             }

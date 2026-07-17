@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.14
+- Accessibility: optional **OpenDyslexic** font (SIL OFL) for dyslexia-friendly reading
+- Settings → Accessibility · reading: Default font / OpenDyslexic (saved on device)
+
 ## 0.2.13
 - Asian language packs: **日本語**, **한국어**, **简体中文**
 - System default detects ja / ko / zh locales

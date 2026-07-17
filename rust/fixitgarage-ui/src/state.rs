@@ -27,6 +27,9 @@ pub struct AppState {
     /// SYSTEM (follow OS) or EN / ES / FR / DE language pack override.
     #[serde(default = "default_language")]
     pub language: String,
+    /// Use OpenDyslexic font for dyslexia-friendly reading (optional).
+    #[serde(default)]
+    pub dyslexia_font: bool,
     #[serde(default)]
     pub selected_vehicle_id: Option<u64>,
     pub next_vehicle_id: u64,
@@ -348,6 +351,7 @@ impl Default for AppState {
             dark_mode: default_dark_mode(),
             units: default_units(),
             language: default_language(),
+            dyslexia_font: false,
             selected_vehicle_id: None,
             next_vehicle_id: 1,
             next_service_id: 1,
@@ -558,6 +562,11 @@ impl AppState {
 
     pub fn language_pref(&self) -> crate::i18n::LanguagePref {
         crate::i18n::LanguagePref::from_str_loose(&self.language)
+    }
+
+    pub fn set_dyslexia_font(&mut self, enabled: bool) {
+        self.dyslexia_font = enabled;
+        self.save();
     }
 
     pub fn services_for_selected(&self) -> Vec<&ServiceRecord> {
