@@ -1,5 +1,5 @@
-# F-Droid metadata draft for FixItGarage (Rust / Slint primary binary)
-# Place/copy into an fdroiddata repo as metadata/org.fixitgarage.app.yml
+# F-Droid metadata for FixItGarage (Rust / Slint primary binary)
+# Copy into an fdroiddata repo as metadata/org.fixitgarage.app.yml
 # Docs: https://f-droid.org/docs/Build_Metadata_Reference/
 
 Categories:
@@ -19,34 +19,36 @@ RepoType: git
 Repo: https://github.com/linuxbased79/FixItGarage.git
 
 Builds:
-  - versionName: 0.2.19
-    versionCode: 2019
-    commit: REPLACE_WITH_TAG_OR_COMMIT
+  - versionName: 0.2.20
+    versionCode: 2020
+    commit: v0.2.20
     subdir: rust
-    output: dist/FixItGarage-0.2.19-arm64.apk
-    # Maintainer notes: requires Android NDK, rustup targets, xbuild (`x`),
-    # OpenJDK, and Android SDK build-tools (aapt2, d8, zipalign, apksigner).
-    # See rust/F-DROID.md for the exact recipe.
+    output: dist/FixItGarage-0.2.20-arm64.apk
+    # Requires: Android NDK, rustup + aarch64-linux-android, xbuild (`x`),
+    # OpenJDK, Android SDK build-tools (aapt2, d8, zipalign, apksigner).
+    # See rust/F-DROID.md.
     sudo:
       - apt-get update
-      - apt-get install -y openjdk-17-jdk-headless unzip curl
+      - apt-get install -y openjdk-17-jdk-headless unzip curl python3
     prebuild:
       - rustup target add aarch64-linux-android
       - cargo install xbuild --git https://github.com/rust-mobile/xbuild.git || true
+      - bash fixitgarage-ui/models/download-models.sh || true
     build:
       - export ANDROID_HOME=$$ANDROID_SDK_ROOT$$
       - export ANDROID_NDK_ROOT=$$NDK$$
       - export PATH="$$PATH$$:$$HOME$$/.cargo/bin:$$ANDROID_HOME$$/build-tools/$$BUILD_TOOLS$$"
       - mkdir -p dist
       - x build -p fixitgarage-ui --platform android --arch arm64 --format apk --release
-      - cp target/x/release/android/fixitgarage-ui.apk dist/FixItGarage-0.2.19-arm64-raw.apk
-      - bash scripts/package-apk-with-boot.sh dist/FixItGarage-0.2.19-arm64-raw.apk dist/FixItGarage-0.2.19-arm64.apk 0.2.19 2016
+      - cp target/x/release/android/fixitgarage-ui.apk dist/FixItGarage-0.2.20-arm64-raw.apk
+      - bash scripts/package-apk-with-boot.sh dist/FixItGarage-0.2.20-arm64-raw.apk dist/FixItGarage-0.2.20-arm64.apk 0.2.20 2020
 
+# NonFreeNet only if user opts into third-party WebDAV hosts.
 # AntiFeatures:
-#  - NonFreeNet  # only if user enables WebDAV to a third-party host (opt-in)
+#  - NonFreeNet
 
 ArchivePolicy: 4 versions
-AutoUpdateMode: None
+AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 0.2.19
-CurrentVersionCode: 2019
+CurrentVersion: 0.2.20
+CurrentVersionCode: 2020

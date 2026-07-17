@@ -1,0 +1,1 @@
+Store-ready packaging: installable APKs (resources.arsc fix), Play/F-Droid assets, privacy policy, on-device OCR + tread CV.

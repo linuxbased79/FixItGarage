@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.20
+- **Store-ready packaging**: `resources.arsc` stored uncompressed + page-aligned `.so` (fixes API 30+ install)
+- Production signing via `FIG_KEYSTORE` env; `create-upload-keystore.sh`
+- Play/F-Droid assets: screenshots, feature graphic, icon; full privacy policy URL
+- `STORE.md` / updated `PLAY.md` / `F-DROID.md` submission guides
+
 ## 0.2.19
 - **On-device OCR** (pure Rust [ocrs](https://github.com/robertknight/ocrs), no GMS): Capture → On-device OCR fills receipt fields
 - OCR models (~12 MB) bundled in APK assets; first-run extract / optional download fallback

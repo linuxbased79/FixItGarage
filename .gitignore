@@ -57,3 +57,8 @@ rust/signing/
 # OCR model weights (download via fixitgarage-ui/models/download-models.sh)
 *.rten
 rust/fixitgarage-ui/models/*.rten
+
+# Upload / release keystores
+*.jks
+fixitgarage-upload*
+

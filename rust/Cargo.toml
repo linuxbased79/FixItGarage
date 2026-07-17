@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.19"
+version = "0.2.20"
 edition = "2021"
 license = "GPL-3.0-only"
 repository = "https://github.com/linuxbased79/FixItGarage"

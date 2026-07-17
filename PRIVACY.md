@@ -1,25 +1,57 @@
-# Privacy policy (draft)
+# Privacy Policy — FixItGarage
 
-FixItGarage is local-first software.
+**Last updated:** 2026-07-17  
+**App ID:** `org.fixitgarage.app`  
+**Contact:** [GitHub Issues](https://github.com/linuxbased79/FixItGarage/issues)
 
-## Data we store
+FixItGarage is **local-first** open-source software (GPL-3.0). Core features work without an account and without Google Play Services (including on GrapheneOS).
 
-- Vehicle and maintenance data you enter  
-- Optional photos you take for issues or receipts  
-- App preferences (wizard mode, theme)
+## Data stored on your device
 
-All of the above is stored **on your device** (Room database and app storage).
+- Vehicles and maintenance history you enter  
+- Tire, brake, battery, wiper, parts, costs, notes, and reminders  
+- Optional photos (issues, receipts, tread assist)  
+- App preferences (theme, units, language, accessibility font, wizard mode)  
+- Optional WebDAV credentials you enter for backup (stored only on device)  
+- Local alarm schedule for date reminders (`fig_alarms.json`)
 
-## Network
+Data is stored in the app’s private storage on your phone. We do **not** operate a FixItGarage cloud account or analytics backend.
 
-The current alpha does not upload your garage data. Links such as “Send feedback” and “Donate” open external sites (e.g. GitHub) in your browser.
+## Network activity
 
-Future **optional** cloud backup (Proton Drive, Google Drive, Dropbox, OneDrive, ownCloud, Nextcloud) will only run when you configure it and will be documented here.
+Network use is **optional and user-initiated**:
 
-## Third parties
+| Action | What leaves the device |
+|--------|-------------------------|
+| Send Feedback / Donate | Opens GitHub (or store) in a browser |
+| Share backup / CSV | System share sheet — destination app you choose (Proton Drive, Drive, Dropbox, OneDrive, etc.) |
+| WebDAV / Nextcloud / ownCloud upload | Only when you configure a URL and tap upload |
+| On-device OCR model fallback download | Only if models are missing from the install and you run OCR (models are normally bundled offline) |
+| Open OCR helper / F-Droid / market links | Opens external apps or sites you choose |
 
-We do not sell personal data. We do not include advertising SDKs in the free/F-Droid-oriented build.
+We do **not** sell personal data. We do **not** include advertising or third-party tracking SDKs.
 
-## Contact
+## Camera & notifications
 
-Open an issue: https://github.com/linuxbased79/FixItGarage/issues
+- **Camera** is optional (issue photos, receipt OCR, tread assist). Photos stay on device unless you share them.  
+- **Notifications / exact alarms / boot completed** are used only for **local** maintenance reminders (re-registered after reboot). No remote push service.
+
+## On-device OCR & computer vision
+
+Receipt text recognition and tread coin-gauge estimation run **on your device** (pure Rust OCR models bundled in the app). No Google ML Kit / Play Services OCR is required.
+
+## Children
+
+The app is a general-purpose vehicle maintenance tool, not directed at children under 13.
+
+## Changes
+
+Material changes to this policy will be noted in the app changelog and this file in the source repository.
+
+## Source
+
+https://github.com/linuxbased79/FixItGarage  
+Public copy of this policy:  
+https://github.com/linuxbased79/FixItGarage/blob/main/PRIVACY.md  
+Raw URL (for store forms):  
+https://raw.githubusercontent.com/linuxbased79/FixItGarage/main/PRIVACY.md
