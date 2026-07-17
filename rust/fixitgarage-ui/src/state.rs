@@ -1042,6 +1042,7 @@ impl AppState {
         model: String,
         year: Option<u16>,
         mileage: Option<u32>,
+        vin: Option<String>,
     ) {
         let Some(id) = self.selected_vehicle_id else {
             return;
@@ -1057,6 +1058,45 @@ impl AppState {
             }
             if let Some(m) = mileage {
                 v.current_mileage = m;
+            }
+            if let Some(vin) = vin {
+                v.vin = vin
+                    .chars()
+                    .filter(|c| c.is_ascii_alphanumeric())
+                    .map(|c| c.to_ascii_uppercase())
+                    .collect();
+            }
+            self.save();
+        }
+    }
+
+    /// Apply VIN + optional decoded make/model/year onto selected vehicle.
+    pub fn apply_vin_decode_to_selected(
+        &mut self,
+        vin: String,
+        make: Option<String>,
+        model: Option<String>,
+        year: Option<u16>,
+    ) {
+        let Some(id) = self.selected_vehicle_id else {
+            return;
+        };
+        if let Some(v) = self.vehicles.iter_mut().find(|v| v.id == id) {
+            v.vin = vin;
+            if let Some(m) = make {
+                if !m.is_empty() && (v.make.is_empty() || v.make.eq_ignore_ascii_case("unknown")) {
+                    v.make = m;
+                } else if v.make.is_empty() {
+                    v.make = m;
+                }
+            }
+            if let Some(m) = model {
+                if !m.is_empty() && v.model.is_empty() {
+                    v.model = m;
+                }
+            }
+            if year.is_some() && v.year.is_none() {
+                v.year = year;
             }
             self.save();
         }
@@ -1412,12 +1452,18 @@ impl AppState {
         model: String,
         year: Option<u16>,
         mileage: u32,
+        vin: String,
     ) {
         if name.trim().is_empty() {
             return;
         }
         let id = self.next_vehicle_id;
         self.next_vehicle_id += 1;
+        let vin: String = vin
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric())
+            .map(|c| c.to_ascii_uppercase())
+            .collect();
         self.vehicles.push(Vehicle {
             id,
             name: name.trim().into(),
@@ -1425,6 +1471,7 @@ impl AppState {
             model,
             year,
             current_mileage: mileage,
+            vin,
         });
         self.selected_vehicle_id = Some(id);
         self.ensure_tire_config(id);
@@ -2231,9 +2278,9 @@ mod tests {
     #[test]
     fn multi_vehicle_services_scoped() {
         let mut s = AppState::default();
-        s.add_vehicle("A".into(), "".into(), "".into(), None, 1000);
+        s.add_vehicle("A".into(), "".into(), "".into(), None, 1000, String::new());
         let a = s.selected_vehicle_id.unwrap();
-        s.add_vehicle("B".into(), "".into(), "".into(), None, 2000);
+        s.add_vehicle("B".into(), "".into(), "".into(), None, 2000, String::new());
         let b = s.selected_vehicle_id.unwrap();
         assert_ne!(a, b);
         s.select_vehicle(a);
@@ -2248,7 +2295,7 @@ mod tests {
     #[test]
     fn rotation_changes_layout() {
         let mut s = AppState::default();
-        s.add_vehicle("Daily".into(), "".into(), "".into(), None, 1000);
+        s.add_vehicle("Daily".into(), "".into(), "".into(), None, 1000, String::new());
         s.set_tire_pattern("side_to_side".into());
         s.apply_tire_rotation();
         let lay = s.selected_tire_config().layout;
@@ -2259,7 +2306,7 @@ mod tests {
     #[test]
     fn rotation_moves_mileage_with_tires() {
         let mut s = AppState::default();
-        s.add_vehicle("Daily".into(), "".into(), "".into(), None, 10000);
+        s.add_vehicle("Daily".into(), "".into(), "".into(), None, 10000, String::new());
         s.set_tire_corner_miles(Some(1), Some(2), Some(3), Some(4), Some(5));
         s.set_tire_pattern("side_to_side".into());
         s.apply_tire_rotation();
@@ -2274,7 +2321,7 @@ mod tests {
     #[test]
     fn rotation_with_spare_moves_five() {
         let mut s = AppState::default();
-        s.add_vehicle("Daily".into(), "".into(), "".into(), None, 10000);
+        s.add_vehicle("Daily".into(), "".into(), "".into(), None, 10000, String::new());
         s.set_include_spare(true);
         s.set_tire_corner_miles(Some(1), Some(2), Some(3), Some(4), Some(5));
         s.set_tire_pattern("forward_cross".into());
@@ -2292,11 +2339,11 @@ mod tests {
     #[test]
     fn tire_layout_is_per_vehicle() {
         let mut s = AppState::default();
-        s.add_vehicle("Car A".into(), "".into(), "".into(), None, 1000);
+        s.add_vehicle("Car A".into(), "".into(), "".into(), None, 1000, String::new());
         let a = s.selected_vehicle_id.unwrap();
         s.set_tire_pattern("side_to_side".into());
         s.apply_tire_rotation();
-        s.add_vehicle("Car B".into(), "".into(), "".into(), None, 2000);
+        s.add_vehicle("Car B".into(), "".into(), "".into(), None, 2000, String::new());
         let b = s.selected_vehicle_id.unwrap();
         // B should still have default A B C D
         assert_eq!(s.selected_tire_config().layout.fl, "A");
@@ -2309,7 +2356,7 @@ mod tests {
     #[test]
     fn all_due_notifications_and_upcoming() {
         let mut s = AppState::default();
-        s.add_vehicle("Daily".into(), "".into(), "".into(), None, 50000);
+        s.add_vehicle("Daily".into(), "".into(), "".into(), None, 50000, String::new());
         s.add_reminder("Inspect belts".into(), "2000-01-01", None);
         assert!(!s.all_due_notification_items().is_empty());
         assert!(s.should_notify_now());
@@ -2322,7 +2369,7 @@ mod tests {
     #[test]
     fn part_save_schedules_filter_reminder() {
         let mut s = AppState::default();
-        s.add_vehicle("Daily".into(), "".into(), "".into(), None, 40000);
+        s.add_vehicle("Daily".into(), "".into(), "".into(), None, 40000, String::new());
         s.upsert_part(
             "ENGINE_AIR_FILTER".into(),
             "Fram".into(),
@@ -2340,7 +2387,7 @@ mod tests {
     #[test]
     fn costs_include_tire_purchases() {
         let mut s = AppState::default();
-        s.add_vehicle("Daily".into(), "".into(), "".into(), None, 1000);
+        s.add_vehicle("Daily".into(), "".into(), "".into(), None, 1000, String::new());
         s.add_service("Oil".into(), 1000, "DIY", 40.0, None);
         s.add_tire_purchase(
             "Michelin".into(),
@@ -2366,7 +2413,7 @@ mod tests {
     #[test]
     fn oil_level_logged_on_complete() {
         let mut s = AppState::default();
-        s.add_vehicle("Daily".into(), "".into(), "".into(), None, 50000);
+        s.add_vehicle("Daily".into(), "".into(), "".into(), None, 50000, String::new());
         let oil_id = s
             .reminders
             .iter()

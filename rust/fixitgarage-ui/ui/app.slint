@@ -52,6 +52,13 @@ export struct HistoryRow {
     detail: string,
 }
 
+export struct RecallRow {
+    campaign: string,
+    component: string,
+    summary: string,
+    detail: string,
+}
+
 export global Theme {
     in-out property <bool> dark: false;
     /// When true, UI uses OpenDyslexic (accessibility).
@@ -211,6 +218,9 @@ export component MainWindow inherits Window {
     in-out property <string> dash-dues: "Reminders: all clear";
 
     in-out property <string> form-name: "";
+    in-out property <string> form-vin: "";
+    in-out property <string> recall-status: "";
+    in-out property <[RecallRow]> recalls: [];
     in-out property <string> form-make: "";
     in-out property <string> form-model: "";
     in-out property <string> form-year: "";
@@ -457,6 +467,10 @@ export component MainWindow inherits Window {
     callback save-cloud-settings();
     callback upload-cloud-backup();
     callback update-selected-vehicle();
+    /// Decode VIN via NHTSA and list recalls for that vehicle.
+    callback check-recalls();
+    /// Open NHTSA.gov VIN recall page in browser.
+    callback open-nhtsa-vin-page();
     callback set-service-search(string);
     callback open-feedback();
     callback open-donate();
@@ -595,8 +609,9 @@ export component MainWindow inherits Window {
                     PageTitle { label: "Vehicles"; }
                     Text { text: "Tap a vehicle to select it for services, costs, and trackers."; font-size: 13px; color: Theme.text-muted; wrap: word-wrap; }
                     Card {
-                        title: "Add vehicle"; body: "";
+                        title: "Add vehicle"; body: "Optional VIN enables free NHTSA (US) recall checks.";
                         LineEdit { placeholder-text: "Name / nickname"; text <=> root.form-name; }
+                        LineEdit { placeholder-text: "VIN (17 characters, optional)"; text <=> root.form-vin; }
                         LineEdit { placeholder-text: "Make"; text <=> root.form-make; }
                         LineEdit { placeholder-text: "Model"; text <=> root.form-model; }
                         HorizontalBox {
@@ -609,6 +624,7 @@ export component MainWindow inherits Window {
                         title: "Edit selected vehicle";
                         body: selected-vehicle-label;
                         LineEdit { placeholder-text: "Name / nickname"; text <=> root.form-name; }
+                        LineEdit { placeholder-text: "VIN (17 characters)"; text <=> root.form-vin; }
                         LineEdit { placeholder-text: "Make"; text <=> root.form-make; }
                         LineEdit { placeholder-text: "Model"; text <=> root.form-model; }
                         HorizontalBox {
@@ -618,6 +634,20 @@ export component MainWindow inherits Window {
                         Button { text: "Save changes"; primary: true; clicked => { root.update-selected-vehicle(); } }
                         Button { text: "Update odometer only"; clicked => { root.update-selected-mileage(); } }
                         Button { text: "Delete selected vehicle"; clicked => { root.delete-selected-vehicle(); } }
+                    }
+                    Card {
+                        title: "Safety recalls (NHTSA · US)";
+                        body: "Uses free public NHTSA APIs. Decodes VIN → make/model/year, then lists campaigns. Internet required.";
+                        Button { text: "Check recalls for VIN"; primary: true; clicked => { root.check-recalls(); } }
+                        Button { text: "Open NHTSA VIN page"; clicked => { root.open-nhtsa-vin-page(); } }
+                        if recall-status != "": Text {
+                            text: recall-status;
+                            font-size: 13px; color: Theme.ok; wrap: word-wrap;
+                        }
+                        for r in recalls: Card {
+                            title: r.campaign + " · " + r.component;
+                            body: r.summary;
+                        }
                     }
                     for v in vehicles: TouchArea {
                         clicked => { root.select-vehicle(v.id); }
@@ -1070,7 +1100,7 @@ export component MainWindow inherits Window {
                     }
                     Card {
                         title: root.tr-settings-about;
-                        body: "FixItGarage 0.2.21 — website + donate page; store guides.";
+                        body: "FixItGarage 0.2.22 — VIN field + NHTSA safety recall checker.";
                     }
                     Card {
                         title: "Reminders after reboot";

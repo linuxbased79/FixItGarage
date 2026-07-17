@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.22
+- **VIN** field on vehicles (optional, 17-character)
+- **Safety recalls**: Check recalls via free NHTSA APIs (VIN decode → make/model/year campaigns)
+- Open official NHTSA VIN page for open-repair status on that exact VIN
+
 ## 0.2.21
 - Project website (GitHub Pages `docs/`): home + donate page
 - Donate button opens https://linuxbased79.github.io/FixItGarage/donate.html

@@ -4,6 +4,7 @@ mod i18n;
 mod ondevice_ocr;
 mod platform;
 mod receipt_parse;
+mod recalls;
 mod state;
 mod tread_cv;
 mod units;
@@ -90,6 +91,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     ui.set_form_name(v.name.clone().into());
                     ui.set_form_make(v.make.clone().into());
                     ui.set_form_model(v.model.clone().into());
+                    ui.set_form_vin(v.vin.clone().into());
                     ui.set_form_year(
                         v.year.map(|y| y.to_string()).unwrap_or_default().into(),
                     );
@@ -113,17 +115,19 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                 let make = ui.get_form_make().to_string();
                 let model = ui.get_form_model().to_string();
                 let year = ui.get_form_year().parse().ok();
+                let vin = ui.get_form_vin().to_string();
                 let u = s.unit_system();
                 let mileage = display_to_miles(
                     ui.get_form_mileage().parse().unwrap_or(0),
                     u,
                 );
-                s.add_vehicle(name, make, model, year, mileage);
+                s.add_vehicle(name, make, model, year, mileage, vin);
                 ui.set_form_name("".into());
                 ui.set_form_make("".into());
                 ui.set_form_model("".into());
                 ui.set_form_year("".into());
                 ui.set_form_mileage("".into());
+                ui.set_form_vin("".into());
                 ui.set_status_message("Vehicle saved (oil-level reminder in 3 months).".into());
                 refresh_ui(&ui, &s);
             }
@@ -173,9 +177,143 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     ui.get_form_model().to_string(),
                     ui.get_form_year().parse().ok(),
                     miles,
+                    Some(ui.get_form_vin().to_string()),
                 );
                 ui.set_status_message("Vehicle details updated.".into());
                 refresh_ui(&ui, &s);
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_check_recalls(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let mut vin = ui.get_form_vin().to_string();
+                if vin.trim().is_empty() {
+                    if let Some(v) = state.borrow().selected_vehicle() {
+                        vin = v.vin.clone();
+                    }
+                }
+                if vin.trim().is_empty() {
+                    // Fallback: make/model/year without VIN
+                    let make = ui.get_form_make().to_string();
+                    let model = ui.get_form_model().to_string();
+                    let year: u16 = ui.get_form_year().parse().unwrap_or(0);
+                    ui.set_recall_status("Checking NHTSA by make/model/year…".into());
+                    ui.set_recalls(Vec::<RecallRow>::new().as_slice().into());
+                    match recalls::check_recalls_ymm(&make, &model, year) {
+                        Ok(list) => {
+                            let rows: Vec<RecallRow> = list
+                                .iter()
+                                .map(|r| RecallRow {
+                                    campaign: r.campaign.clone().into(),
+                                    component: r.component.clone().into(),
+                                    summary: truncate_ui(&r.summary, 280).into(),
+                                    detail: format!("{} · {}", r.report_date, r.manufacturer).into(),
+                                })
+                                .collect();
+                            let n = rows.len();
+                            ui.set_recalls(rows.as_slice().into());
+                            ui.set_recall_status(
+                                format!(
+                                    "NHTSA: {n} recall campaign(s) for {year} {make} {model}. Free repairs at dealer when open for your VIN."
+                                )
+                                .into(),
+                            );
+                            ui.set_status_message(format!("Found {n} recall(s).").into());
+                        }
+                        Err(e) => {
+                            ui.set_recall_status(format!("Recall check failed: {e}").into());
+                            ui.set_status_message(format!("Recalls: {e}").into());
+                        }
+                    }
+                    return;
+                }
+                ui.set_recall_status("Contacting NHTSA (VIN decode + recalls)…".into());
+                ui.set_recalls(Vec::<RecallRow>::new().as_slice().into());
+                match recalls::check_recalls_for_vin(&vin) {
+                    Ok(result) => {
+                        let vin_norm = recalls::normalize_vin(&vin).unwrap_or(vin.clone());
+                        // Persist VIN + fill empty make/model/year
+                        {
+                            let mut s = state.borrow_mut();
+                            s.apply_vin_decode_to_selected(
+                                vin_norm.clone(),
+                                Some(result.decoded.make.clone()),
+                                Some(result.decoded.model.clone()),
+                                result.decoded.year,
+                            );
+                        }
+                        ui.set_form_vin(vin_norm.into());
+                        if !result.decoded.make.is_empty() {
+                            ui.set_form_make(result.decoded.make.clone().into());
+                        }
+                        if !result.decoded.model.is_empty() {
+                            ui.set_form_model(result.decoded.model.clone().into());
+                        }
+                        if let Some(y) = result.decoded.year {
+                            ui.set_form_year(y.to_string().into());
+                        }
+                        let rows: Vec<RecallRow> = result
+                            .recalls
+                            .iter()
+                            .map(|r| RecallRow {
+                                campaign: r.campaign.clone().into(),
+                                component: r.component.clone().into(),
+                                summary: truncate_ui(&r.summary, 280).into(),
+                                detail: format!("{} · {}", r.report_date, r.manufacturer).into(),
+                            })
+                            .collect();
+                        let n = rows.len();
+                        ui.set_recalls(rows.as_slice().into());
+                        let status = if n == 0 {
+                            format!(
+                                "No NHTSA campaigns listed for {} {} {}. Still verify open status on NHTSA VIN page.",
+                                result.decoded.year.unwrap_or(0),
+                                result.decoded.make,
+                                result.decoded.model
+                            )
+                        } else {
+                            format!(
+                                "{n} campaign(s) for {} {} {}. Use “Open NHTSA VIN page” to see if this VIN still needs repair.",
+                                result.decoded.year.unwrap_or(0),
+                                result.decoded.make,
+                                result.decoded.model
+                            )
+                        };
+                        ui.set_recall_status(status.into());
+                        ui.set_status_message(format!("Recalls: {n} found.").into());
+                        refresh_ui(&ui, &state.borrow());
+                    }
+                    Err(e) => {
+                        ui.set_recall_status(format!("Recall check failed: {e}").into());
+                        ui.set_status_message(format!("Recalls: {e}").into());
+                    }
+                }
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_open_nhtsa_vin_page(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let mut vin = ui.get_form_vin().to_string();
+                if vin.trim().is_empty() {
+                    if let Some(v) = state.borrow().selected_vehicle() {
+                        vin = v.vin.clone();
+                    }
+                }
+                match recalls::normalize_vin(&vin) {
+                    Ok(v) => {
+                        open_url(&recalls::nhtsa_vin_web_url(&v));
+                        ui.set_status_message("Opened NHTSA recalls page for this VIN.".into());
+                    }
+                    Err(e) => ui.set_status_message(format!("VIN: {e}").into()),
+                }
             }
         });
     }
@@ -1435,6 +1573,16 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
     });
 
     ui.run()
+}
+
+fn truncate_ui(s: &str, max: usize) -> String {
+    let t = s.trim();
+    if t.chars().count() <= max {
+        t.to_string()
+    } else {
+        let cut: String = t.chars().take(max.saturating_sub(1)).collect();
+        format!("{cut}…")
+    }
 }
 
 /// Consume ShareReceiveActivity text / pending image and auto-fill the form.

@@ -44,6 +44,9 @@ pub struct Vehicle {
     pub model: String,
     pub year: Option<u16>,
     pub current_mileage: u32,
+    /// 17-character VIN (optional). Used for NHTSA recall checks.
+    #[serde(default)]
+    pub vin: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

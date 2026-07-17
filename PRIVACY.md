@@ -28,6 +28,7 @@ Network use is **optional and user-initiated**:
 | Share backup / CSV | System share sheet — destination app you choose (Proton Drive, Drive, Dropbox, OneDrive, etc.) |
 | WebDAV / Nextcloud / ownCloud upload | Only when you configure a URL and tap upload |
 | On-device OCR model fallback download | Only if models are missing from the install and you run OCR (models are normally bundled offline) |
+| NHTSA recall check | VIN/make/model/year sent to public US NHTSA APIs (user-initiated) |
 | Open OCR helper / F-Droid / market links | Opens external apps or sites you choose |
 
 We do **not** sell personal data. We do **not** include advertising or third-party tracking SDKs.
