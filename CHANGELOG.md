@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.16
+- Release packaging: `scripts/release-apks.sh` builds both arches with BootReceiver
+- F-Droid draft metadata (`metadata/org.fixitgarage.app.yml`) + updated listing text
+- Play Console checklist (`PLAY.md`); README status brought current
+
 ## 0.2.15
 - **Boot-resilient reminders**: `BootReceiver` re-registers date alarms after reboot / app update
 - Alarm schedule saved to `fig_alarms.json` (app files dir) for the receiver

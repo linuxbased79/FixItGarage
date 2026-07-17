@@ -1,1 +1,1 @@
-Local-first garage log: services, MPG/L/100km, tires, filters, costs, backups.
+Local-first garage log: services, MPG, tires, reminders, backups — no account.

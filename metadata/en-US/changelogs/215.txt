@@ -1,0 +1,1 @@
+Boot-resilient date reminders (re-register after reboot). OpenDyslexic font. Multi-language packs including Japanese, Korean, Chinese. Per-vehicle tire layouts and optional spare rotation.

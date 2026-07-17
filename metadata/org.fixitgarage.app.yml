@@ -1,0 +1,52 @@
+# F-Droid metadata draft for FixItGarage (Rust / Slint primary binary)
+# Place/copy into an fdroiddata repo as metadata/org.fixitgarage.app.yml
+# Docs: https://f-droid.org/docs/Build_Metadata_Reference/
+
+Categories:
+  - Navigation
+  - Science & Education
+
+License: GPL-3.0-only
+
+AuthorName: linuxbased79
+
+SourceCode: https://github.com/linuxbased79/FixItGarage
+IssueTracker: https://github.com/linuxbased79/FixItGarage/issues
+
+AutoName: FixItGarage
+
+RepoType: git
+Repo: https://github.com/linuxbased79/FixItGarage.git
+
+Builds:
+  - versionName: 0.2.16
+    versionCode: 2016
+    commit: REPLACE_WITH_TAG_OR_COMMIT
+    subdir: rust
+    output: dist/FixItGarage-0.2.16-arm64.apk
+    # Maintainer notes: requires Android NDK, rustup targets, xbuild (`x`),
+    # OpenJDK, and Android SDK build-tools (aapt2, d8, zipalign, apksigner).
+    # See rust/F-DROID.md for the exact recipe.
+    sudo:
+      - apt-get update
+      - apt-get install -y openjdk-17-jdk-headless unzip curl
+    prebuild:
+      - rustup target add aarch64-linux-android
+      - cargo install xbuild --git https://github.com/rust-mobile/xbuild.git || true
+    build:
+      - export ANDROID_HOME=$$ANDROID_SDK_ROOT$$
+      - export ANDROID_NDK_ROOT=$$NDK$$
+      - export PATH="$$PATH$$:$$HOME$$/.cargo/bin:$$ANDROID_HOME$$/build-tools/$$BUILD_TOOLS$$"
+      - mkdir -p dist
+      - x build -p fixitgarage-ui --platform android --arch arm64 --format apk --release
+      - cp target/x/release/android/fixitgarage-ui.apk dist/FixItGarage-0.2.16-arm64-raw.apk
+      - bash scripts/package-apk-with-boot.sh dist/FixItGarage-0.2.16-arm64-raw.apk dist/FixItGarage-0.2.16-arm64.apk 0.2.16 2016
+
+# AntiFeatures:
+#  - NonFreeNet  # only if user enables WebDAV to a third-party host (opt-in)
+
+ArchivePolicy: 4 versions
+AutoUpdateMode: None
+UpdateCheckMode: Tags
+CurrentVersion: 0.2.16
+CurrentVersionCode: 2016
