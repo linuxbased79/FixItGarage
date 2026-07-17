@@ -60,13 +60,11 @@ That page lists Liberapay, GitHub Sponsors, Ko-fi, and PayPal.Me.
 
 ### Option A — Liberapay (recommended for FOSS)
 
-1. Go to https://liberapay.com/sign-up  
-2. Sign up (email or GitHub).  
-3. Create your profile; prefer username **`linuxbased79`** so the link matches,  
-   or change the href in `docs/donate.html` to your real Liberapay URL.  
-4. Connect a payout method (bank / Stripe / PayPal depending on region).  
-5. Open https://liberapay.com/YOURNAME and confirm it loads.  
-6. On a phone: open the donate page → **Donate on Liberapay** → complete a $1 test if you want.
+1. Liberapay profile (live): **https://liberapay.com/caozuna**  
+2. Connect payout (e.g. Stripe) in Liberapay settings.  
+3. Confirm the public page loads while logged out.  
+4. On a phone: open the donate page → **Donate on Liberapay** → optional $1 test.  
+5. App **Donate** opens https://linuxbased79.github.io/FixItGarage/donate.html which links to Liberapay.
 
 ### Option B — GitHub Sponsors
 
