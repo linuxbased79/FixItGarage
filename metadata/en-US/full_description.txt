@@ -1,0 +1,7 @@
+FixItGarage is a free (GPL-3.0) vehicle maintenance tracker.
+
+Track unlimited vehicles, DIY and shop service history, tires and rotations with a top-down diagram, filters and oil part numbers, brakes, battery, wipers, operational costs, reminders, photos, and notes.
+
+Local-first: your data stays on the device by default. Optional cloud backup is planned. Compatible with GrapheneOS — no Google Play Services required for core features.
+
+Send feedback via GitHub Issues from Settings.

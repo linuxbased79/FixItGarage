@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Simple wrench/garage mark -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,28c-8,0 -14,6 -14,14 0,4 2,8 5,10l-9,18h10l6,-12 6,12h10l-9,-18c3,-2 5,-6 5,-10 0,-8 -6,-14 -14,-14zM54,36c3.3,0 6,2.7 6,6s-2.7,6 -6,6 -6,-2.7 -6,-6 2.7,-6 6,-6z" />
+    <path
+        android:fillColor="#A5D6A7"
+        android:pathData="M30,72h48v8H30z" />
+</vector>

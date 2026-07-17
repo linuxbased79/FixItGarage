@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FixItGarage</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_vehicles">Vehicles</string>
+    <string name="nav_maintenance">Maintenance</string>
+    <string name="nav_tires">Tires</string>
+    <string name="nav_parts">Parts</string>
+    <string name="nav_costs">Costs</string>
+    <string name="nav_settings">Settings</string>
+    <string name="last_service">Last service</string>
+    <string name="no_vehicles">Add your first vehicle to get started</string>
+    <string name="setup_wizard_title">How do you maintain your vehicles?</string>
+    <string name="mode_diy">Mostly DIY</string>
+    <string name="mode_shop">Mostly shop</string>
+    <string name="mode_both">Both DIY and shop</string>
+    <string name="send_feedback">Send feedback</string>
+    <string name="donate">Donate</string>
+    <string name="export_csv">Export data (CSV)</string>
+    <string name="github_issues_url">https://github.com/linuxbased79/FixItGarage/issues</string>
+    <string name="donate_url">https://github.com/linuxbased79/FixItGarage#donate</string>
+    <string name="privacy_note">FixItGarage stores data on your device by default. Cloud backup is optional.</string>
+</resources>
