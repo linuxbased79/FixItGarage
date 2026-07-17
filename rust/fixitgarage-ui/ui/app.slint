@@ -86,6 +86,31 @@ component NavBtn inherits TouchArea {
     }
 }
 
+// High-contrast choice chip (std-widgets Button is unreadable when not primary)
+component ChoiceBtn inherits TouchArea {
+    in property <string> label;
+    in property <bool> active;
+    min-height: 44px;
+    min-width: 88px;
+    horizontal-stretch: 1;
+    Rectangle {
+        border-radius: 10px;
+        border-width: 2px;
+        border-color: root.active ? Theme.accent : Theme.surface-border;
+        background: root.active ? Theme.accent : Theme.surface;
+        Text {
+            text: root.label;
+            color: root.active ? #FFFFFF : Theme.text;
+            font-size: 15px;
+            font-weight: 700;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            width: 100%;
+            height: 100%;
+        }
+    }
+}
+
 component Card inherits Rectangle {
     in-out property <string> title;
     in-out property <string> body;
@@ -230,8 +255,9 @@ export component MainWindow inherits Window {
                 wrap: word-wrap;
             }
 
-            Button {
-                text: "Both DIY and shop";
+            ChoiceBtn {
+                label: "Both DIY and shop";
+                active: false;
                 clicked => { root.finish-wizard("BOTH"); }
             }
             Text {
@@ -241,17 +267,17 @@ export component MainWindow inherits Window {
                 wrap: word-wrap;
             }
 
-            // Theme on first run too
+            // Theme on first run — ChoiceBtn keeps label readable always
             HorizontalBox {
                 spacing: 8px;
-                Button {
-                    text: "Light";
-                    primary: root.dark-mode == "LIGHT";
+                ChoiceBtn {
+                    label: "Light";
+                    active: root.dark-mode == "LIGHT";
                     clicked => { root.set-dark-mode("LIGHT"); }
                 }
-                Button {
-                    text: "Dark";
-                    primary: root.dark-mode == "DARK";
+                ChoiceBtn {
+                    label: "Dark";
+                    active: root.dark-mode == "DARK";
                     clicked => { root.set-dark-mode("DARK"); }
                 }
             }
@@ -429,14 +455,14 @@ export component MainWindow inherits Window {
                         }
                         HorizontalBox {
                             spacing: 8px;
-                            Button {
-                                text: "DIY";
-                                primary: root.svc-source == "DIY";
+                            ChoiceBtn {
+                                label: "DIY";
+                                active: root.svc-source == "DIY";
                                 clicked => { root.set-source("DIY"); }
                             }
-                            Button {
-                                text: "Shop";
-                                primary: root.svc-source == "SHOP";
+                            ChoiceBtn {
+                                label: "Shop";
+                                active: root.svc-source == "SHOP";
                                 clicked => { root.set-source("SHOP"); }
                             }
                         }
@@ -532,27 +558,27 @@ export component MainWindow inherits Window {
                         body: "";
                         HorizontalBox {
                             spacing: 6px;
-                            Button {
-                                text: "Fwd cross";
-                                primary: root.tire-pattern == "forward_cross";
+                            ChoiceBtn {
+                                label: "Fwd cross";
+                                active: root.tire-pattern == "forward_cross";
                                 clicked => { root.set-pattern("forward_cross"); }
                             }
-                            Button {
-                                text: "X";
-                                primary: root.tire-pattern == "x_pattern";
+                            ChoiceBtn {
+                                label: "X";
+                                active: root.tire-pattern == "x_pattern";
                                 clicked => { root.set-pattern("x_pattern"); }
                             }
                         }
                         HorizontalBox {
                             spacing: 6px;
-                            Button {
-                                text: "Rear cross";
-                                primary: root.tire-pattern == "rearward_cross";
+                            ChoiceBtn {
+                                label: "Rear cross";
+                                active: root.tire-pattern == "rearward_cross";
                                 clicked => { root.set-pattern("rearward_cross"); }
                             }
-                            Button {
-                                text: "Side";
-                                primary: root.tire-pattern == "side_to_side";
+                            ChoiceBtn {
+                                label: "Side";
+                                active: root.tire-pattern == "side_to_side";
                                 clicked => { root.set-pattern("side_to_side"); }
                             }
                         }
@@ -610,14 +636,14 @@ export component MainWindow inherits Window {
                         body: "Dark mode changes the whole app. Choice is saved on this device.";
                         HorizontalBox {
                             spacing: 8px;
-                            Button {
-                                text: "Light";
-                                primary: root.dark-mode == "LIGHT";
+                            ChoiceBtn {
+                                label: "Light";
+                                active: root.dark-mode == "LIGHT";
                                 clicked => { root.set-dark-mode("LIGHT"); }
                             }
-                            Button {
-                                text: "Dark";
-                                primary: root.dark-mode == "DARK";
+                            ChoiceBtn {
+                                label: "Dark";
+                                active: root.dark-mode == "DARK";
                                 clicked => { root.set-dark-mode("DARK"); }
                             }
                         }
@@ -632,19 +658,20 @@ export component MainWindow inherits Window {
                         title: "Feature focus";
                         body: "Current: " + user-mode;
                         HorizontalBox {
-                            Button {
-                                text: "DIY";
-                                primary: root.user-mode == "DIY";
+                            spacing: 6px;
+                            ChoiceBtn {
+                                label: "DIY";
+                                active: root.user-mode == "DIY";
                                 clicked => { root.set-user-mode("DIY"); }
                             }
-                            Button {
-                                text: "SHOP";
-                                primary: root.user-mode == "SHOP";
+                            ChoiceBtn {
+                                label: "SHOP";
+                                active: root.user-mode == "SHOP";
                                 clicked => { root.set-user-mode("SHOP"); }
                             }
-                            Button {
-                                text: "BOTH";
-                                primary: root.user-mode == "BOTH";
+                            ChoiceBtn {
+                                label: "BOTH";
+                                active: root.user-mode == "BOTH";
                                 clicked => { root.set-user-mode("BOTH"); }
                             }
                         }
