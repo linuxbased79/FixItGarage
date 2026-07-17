@@ -1,1 +1,1 @@
-Local-first vehicle maintenance: services, MPG, tires, oil checks, backups.
+Local-first garage log: services, MPG/L/100km, tires, filters, costs, backups.

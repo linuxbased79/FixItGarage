@@ -327,6 +327,70 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
     {
         let ui_weak = ui.as_weak();
         let state = state.clone();
+        ui.on_fill_service_template(move |kind| {
+            if let Some(ui) = ui_weak.upgrade() {
+                let s = state.borrow();
+                let u = s.unit_system();
+                let odo = s
+                    .selected_vehicle()
+                    .map(|v| miles_to_display(v.current_mileage, u))
+                    .unwrap_or(0);
+                let k = kind.to_string().to_ascii_lowercase();
+                match k.as_str() {
+                    "oil" => {
+                        ui.set_svc_title("Oil change".into());
+                        ui.set_svc_source("DIY".into());
+                        ui.set_svc_mileage(if odo > 0 { odo.to_string().into() } else { "".into() });
+                        ui.set_svc_gallons("".into());
+                        ui.set_svc_fuel("".into());
+                        ui.set_svc_shop("".into());
+                        ui.set_status_message("Template: DIY oil change — add parts cost and Save.".into());
+                    }
+                    "fuel" => {
+                        ui.set_svc_title("Fuel fill-up".into());
+                        ui.set_svc_source("DIY".into());
+                        ui.set_svc_mileage(if odo > 0 { odo.to_string().into() } else { "".into() });
+                        ui.set_svc_cost("".into());
+                        ui.set_svc_labor("".into());
+                        ui.set_svc_shop("".into());
+                        ui.set_status_message(
+                            format!(
+                                "Template: fuel fill — enter {} and fuel cost, then Save.",
+                                u.fuel_label()
+                            )
+                            .into(),
+                        );
+                    }
+                    "rotation" => {
+                        ui.set_svc_title("Tire rotation".into());
+                        ui.set_svc_source("DIY".into());
+                        ui.set_svc_mileage(if odo > 0 { odo.to_string().into() } else { "".into() });
+                        ui.set_svc_gallons("".into());
+                        ui.set_svc_fuel("".into());
+                        ui.set_status_message(
+                            "Template: tire rotation — also apply pattern on Tires tab.".into(),
+                        );
+                    }
+                    "shop" => {
+                        ui.set_svc_title("Shop service".into());
+                        ui.set_svc_source("SHOP".into());
+                        ui.set_svc_mileage(if odo > 0 { odo.to_string().into() } else { "".into() });
+                        ui.set_svc_gallons("".into());
+                        ui.set_status_message(
+                            "Template: shop visit — fill shop name, parts & labor.".into(),
+                        );
+                    }
+                    _ => {
+                        ui.set_status_message("Unknown template.".into());
+                    }
+                }
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
         ui.on_add_service(move || {
             if let Some(ui) = ui_weak.upgrade() {
                 let mut s = state.borrow_mut();
@@ -481,15 +545,24 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     .parse()
                     .ok()
                     .map(|v| display_to_miles(v, u));
+                let ptype = ui.get_part_type().to_string();
                 s.upsert_part(
-                    ui.get_part_type().to_string(),
+                    ptype.clone(),
                     ui.get_part_brand().to_string(),
                     ui.get_part_number().to_string(),
                     ui.get_part_oil().to_string(),
                     ui.get_part_notes().to_string(),
                     mi,
                 );
-                ui.set_status_message("Part saved.".into());
+                let msg = if matches!(
+                    ptype.as_str(),
+                    "ENGINE_AIR_FILTER" | "CABIN_FILTER" | "OIL_FILTER"
+                ) {
+                    "Part saved — replacement reminder scheduled."
+                } else {
+                    "Part saved."
+                };
+                ui.set_status_message(msg.into());
                 refresh_ui(&ui, &s);
             }
         });

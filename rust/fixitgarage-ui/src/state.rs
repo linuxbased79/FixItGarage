@@ -1,6 +1,6 @@
 //! Local-first in-memory + JSON persistence for the Slint UI.
 
-use chrono::{TimeZone, Utc};
+use chrono::{Datelike, TimeZone, Utc};
 use fixitgarage_core::models::{ServiceRecord, ServiceSource, UserMode, Vehicle};
 use fixitgarage_core::reminders::{is_due_by_date, is_due_by_mileage, oil_level_due_after};
 use fixitgarage_core::{
@@ -546,7 +546,7 @@ impl AppState {
         list
     }
 
-    pub fn cost_labels(&self) -> [(String, String); 3] {
+    pub fn cost_labels(&self) -> [(String, String); 5] {
         let now = Utc::now().timestamp_millis();
         let selected: Vec<ServiceRecord> = self
             .services_for_selected()
@@ -554,11 +554,55 @@ impl AppState {
             .cloned()
             .collect();
         let s = summarize_costs(&selected, now);
+        let (tire_m, tire_y, tire_all) = self.tire_cost_totals(now);
+        // Spec: operational costs include all maintenance (services + tire purchases)
         [
-            ("This month".into(), format!("${:.2}", s.month_total)),
-            ("This year".into(), format!("${:.2}", s.year_total)),
-            ("All time".into(), format!("${:.2}", s.all_time_total)),
+            (
+                "This month".into(),
+                format!("${:.2}", s.month_total + tire_m),
+            ),
+            (
+                "This year".into(),
+                format!("${:.2}", s.year_total + tire_y),
+            ),
+            (
+                "All time".into(),
+                format!("${:.2}", s.all_time_total + tire_all),
+            ),
+            (
+                "Services (all time)".into(),
+                format!("${:.2}", s.all_time_total),
+            ),
+            ("Tires (all time)".into(), format!("${:.2}", tire_all)),
         ]
+    }
+
+    /// Tire purchase costs for selected vehicle, split by calendar month/year/all.
+    fn tire_cost_totals(&self, now_epoch_ms: i64) -> (f64, f64, f64) {
+        let Some(vid) = self.selected_vehicle_id else {
+            return (0.0, 0.0, 0.0);
+        };
+        let now = match Utc.timestamp_millis_opt(now_epoch_ms) {
+            chrono::LocalResult::Single(dt) => dt,
+            _ => return (0.0, 0.0, 0.0),
+        };
+        let y = now.year();
+        let m = now.month();
+        let mut month = 0.0;
+        let mut year = 0.0;
+        let mut all = 0.0;
+        for t in self.tire_purchases.iter().filter(|t| t.vehicle_id == vid) {
+            all += t.cost;
+            if let chrono::LocalResult::Single(dt) = Utc.timestamp_millis_opt(t.date_epoch_ms) {
+                if dt.year() == y {
+                    year += t.cost;
+                    if dt.month() == m {
+                        month += t.cost;
+                    }
+                }
+            }
+        }
+        (month, year, all)
     }
 
     pub fn tire_preview(&self) -> String {
@@ -1319,6 +1363,8 @@ impl AppState {
         let Some(vid) = self.selected_vehicle_id else {
             return;
         };
+        let ptype = part_type.clone();
+        let installed = Utc::now().timestamp_millis();
         if let Some(existing) = self
             .parts
             .iter_mut()
@@ -1328,7 +1374,7 @@ impl AppState {
             existing.part_number = part_number;
             existing.oil_viscosity = oil_viscosity;
             existing.notes = notes;
-            existing.installed_epoch_ms = Some(Utc::now().timestamp_millis());
+            existing.installed_epoch_ms = Some(installed);
             existing.installed_mileage = mileage;
         } else {
             let id = self.next_part_id;
@@ -1341,11 +1387,45 @@ impl AppState {
                 part_number,
                 oil_viscosity,
                 notes,
-                installed_epoch_ms: Some(Utc::now().timestamp_millis()),
+                installed_epoch_ms: Some(installed),
                 installed_mileage: mileage,
             });
         }
+        // Spec: smart reminders for filter changes by mileage + date
+        self.schedule_part_reminder(vid, &ptype, Some(installed), mileage);
         self.save();
+    }
+
+    fn schedule_part_reminder(
+        &mut self,
+        vehicle_id: u64,
+        part_type: &str,
+        installed_epoch_ms: Option<i64>,
+        installed_mileage: Option<u32>,
+    ) {
+        let (title, due_date, due_mi): (String, Option<i64>, Option<u32>) = match part_type {
+            "ENGINE_AIR_FILTER" => (
+                "Replace engine air filter".into(),
+                installed_epoch_ms.map(|ms| add_months_approx(ms, 12)),
+                installed_mileage.map(|m| m.saturating_add(15_000)),
+            ),
+            "CABIN_FILTER" => (
+                "Replace cabin air filter".into(),
+                installed_epoch_ms.map(|ms| add_months_approx(ms, 12)),
+                installed_mileage.map(|m| m.saturating_add(15_000)),
+            ),
+            "OIL_FILTER" => (
+                "Replace oil filter".into(),
+                installed_epoch_ms.map(|ms| add_months_approx(ms, 6)),
+                installed_mileage.map(|m| m.saturating_add(5_000)),
+            ),
+            // Oil type is reference data, not a timed replacement
+            _ => return,
+        };
+        self.reminders.retain(|r| {
+            !(r.vehicle_id == vehicle_id && !r.completed && r.title == title)
+        });
+        self.add_reminder_raw(vehicle_id, title, due_date, due_mi);
     }
 
     pub fn upsert_component(
@@ -1929,6 +2009,42 @@ mod tests {
         assert!(!s.should_notify_now());
         // Upcoming includes due/soon items
         assert!(!s.upcoming_reminders_lines().is_empty());
+    }
+
+    #[test]
+    fn part_save_schedules_filter_reminder() {
+        let mut s = AppState::default();
+        s.add_vehicle("Daily".into(), "".into(), "".into(), None, 40000);
+        s.upsert_part(
+            "ENGINE_AIR_FILTER".into(),
+            "Fram".into(),
+            "CA123".into(),
+            "".into(),
+            "".into(),
+            Some(40000),
+        );
+        assert!(s
+            .reminders
+            .iter()
+            .any(|r| !r.completed && r.title.contains("air filter")));
+    }
+
+    #[test]
+    fn costs_include_tire_purchases() {
+        let mut s = AppState::default();
+        s.add_vehicle("Daily".into(), "".into(), "".into(), None, 1000);
+        s.add_service("Oil".into(), 1000, "DIY", 40.0, None);
+        s.add_tire_purchase(
+            "Michelin".into(),
+            "X".into(),
+            "225/65R17".into(),
+            600.0,
+            Some(1000),
+            "".into(),
+        );
+        let labels = s.cost_labels();
+        // All time should be services 40 + tires 600
+        assert!(labels[2].1.contains("640"));
     }
 
     #[test]

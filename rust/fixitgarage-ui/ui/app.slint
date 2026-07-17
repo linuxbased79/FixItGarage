@@ -182,6 +182,8 @@ export component MainWindow inherits Window {
         { label: "This month", value: "$0.00" },
         { label: "This year", value: "$0.00" },
         { label: "All time", value: "$0.00" },
+        { label: "Services (all time)", value: "$0.00" },
+        { label: "Tires (all time)", value: "$0.00" },
     ];
     in-out property <[NoteRow]> notes: [];
     in-out property <[ReminderRow]> reminders: [];
@@ -334,6 +336,8 @@ export component MainWindow inherits Window {
     callback select-vehicle(int);
     callback add-vehicle();
     callback add-service();
+    /// Pre-fill service form: "oil" | "fuel" | "rotation" | "shop"
+    callback fill-service-template(string);
     callback apply-rotation();
     callback set-pattern(string);
     callback set-source(string);
@@ -558,6 +562,19 @@ export component MainWindow inherits Window {
                         edited => { root.set-service-search(root.service-search); }
                     }
                     Card {
+                        title: "Quick templates"; body: "Fills the form — edit costs then Save.";
+                        HorizontalBox {
+                            spacing: 6px;
+                            Button { text: "Oil change"; clicked => { root.fill-service-template("oil"); } }
+                            Button { text: "Fuel fill"; clicked => { root.fill-service-template("fuel"); } }
+                        }
+                        HorizontalBox {
+                            spacing: 6px;
+                            Button { text: "Tire rotation"; clicked => { root.fill-service-template("rotation"); } }
+                            Button { text: "Shop visit"; clicked => { root.fill-service-template("shop"); } }
+                        }
+                    }
+                    Card {
                         title: "Log service"; body: show-shop-emphasis ? "Shop & DIY history for this vehicle." : "DIY-focused logging.";
                         LineEdit { placeholder-text: "Title (e.g. Oil change)"; text <=> root.svc-title; }
                         LineEdit { placeholder-text: root.label-distance; text <=> root.svc-mileage; }
@@ -718,7 +735,10 @@ export component MainWindow inherits Window {
                     padding: 16px; spacing: 12px;
                     PageTitle { label: "Operational costs"; }
                     VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
-                    Text { text: "Totals for the selected vehicle."; font-size: 13px; color: Theme.text-muted; wrap: word-wrap; }
+                    Text {
+                        text: "All maintenance for this vehicle: services, fuel, labor, and tire purchases.";
+                        font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
+                    }
                     for c in cost-lines: Card { title: c.label; body: c.value; }
                 }
             }
@@ -858,7 +878,7 @@ export component MainWindow inherits Window {
                         Button { text: "Donate"; clicked => { root.open-donate(); } }
                         Button { text: "Send feedback (GitHub Issues)"; clicked => { root.open-feedback(); } }
                     }
-                    Card { title: "About"; body: "FixItGarage 0.2.8 — More hub + Settings gear; imperial/metric units."; }
+                    Card { title: "About"; body: "FixItGarage 0.2.9 — service templates, parts reminders, full cost rollup (tires + services)."; }
                     if status-message != "": Text { text: status-message; color: Theme.ok; wrap: word-wrap; }
                 }
             }
@@ -878,7 +898,7 @@ export component MainWindow inherits Window {
                         Text { text: "Oil type: " + part-oil-type; color: Theme.text; wrap: word-wrap; font-size: 13px; }
                     }
                     Card {
-                        title: "Save / update"; body: "";
+                        title: "Save / update"; body: "Saving air/cabin/oil filter schedules a smart reminder (~12 mo / 15k for air & cabin; ~6 mo / 5k for oil filter).";
                         HorizontalBox {
                             spacing: 4px;
                             ChoiceBtn { label: "Air"; active: root.part-type == "ENGINE_AIR_FILTER"; clicked => { root.part-type = "ENGINE_AIR_FILTER"; } }

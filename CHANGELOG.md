@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.9
+- Service quick templates: oil change, fuel fill, tire rotation, shop visit
+- Parts log schedules smart reminders (air/cabin ~12 mo/15k; oil filter ~6 mo/5k)
+- Operational costs include tire purchases; breakdown services vs tires
+
 ## 0.2.8
 - Split navigation: **More** = tools/trackers hub; **Settings** (⚙) = preferences only
 - Settings gear on Home header and bottom nav
