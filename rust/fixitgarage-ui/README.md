@@ -56,27 +56,33 @@ export ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/<version>
 cargo install --git https://github.com/rust-mobile/xbuild.git
 ```
 
-### 3. Build / run
+### 3. Build APK (one-shot script)
+
+From the `rust/` directory:
 
 ```bash
-cd rust/fixitgarage-ui
-x devices
-x run --device <id>
-# APK:
-x build --platform android --arch arm64 --format apk --release
-# → target/x/release/android/*.apk
+./scripts/build-apk.sh
+# → rust/dist/FixItGarage-0.1.0-arm64.apk
 ```
 
-Alternate (cargo-apk):
+Or manually:
 
 ```bash
-cargo install cargo-apk
-cargo apk run --target aarch64-linux-android --lib
+cd rust
+x build -p fixitgarage-ui --platform android --arch arm64 --format apk --release
+# → target/x/release/android/fixitgarage-ui.apk
+```
+
+Install on a device (USB debugging / GrapheneOS developer options):
+
+```bash
+adb install -r dist/FixItGarage-0.1.0-arm64.apk
 ```
 
 ### Package id
 
-Use application id **`org.fixitgarage.app`** when packaging for F-Droid (same as the Kotlin shell).
+**`org.fixitgarage.app`** (set in `manifest.yaml`).  
+ABI: **arm64-v8a**. Min SDK **26**, target SDK **33**.
 
 ## Architecture
 

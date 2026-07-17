@@ -48,4 +48,8 @@ Github Token.txt
 
 # Rust
 rust/target/
+rust/dist/
+rust/signing/
 **/*.rs.bk
+*.apk
+*.aab

@@ -34,3 +34,21 @@ dirs = "6"
 
 [build-dependencies]
 slint-build = "1.17"
+
+# Used by cargo-apk / mobile packagers
+[package.metadata.android]
+package = "org.fixitgarage.app"
+build_targets = ["aarch64-linux-android"]
+runtime_libs = []
+
+[package.metadata.android.sdk]
+min_sdk_version = 26
+target_sdk_version = 35
+
+[package.metadata.android.application]
+label = "FixItGarage"
+theme = "@android:style/Theme.DeviceDefault.NoActionBar"
+
+[[package.metadata.android.uses_permission]]
+name = "android.permission.INTERNET"
+
