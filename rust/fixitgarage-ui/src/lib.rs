@@ -3,6 +3,7 @@
 mod platform;
 mod receipt_parse;
 mod state;
+mod units;
 mod webdav;
 
 use chrono::{TimeZone, Utc};
@@ -12,9 +13,13 @@ use platform::{
     PKG_GOOGLE_DRIVE, PKG_ONEDRIVE, PKG_PROTON_DRIVE,
 };
 use receipt_parse::{parse_receipt_text, parse_tire_receipt_text};
-use state::{reminder_status_line, AppState};
+use state::{reminder_status_line_units, AppState};
 use std::cell::RefCell;
 use std::rc::Rc;
+use units::{
+    display_to_gallons, display_to_miles, display_to_mm, gallons_to_display, miles_to_display,
+    mm_to_display, oil_level_options,
+};
 
 slint::include_modules!();
 
@@ -78,7 +83,10 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     ui.set_form_year(
                         v.year.map(|y| y.to_string()).unwrap_or_default().into(),
                     );
-                    ui.set_form_mileage(v.current_mileage.to_string().into());
+                    let u = s.unit_system();
+                    ui.set_form_mileage(
+                        miles_to_display(v.current_mileage, u).to_string().into(),
+                    );
                 }
                 refresh_ui(&ui, &s);
             }
@@ -95,7 +103,11 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                 let make = ui.get_form_make().to_string();
                 let model = ui.get_form_model().to_string();
                 let year = ui.get_form_year().parse().ok();
-                let mileage = ui.get_form_mileage().parse().unwrap_or(0);
+                let u = s.unit_system();
+                let mileage = display_to_miles(
+                    ui.get_form_mileage().parse().unwrap_or(0),
+                    u,
+                );
                 s.add_vehicle(name, make, model, year, mileage);
                 ui.set_form_name("".into());
                 ui.set_form_make("".into());
@@ -118,9 +130,16 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     ui.set_status_message("Select a vehicle first.".into());
                     return;
                 };
-                let mileage = ui.get_form_mileage().parse().unwrap_or(0);
+                let u = s.unit_system();
+                let mileage = display_to_miles(
+                    ui.get_form_mileage().parse().unwrap_or(0),
+                    u,
+                );
                 s.update_vehicle_mileage(id, mileage);
-                ui.set_status_message(format!("Mileage updated to {mileage}.").into());
+                ui.set_status_message(format!(
+                    "Odometer updated to {}.",
+                    units::format_distance(mileage, u)
+                ).into());
                 refresh_ui(&ui, &s);
             }
         });
@@ -132,12 +151,18 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         ui.on_update_selected_vehicle(move || {
             if let Some(ui) = ui_weak.upgrade() {
                 let mut s = state.borrow_mut();
+                let u = s.unit_system();
+                let miles = ui
+                    .get_form_mileage()
+                    .parse()
+                    .ok()
+                    .map(|v| display_to_miles(v, u));
                 s.update_selected_vehicle_details(
                     ui.get_form_name().to_string(),
                     ui.get_form_make().to_string(),
                     ui.get_form_model().to_string(),
                     ui.get_form_year().parse().ok(),
-                    ui.get_form_mileage().parse().ok(),
+                    miles,
                 );
                 ui.set_status_message("Vehicle details updated.".into());
                 refresh_ui(&ui, &s);
@@ -194,12 +219,13 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         ui.on_save_tread(move || {
             if let Some(ui) = ui_weak.upgrade() {
                 let mut s = state.borrow_mut();
+                let u = s.unit_system();
                 let parse = |v: slint::SharedString| {
                     let t = v.to_string();
                     if t.trim().is_empty() {
                         None
                     } else {
-                        t.parse().ok()
+                        t.parse::<f64>().ok().map(|x| display_to_mm(x, u))
                     }
                 };
                 s.set_tread_depths(
@@ -277,12 +303,13 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         ui.on_save_tire_miles(move || {
             if let Some(ui) = ui_weak.upgrade() {
                 let mut s = state.borrow_mut();
+                let u = s.unit_system();
                 let parse = |v: slint::SharedString| {
                     let t = v.to_string();
                     if t.trim().is_empty() {
                         None
                     } else {
-                        t.parse().ok()
+                        t.parse::<u32>().ok().map(|x| display_to_miles(x, u))
                     }
                 };
                 s.set_tire_corner_miles(
@@ -291,7 +318,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     parse(ui.get_mi_rl()),
                     parse(ui.get_mi_rr()),
                 );
-                ui.set_status_message("Mileage per tire saved.".into());
+                ui.set_status_message("Distance per tire saved.".into());
                 refresh_ui(&ui, &s);
             }
         });
@@ -307,8 +334,12 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     ui.set_status_message("Add a vehicle first.".into());
                     return;
                 }
+                let u = s.unit_system();
                 let title = ui.get_svc_title().to_string();
-                let mileage = ui.get_svc_mileage().parse().unwrap_or(0);
+                let mileage = display_to_miles(
+                    ui.get_svc_mileage().parse().unwrap_or(0),
+                    u,
+                );
                 let parts = ui.get_svc_cost().parse().unwrap_or(0.0);
                 let labor = ui.get_svc_labor().parse().unwrap_or(0.0);
                 let gallons = {
@@ -316,7 +347,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     if g.trim().is_empty() {
                         None
                     } else {
-                        g.parse().ok()
+                        g.parse::<f64>().ok().map(|v| display_to_gallons(v, u))
                     }
                 };
                 let fuel_cost = {
@@ -407,6 +438,22 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
     {
         let ui_weak = ui.as_weak();
         let state = state.clone();
+        ui.on_set_units(move |units| {
+            let mut s = state.borrow_mut();
+            s.set_units(&units);
+            if let Some(ui) = ui_weak.upgrade() {
+                ui.set_status_message(format!(
+                    "Units: {} (saved). Values convert for display; data stored as miles/gallons/mm.",
+                    s.unit_system().as_str()
+                ).into());
+                refresh_ui(&ui, &s);
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
         ui.on_set_dark_mode(move |mode| {
             let mut s = state.borrow_mut();
             let mode = mode.to_string();
@@ -428,13 +475,19 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         ui.on_save_part(move || {
             if let Some(ui) = ui_weak.upgrade() {
                 let mut s = state.borrow_mut();
+                let u = s.unit_system();
+                let mi = ui
+                    .get_part_mileage()
+                    .parse()
+                    .ok()
+                    .map(|v| display_to_miles(v, u));
                 s.upsert_part(
                     ui.get_part_type().to_string(),
                     ui.get_part_brand().to_string(),
                     ui.get_part_number().to_string(),
                     ui.get_part_oil().to_string(),
                     ui.get_part_notes().to_string(),
-                    ui.get_part_mileage().parse().ok(),
+                    mi,
                 );
                 ui.set_status_message("Part saved.".into());
                 refresh_ui(&ui, &s);
@@ -448,10 +501,16 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         ui.on_save_component(move || {
             if let Some(ui) = ui_weak.upgrade() {
                 let mut s = state.borrow_mut();
+                let u = s.unit_system();
+                let mi = ui
+                    .get_comp_mileage()
+                    .parse()
+                    .ok()
+                    .map(|v| display_to_miles(v, u));
                 s.upsert_component(
                     ui.get_comp_type().to_string(),
                     ui.get_comp_notes().to_string(),
-                    ui.get_comp_mileage().parse().ok(),
+                    mi,
                     &ui.get_comp_date().to_string(),
                 );
                 ui.set_status_message("Component saved.".into());
@@ -481,10 +540,16 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         ui.on_add_reminder(move || {
             if let Some(ui) = ui_weak.upgrade() {
                 let mut s = state.borrow_mut();
+                let u = s.unit_system();
+                let due_mi = ui
+                    .get_rem_mileage()
+                    .parse()
+                    .ok()
+                    .map(|v| display_to_miles(v, u));
                 s.add_reminder(
                     ui.get_rem_title().to_string(),
                     &ui.get_rem_date().to_string(),
-                    ui.get_rem_mileage().parse().ok(),
+                    due_mi,
                 );
                 reschedule_reminder_alarms(&s);
                 ui.set_rem_title("".into());
@@ -566,12 +631,13 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     ui.set_status_message("Select a vehicle first.".into());
                     return;
                 }
+                let u = s.unit_system();
                 let gallons = {
                     let g = ui.get_rcp_gallons().to_string();
                     if g.trim().is_empty() {
                         None
                     } else {
-                        g.parse().ok()
+                        g.parse::<f64>().ok().map(|v| display_to_gallons(v, u))
                     }
                 };
                 let fuel = {
@@ -585,7 +651,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                 s.add_receipt(
                     ui.get_rcp_title().to_string(),
                     &ui.get_rcp_date().to_string(),
-                    ui.get_rcp_mileage().parse().unwrap_or(0),
+                    display_to_miles(ui.get_rcp_mileage().parse().unwrap_or(0), u),
                     gallons,
                     ui.get_rcp_parts().parse().unwrap_or(0.0),
                     ui.get_rcp_labor().parse().unwrap_or(0.0),
@@ -613,12 +679,18 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         ui.on_save_tire_purchase(move || {
             if let Some(ui) = ui_weak.upgrade() {
                 let mut s = state.borrow_mut();
+                let u = s.unit_system();
+                let mi = ui
+                    .get_tire_buy_mileage()
+                    .parse()
+                    .ok()
+                    .map(|v| display_to_miles(v, u));
                 s.add_tire_purchase(
                     ui.get_tire_brand().to_string(),
                     ui.get_tire_model().to_string(),
                     ui.get_tire_size().to_string(),
                     ui.get_tire_cost().parse().unwrap_or(0.0),
-                    ui.get_tire_buy_mileage().parse().ok(),
+                    mi,
                     ui.get_tire_buy_notes().to_string(),
                 );
                 ui.set_tire_brand("".into());
@@ -786,21 +858,26 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
 
     {
         let ui_weak = ui.as_weak();
+        let state = state.clone();
         ui.on_parse_receipt_text(move || {
             if let Some(ui) = ui_weak.upgrade() {
                 let text = ui.get_rcp_paste().to_string();
                 let p = parse_receipt_text(&text);
+                let u = state.borrow().unit_system();
                 let mut filled = 0u32;
                 if let Some(d) = p.date {
                     ui.set_rcp_date(d.into());
                     filled += 1;
                 }
                 if let Some(m) = p.mileage {
-                    ui.set_rcp_mileage(m.to_string().into());
+                    // Receipt text usually miles; convert to display unit
+                    ui.set_rcp_mileage(miles_to_display(m, u).to_string().into());
                     filled += 1;
                 }
                 if let Some(g) = p.gallons {
-                    ui.set_rcp_gallons(g.to_string().into());
+                    // Receipt text usually gallons
+                    let shown = gallons_to_display(g, u);
+                    ui.set_rcp_gallons(format!("{shown:.3}").into());
                     filled += 1;
                 }
                 if let Some(v) = p.parts_cost {
@@ -965,6 +1042,23 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     ui.set_selected_vehicle_label(sel_name.into());
     ui.set_selected_vehicle_id(state.selected_vehicle_id.unwrap_or(0) as i32);
 
+    let u = state.unit_system();
+    ui.set_units(u.as_str().into());
+    ui.set_label_distance(u.distance_label().into());
+    ui.set_label_fuel(u.fuel_label().into());
+    ui.set_label_economy(u.economy_unit().into());
+    ui.set_label_tread(u.tread_unit().into());
+    ui.set_unit_distance(u.distance_unit().into());
+    ui.set_unit_fuel(u.fuel_unit().into());
+    // Oil level choices for current unit system
+    let oil_opts = oil_level_options(u);
+    ui.set_oil_opt_0(oil_opts[0].into());
+    ui.set_oil_opt_1(oil_opts[1].into());
+    ui.set_oil_opt_2(oil_opts[2].into());
+    ui.set_oil_opt_3(oil_opts[3].into());
+    ui.set_oil_opt_4(oil_opts[4].into());
+    ui.set_oil_opt_5(oil_opts[5].into());
+
     ui.set_mpg_label(state.mpg_label().into());
     ui.set_tire_fl(state.tire_layout.fl.clone().into());
     ui.set_tire_fr(state.tire_layout.fr.clone().into());
@@ -996,9 +1090,9 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
         ui.set_last_service_title(last.title.clone().into());
         ui.set_last_service_detail(
             format!(
-                "{} · {} mi · {}",
+                "{} · {} · {}",
                 format_service_date(last.date_epoch_ms),
-                last.mileage,
+                units::format_distance(last.mileage, u),
                 last.source.as_str()
             )
             .into(),
@@ -1029,7 +1123,7 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
                     v.name.clone().into()
                 },
                 subtitle: subtitle.into(),
-                mileage: format!("{} mi", v.current_mileage).into(),
+                mileage: units::format_distance(v.current_mileage, u).into(),
             }
         })
         .collect();
@@ -1045,9 +1139,9 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
                 id: s.id as i32,
                 title: s.title.clone().into(),
                 subtitle: format!(
-                    "{} · {} mi · {}",
+                    "{} · {} · {}",
                     format_service_date(s.date_epoch_ms),
-                    s.mileage,
+                    units::format_distance(s.mileage, u),
                     s.source.as_str()
                 )
                 .into(),
@@ -1113,7 +1207,7 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
             ReminderRow {
                 id: r.id as i32,
                 title: r.title.clone().into(),
-                detail: reminder_status_line(r, mileage).into(),
+                detail: reminder_status_line_units(r, mileage, u).into(),
                 is_oil_level: is_oil,
             }
         })
@@ -1152,7 +1246,7 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
         .map(|p| {
             let mi = p
                 .mileage
-                .map(|m| format!("{m} mi"))
+                .map(|m| units::format_distance(m, u))
                 .unwrap_or_else(|| "—".into());
             HistoryRow {
                 id: p.id as i32,
@@ -1181,7 +1275,7 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
         .map(|r| {
             let mi = r
                 .mileage
-                .map(|m| format!("{m} mi"))
+                .map(|m| units::format_distance(m, u))
                 .unwrap_or_else(|| "—".into());
             HistoryRow {
                 id: r.id as i32,
@@ -1230,10 +1324,30 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     ui.set_tread_coin_guide(state.tread_coin_guide().into());
     ui.set_tire_miles_summary(state.tire_miles_summary().into());
     let tm = state.tire_miles_for_selected();
-    ui.set_mi_fl(tm.fl.map(|v| v.to_string()).unwrap_or_default().into());
-    ui.set_mi_fr(tm.fr.map(|v| v.to_string()).unwrap_or_default().into());
-    ui.set_mi_rl(tm.rl.map(|v| v.to_string()).unwrap_or_default().into());
-    ui.set_mi_rr(tm.rr.map(|v| v.to_string()).unwrap_or_default().into());
+    ui.set_mi_fl(
+        tm.fl
+            .map(|v| miles_to_display(v, u).to_string())
+            .unwrap_or_default()
+            .into(),
+    );
+    ui.set_mi_fr(
+        tm.fr
+            .map(|v| miles_to_display(v, u).to_string())
+            .unwrap_or_default()
+            .into(),
+    );
+    ui.set_mi_rl(
+        tm.rl
+            .map(|v| miles_to_display(v, u).to_string())
+            .unwrap_or_default()
+            .into(),
+    );
+    ui.set_mi_rr(
+        tm.rr
+            .map(|v| miles_to_display(v, u).to_string())
+            .unwrap_or_default()
+            .into(),
+    );
     ui.set_cloud_url(state.cloud_webdav_url.clone().into());
     ui.set_cloud_user(state.cloud_username.clone().into());
     // Do not push password into UI on every refresh if user is typing — only seed when empty
@@ -1241,10 +1355,18 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
         ui.set_cloud_pass(state.cloud_password.clone().into());
     }
     let t = state.tread_for_selected();
-    ui.set_tread_fl(t.fl.map(|v| format!("{v}")).unwrap_or_default().into());
-    ui.set_tread_fr(t.fr.map(|v| format!("{v}")).unwrap_or_default().into());
-    ui.set_tread_rl(t.rl.map(|v| format!("{v}")).unwrap_or_default().into());
-    ui.set_tread_rr(t.rr.map(|v| format!("{v}")).unwrap_or_default().into());
+    let fmt_t = |v: f64| {
+        let d = mm_to_display(v, u);
+        if u.is_metric() {
+            format!("{d:.1}")
+        } else {
+            format!("{d:.1}")
+        }
+    };
+    ui.set_tread_fl(t.fl.map(fmt_t).unwrap_or_default().into());
+    ui.set_tread_fr(t.fr.map(fmt_t).unwrap_or_default().into());
+    ui.set_tread_rl(t.rl.map(fmt_t).unwrap_or_default().into());
+    ui.set_tread_rr(t.rr.map(fmt_t).unwrap_or_default().into());
 }
 
 /// Push due notifications (throttled) for all vehicles + selected component alerts.

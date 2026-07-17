@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.7
+- Units preference: Imperial (mi, gal, MPG, tread 1/32\") or Metric (km, L, L/100km, tread mm)
+- Settings toggle; saved on device; values convert for display
+- Oil level choices switch between quarts and liters wording
+
 ## 0.2.6
 - Smart reminders: multi-item notifications (all vehicles), 12h throttle
 - AlarmManager date wake schedules so due checks re-open the app

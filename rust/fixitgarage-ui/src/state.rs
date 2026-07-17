@@ -7,6 +7,10 @@ use fixitgarage_core::{
     apply_rotation, average_mpg, map_corners, services_to_csv, summarize_costs, RotationPattern,
     TireLayout,
 };
+use crate::units::{
+    display_oil_level, format_distance, format_economy, format_fuel, format_tread,
+    tread_coin_guide as units_tread_coin_guide, tread_limit_label, UnitSystem,
+};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -17,6 +21,9 @@ pub struct AppState {
     pub user_mode: String,
     #[serde(default = "default_dark_mode")]
     pub dark_mode: String,
+    /// IMPERIAL (mi, gal, 32nds) or METRIC (km, L, mm). Storage stays miles/gallons/mm.
+    #[serde(default = "default_units")]
+    pub units: String,
     #[serde(default)]
     pub selected_vehicle_id: Option<u64>,
     pub next_vehicle_id: u64,
@@ -171,13 +178,16 @@ pub fn normalize_oil_level(s: &str) -> String {
             return (*opt).to_string();
         }
     }
-    // Accept common aliases
-    match t.to_ascii_lowercase().as_str() {
+    // Metric wording → imperial canonical storage
+    let lower = t.to_ascii_lowercase();
+    match lower.as_str() {
         "ok" | "good" | "full / ok" => "Full".into(),
-        "0.5" | "half" | "1/2" | "half quart low" => "½ quart low".into(),
-        "1" | "1 qt" | "1 quart" => "1 quart low".into(),
-        "2" | "2 qt" | "2 quarts" => "2 quarts low".into(),
-        "3" | "3 qt" | "3 quarts" => "3 quarts low".into(),
+        "0.5" | "half" | "1/2" | "half quart low" | "0.5 l low" | "½ l low" | "0,5 l low" => {
+            "½ quart low".into()
+        }
+        "1" | "1 qt" | "1 quart" | "1 l low" | "1l low" => "1 quart low".into(),
+        "2" | "2 qt" | "2 quarts" | "2 l low" | "2l low" => "2 quarts low".into(),
+        "3" | "3 qt" | "3 quarts" | "3 l low" | "3l low" => "3 quarts low".into(),
         "over" | "high" | "too full" => "Overfilled".into(),
         _ if !t.is_empty() => t.to_string(),
         _ => "Full".into(),
@@ -187,6 +197,10 @@ pub fn normalize_oil_level(s: &str) -> String {
 fn default_dark_mode() -> String {
     // Dark by default; user choice is saved in state.json and restored on next launch.
     "DARK".into()
+}
+
+fn default_units() -> String {
+    "IMPERIAL".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -271,6 +285,7 @@ impl Default for AppState {
             wizard_done: false,
             user_mode: "BOTH".into(),
             dark_mode: default_dark_mode(),
+            units: default_units(),
             selected_vehicle_id: None,
             next_vehicle_id: 1,
             next_service_id: 1,
@@ -404,6 +419,15 @@ impl AppState {
         }
     }
 
+    pub fn unit_system(&self) -> UnitSystem {
+        UnitSystem::from_str_loose(&self.units)
+    }
+
+    pub fn set_units(&mut self, units: &str) {
+        self.units = UnitSystem::from_str_loose(units).as_str().into();
+        self.save();
+    }
+
     pub fn services_for_selected(&self) -> Vec<&ServiceRecord> {
         let Some(vid) = self.selected_vehicle_id else {
             return Vec::new();
@@ -421,13 +445,15 @@ impl AppState {
     }
 
     pub fn mpg_label(&self) -> String {
+        let u = self.unit_system();
+        let unit = u.economy_unit();
         match self.average_mpg() {
-            Some(mpg) => format!("MPG: {mpg:.1}"),
+            Some(mpg) => format!("{} avg", format_economy(mpg, u)),
             None => {
                 if self.selected_vehicle_id.is_none() {
-                    "MPG: select a vehicle".into()
+                    format!("{unit}: select a vehicle")
                 } else {
-                    "MPG: need 2+ fuel fill-ups".into()
+                    format!("{unit}: need 2+ fuel fill-ups")
                 }
             }
         }
@@ -447,10 +473,11 @@ impl AppState {
 
     /// Dashboard numbers for the home screen.
     pub fn dashboard_lines(&self) -> (String, String, String, String) {
+        let u = self.unit_system();
         let mpg = self
             .average_mpg()
-            .map(|m| format!("{m:.1} MPG avg"))
-            .unwrap_or_else(|| "MPG: —".into());
+            .map(|m| format!("{} avg", format_economy(m, u)))
+            .unwrap_or_else(|| format!("{}: —", u.economy_unit()));
         let costs = self.cost_labels();
         let month = format!("This month: {}", costs[0].1);
         let year = format!("This year: {}", costs[1].1);
@@ -465,11 +492,12 @@ impl AppState {
         (mpg, month, year, dues)
     }
 
-    /// Fuel fill-up history with per-leg MPG where possible.
+    /// Fuel fill-up history with per-leg economy where possible.
     pub fn fuel_history_lines(&self) -> Vec<(String, String)> {
         let Some(vid) = self.selected_vehicle_id else {
             return Vec::new();
         };
+        let u = self.unit_system();
         let mut fills: Vec<&ServiceRecord> = self
             .services
             .iter()
@@ -481,7 +509,11 @@ impl AppState {
             let s = fills[i];
             let date = format_epoch(s.date_epoch_ms);
             let gal = s.gallons.unwrap_or(0.0);
-            let mut detail = format!("{} mi · {gal:.2} gal", s.mileage);
+            let mut detail = format!(
+                "{} · {}",
+                format_distance(s.mileage, u),
+                format_fuel(gal, u)
+            );
             if let Some(fc) = s.fuel_cost {
                 detail.push_str(&format!(" · ${fc:.2}"));
             }
@@ -490,7 +522,7 @@ impl AppState {
                 let miles = s.mileage.saturating_sub(prev.mileage);
                 if miles > 0 && gal > 0.0 {
                     let leg = f64::from(miles) / gal;
-                    detail.push_str(&format!(" · {leg:.1} MPG this fill"));
+                    detail.push_str(&format!(" · {} this fill", format_economy(leg, u)));
                 }
             }
             out.push((format!("{date} — {}", s.title), detail));
@@ -821,9 +853,10 @@ impl AppState {
     }
 
     pub fn tread_summary(&self) -> String {
+        let u = self.unit_system();
         let t = self.tread_for_selected();
         let fmt = |v: Option<f64>| {
-            v.map(|x| format!("{x:.1} mm"))
+            v.map(|x| format_tread(x, u))
                 .unwrap_or_else(|| "—".into())
         };
         let when = t
@@ -886,7 +919,7 @@ impl AppState {
                 .map(|v| v.name.as_str())
                 .unwrap_or("Vehicle");
             if is_due_by_date(r.due_epoch_ms, now) || is_due_by_mileage(r.due_mileage, odo) {
-                let detail = reminder_status_line(r, odo);
+                let detail = reminder_status_line_units(r, odo, self.unit_system());
                 out.push((
                     43000 + (r.id as i32 % 5000),
                     format!("Due: {}", r.title),
@@ -945,7 +978,7 @@ impl AppState {
             .map(|r| {
                 (
                     r.title.clone(),
-                    reminder_status_line(r, odo),
+                    reminder_status_line_units(r, odo, self.unit_system()),
                 )
             })
             .collect();
@@ -995,12 +1028,13 @@ impl AppState {
     pub const TREAD_MIN_MM: f64 = 1.6;
 
     pub fn tread_warning(&self) -> String {
+        let u = self.unit_system();
         let t = self.tread_for_selected();
         let mut low = Vec::new();
         let mut check = |label: &str, v: Option<f64>| {
             if let Some(mm) = v {
                 if mm < Self::TREAD_MIN_MM {
-                    low.push(format!("{label} {mm:.1} mm"));
+                    low.push(format!("{label} {}", format_tread(mm, u)));
                 }
             }
         };
@@ -1010,13 +1044,17 @@ impl AppState {
         check("RR", t.rr);
         if low.is_empty() {
             if t.measured_epoch_ms.is_none() {
-                "No tread measurement yet. Legal minimum is usually 1.6 mm (2/32\").".into()
+                format!("No tread measurement yet. {}", tread_limit_label(u))
             } else {
-                "All measured corners are at or above 1.6 mm.".into()
+                format!(
+                    "All measured corners are at or above the legal limit ({}).",
+                    format_tread(Self::TREAD_MIN_MM, u)
+                )
             }
         } else {
             format!(
-                "⚠ Below 1.6 mm (replace soon): {}",
+                "⚠ Below {} (replace soon): {}",
+                format_tread(Self::TREAD_MIN_MM, u),
                 low.join(", ")
             )
         }
@@ -1512,11 +1550,9 @@ impl AppState {
         self.wiper_due_warning().contains('⚠')
     }
 
-    /// US coin gauge assist for camera tread measurement (approx legal / mid wear).
+    /// Camera / coin gauge assist for tread measurement.
     pub fn tread_coin_guide(&self) -> String {
-        "Coin gauge (camera assist): US penny Lincoln head ~1.6 mm (2/32\") wear limit; \
-         quarter Washington head ~3.2 mm (4/32\") mid wear. Place coin in groove, photo, then enter mm."
-            .into()
+        units_tread_coin_guide(self.unit_system())
     }
 
     pub fn set_tire_corner_miles(
@@ -1557,8 +1593,12 @@ impl AppState {
     }
 
     pub fn tire_miles_summary(&self) -> String {
+        let u = self.unit_system();
         let m = self.tire_miles_for_selected();
-        let f = |v: Option<u32>| v.map(|x| format!("{x} mi")).unwrap_or_else(|| "—".into());
+        let f = |v: Option<u32>| {
+            v.map(|x| format_distance(x, u))
+                .unwrap_or_else(|| "—".into())
+        };
         format!(
             "FL {} · FR {} · RL {} · RR {}",
             f(m.fl),
@@ -1671,11 +1711,13 @@ impl AppState {
                     chrono::LocalResult::Single(dt) => dt.format("%Y-%m-%d").to_string(),
                     _ => "—".into(),
                 };
+                let u = self.unit_system();
                 let mi = l
                     .mileage
-                    .map(|m| format!(" · {m} mi"))
+                    .map(|m| format!(" · {}", format_distance(m, u)))
                     .unwrap_or_default();
-                format!("Last check: {}{} — {}", date, mi, l.level)
+                let level = display_oil_level(&l.level, u);
+                format!("Last check: {}{} — {}", date, mi, level)
             })
             .unwrap_or_else(|| "No oil level logged yet.".into())
     }
@@ -1710,7 +1752,7 @@ impl AppState {
                     .unwrap_or_else(|| "—".into());
                 let mi = c
                     .installed_mileage
-                    .map(|m| format!("{m} mi"))
+                    .map(|m| format_distance(m, self.unit_system()))
                     .unwrap_or_else(|| "—".into());
                 let size = if c.notes.trim().is_empty() {
                     "size not set".into()
@@ -1806,7 +1848,11 @@ fn add_months_approx(epoch_ms: i64, months: i32) -> i64 {
     epoch_ms + days * 86_400_000
 }
 
-pub fn reminder_status_line(r: &ReminderEntry, current_mileage: u32) -> String {
+pub fn reminder_status_line_units(
+    r: &ReminderEntry,
+    current_mileage: u32,
+    units: UnitSystem,
+) -> String {
     let now = Utc::now().timestamp_millis();
     let mut bits = Vec::new();
     if let Some(ms) = r.due_epoch_ms {
@@ -1816,9 +1862,9 @@ pub fn reminder_status_line(r: &ReminderEntry, current_mileage: u32) -> String {
         }
     }
     if let Some(m) = r.due_mileage {
-        bits.push(format!("at {m} mi"));
+        bits.push(format!("at {}", format_distance(m, units)));
         if is_due_by_mileage(Some(m), current_mileage) {
-            bits.push("DUE BY MILEAGE".into());
+            bits.push("DUE BY ODOMETER".into());
         }
     }
     if bits.is_empty() {

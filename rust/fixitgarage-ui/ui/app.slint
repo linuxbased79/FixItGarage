@@ -300,6 +300,21 @@ export component MainWindow inherits Window {
     in-out property <string> status-message: "";
     in-out property <string> csv-preview: "";
     in-out property <string> dark-mode: "DARK";
+    // IMPERIAL | METRIC — display preference (storage stays mi/gal/mm)
+    in-out property <string> units: "IMPERIAL";
+    in-out property <string> label-distance: "Mileage (mi)";
+    in-out property <string> label-fuel: "Gallons";
+    in-out property <string> label-economy: "MPG";
+    in-out property <string> label-tread: "mm";
+    in-out property <string> unit-distance: "mi";
+    in-out property <string> unit-fuel: "gal";
+    // Oil level choice labels (swap with unit system)
+    in-out property <string> oil-opt-0: "Full";
+    in-out property <string> oil-opt-1: "½ quart low";
+    in-out property <string> oil-opt-2: "1 quart low";
+    in-out property <string> oil-opt-3: "2 quarts low";
+    in-out property <string> oil-opt-4: "3 quarts low";
+    in-out property <string> oil-opt-5: "Overfilled";
 
     callback finish-wizard(string);
     callback navigate(int);
@@ -311,6 +326,7 @@ export component MainWindow inherits Window {
     callback set-source(string);
     callback set-user-mode(string);
     callback set-dark-mode(string);
+    callback set-units(string);
     callback save-part();
     callback save-component();
     callback add-note();
@@ -369,6 +385,12 @@ export component MainWindow inherits Window {
                 spacing: 8px;
                 ChoiceBtn { label: "Dark"; active: root.dark-mode == "DARK"; clicked => { root.set-dark-mode("DARK"); } }
                 ChoiceBtn { label: "Light"; active: root.dark-mode == "LIGHT"; clicked => { root.set-dark-mode("LIGHT"); } }
+            }
+            Text { text: "Units (can change later in Settings)"; font-size: 13px; color: Theme.text-muted; }
+            HorizontalBox {
+                spacing: 8px;
+                ChoiceBtn { label: "Imperial"; active: root.units == "IMPERIAL"; clicked => { root.set-units("IMPERIAL"); } }
+                ChoiceBtn { label: "Metric"; active: root.units == "METRIC"; clicked => { root.set-units("METRIC"); } }
             }
         }
     }
@@ -474,7 +496,7 @@ export component MainWindow inherits Window {
                         LineEdit { placeholder-text: "Model"; text <=> root.form-model; }
                         HorizontalBox {
                             LineEdit { placeholder-text: "Year"; text <=> root.form-year; horizontal-stretch: 1; }
-                            LineEdit { placeholder-text: "Mileage"; text <=> root.form-mileage; horizontal-stretch: 1; }
+                            LineEdit { placeholder-text: root.label-distance; text <=> root.form-mileage; horizontal-stretch: 1; }
                         }
                         Button { text: "Save vehicle"; primary: true; clicked => { root.add-vehicle(); } }
                     }
@@ -486,10 +508,10 @@ export component MainWindow inherits Window {
                         LineEdit { placeholder-text: "Model"; text <=> root.form-model; }
                         HorizontalBox {
                             LineEdit { placeholder-text: "Year"; text <=> root.form-year; horizontal-stretch: 1; }
-                            LineEdit { placeholder-text: "Mileage"; text <=> root.form-mileage; horizontal-stretch: 1; }
+                            LineEdit { placeholder-text: root.label-distance; text <=> root.form-mileage; horizontal-stretch: 1; }
                         }
                         Button { text: "Save changes"; primary: true; clicked => { root.update-selected-vehicle(); } }
-                        Button { text: "Update mileage only"; clicked => { root.update-selected-mileage(); } }
+                        Button { text: "Update odometer only"; clicked => { root.update-selected-mileage(); } }
                         Button { text: "Delete selected vehicle"; clicked => { root.delete-selected-vehicle(); } }
                     }
                     for v in vehicles: TouchArea {
@@ -518,7 +540,7 @@ export component MainWindow inherits Window {
                     Card {
                         title: "Log service"; body: show-shop-emphasis ? "Shop & DIY history for this vehicle." : "DIY-focused logging.";
                         LineEdit { placeholder-text: "Title (e.g. Oil change)"; text <=> root.svc-title; }
-                        LineEdit { placeholder-text: "Mileage"; text <=> root.svc-mileage; }
+                        LineEdit { placeholder-text: root.label-distance; text <=> root.svc-mileage; }
                         HorizontalBox {
                             spacing: 8px;
                             ChoiceBtn { label: "DIY"; active: root.svc-source == "DIY"; clicked => { root.set-source("DIY"); } }
@@ -526,7 +548,7 @@ export component MainWindow inherits Window {
                         }
                         LineEdit { placeholder-text: "Parts cost"; text <=> root.svc-cost; }
                         LineEdit { placeholder-text: "Labor cost"; text <=> root.svc-labor; }
-                        LineEdit { placeholder-text: "Gallons (fuel, optional)"; text <=> root.svc-gallons; }
+                        LineEdit { placeholder-text: root.label-fuel + " (fuel, optional)"; text <=> root.svc-gallons; }
                         LineEdit { placeholder-text: "Fuel cost (optional)"; text <=> root.svc-fuel; }
                         if root.svc-source == "SHOP": LineEdit { placeholder-text: "Shop name"; text <=> root.svc-shop; }
                         Button { text: "Save service"; primary: true; clicked => { root.add-service(); } }
@@ -593,7 +615,7 @@ export component MainWindow inherits Window {
                         Button { text: "Apply rotation"; primary: true; clicked => { root.apply-rotation(); } }
                     }
                     if show-tires: Card {
-                        title: "Tread depth (mm)";
+                        title: "Tread depth (" + root.label-tread + ")";
                         body: tread-summary;
                         Text {
                             text: tread-warning;
@@ -609,31 +631,31 @@ export component MainWindow inherits Window {
                             font-size: 11px; color: Theme.text-soft; wrap: word-wrap;
                         }
                         HorizontalBox {
-                            LineEdit { placeholder-text: "FL mm"; text <=> root.tread-fl; horizontal-stretch: 1; }
-                            LineEdit { placeholder-text: "FR mm"; text <=> root.tread-fr; horizontal-stretch: 1; }
+                            LineEdit { placeholder-text: "FL " + root.label-tread; text <=> root.tread-fl; horizontal-stretch: 1; }
+                            LineEdit { placeholder-text: "FR " + root.label-tread; text <=> root.tread-fr; horizontal-stretch: 1; }
                         }
                         HorizontalBox {
-                            LineEdit { placeholder-text: "RL mm"; text <=> root.tread-rl; horizontal-stretch: 1; }
-                            LineEdit { placeholder-text: "RR mm"; text <=> root.tread-rr; horizontal-stretch: 1; }
+                            LineEdit { placeholder-text: "RL " + root.label-tread; text <=> root.tread-rl; horizontal-stretch: 1; }
+                            LineEdit { placeholder-text: "RR " + root.label-tread; text <=> root.tread-rr; horizontal-stretch: 1; }
                         }
                         Button { text: "Save tread depths"; primary: true; clicked => { root.save-tread(); } }
                     }
                     if show-tires: Card {
-                        title: "Mileage per tire";
+                        title: "Distance per tire";
                         body: tire-miles-summary;
                         Text {
-                            text: "Odometer (or miles on this tire) for each corner — helps plan rotations.";
+                            text: "Odometer on this tire for each corner (" + root.unit-distance + ") — helps plan rotations.";
                             font-size: 12px; color: Theme.text-muted; wrap: word-wrap;
                         }
                         HorizontalBox {
-                            LineEdit { placeholder-text: "FL mi"; text <=> root.mi-fl; horizontal-stretch: 1; }
-                            LineEdit { placeholder-text: "FR mi"; text <=> root.mi-fr; horizontal-stretch: 1; }
+                            LineEdit { placeholder-text: "FL " + root.unit-distance; text <=> root.mi-fl; horizontal-stretch: 1; }
+                            LineEdit { placeholder-text: "FR " + root.unit-distance; text <=> root.mi-fr; horizontal-stretch: 1; }
                         }
                         HorizontalBox {
-                            LineEdit { placeholder-text: "RL mi"; text <=> root.mi-rl; horizontal-stretch: 1; }
-                            LineEdit { placeholder-text: "RR mi"; text <=> root.mi-rr; horizontal-stretch: 1; }
+                            LineEdit { placeholder-text: "RL " + root.unit-distance; text <=> root.mi-rl; horizontal-stretch: 1; }
+                            LineEdit { placeholder-text: "RR " + root.unit-distance; text <=> root.mi-rr; horizontal-stretch: 1; }
                         }
-                        Button { text: "Save tire mileage"; primary: true; clicked => { root.save-tire-miles(); } }
+                        Button { text: "Save tire distance"; primary: true; clicked => { root.save-tire-miles(); } }
                     }
                     if show-tires: Card {
                         title: "Tire purchase"; body: "Log a new set. Paste receipt text (OCR / email / clipboard) to auto-fill.";
@@ -648,7 +670,7 @@ export component MainWindow inherits Window {
                         LineEdit { placeholder-text: "Model"; text <=> root.tire-model; }
                         LineEdit { placeholder-text: "Size (e.g. 225/65R17)"; text <=> root.tire-size; }
                         LineEdit { placeholder-text: "Cost"; text <=> root.tire-cost; }
-                        LineEdit { placeholder-text: "Mileage at purchase"; text <=> root.tire-buy-mileage; }
+                        LineEdit { placeholder-text: root.label-distance + " at purchase"; text <=> root.tire-buy-mileage; }
                         LineEdit { placeholder-text: "Notes"; text <=> root.tire-buy-notes; }
                         Button { text: "Save tire purchase"; primary: true; clicked => { root.save-tire-purchase(); } }
                     }
@@ -696,6 +718,21 @@ export component MainWindow inherits Window {
                         }
                         Text {
                             text: root.dark-mode == "DARK" ? "Using dark mode (saved)" : "Using light mode (saved)";
+                            font-size: 12px; color: Theme.text-muted; wrap: word-wrap;
+                        }
+                    }
+                    Card {
+                        title: "Units of measure";
+                        body: "Choose imperial or metric. Existing data is converted for display (stored as miles, US gallons, and mm).";
+                        HorizontalBox {
+                            spacing: 8px;
+                            ChoiceBtn { label: "Imperial"; active: root.units == "IMPERIAL"; clicked => { root.set-units("IMPERIAL"); } }
+                            ChoiceBtn { label: "Metric"; active: root.units == "METRIC"; clicked => { root.set-units("METRIC"); } }
+                        }
+                        Text {
+                            text: root.units == "METRIC"
+                                ? "Metric: km · liters · L/100km · tread mm · oil in liters"
+                                : "Imperial: miles · gallons · MPG · tread 1/32\" · oil in quarts";
                             font-size: 12px; color: Theme.text-muted; wrap: word-wrap;
                         }
                     }
@@ -768,7 +805,7 @@ export component MainWindow inherits Window {
                         Button { text: "Donate"; clicked => { root.open-donate(); } }
                         Button { text: "Send feedback (GitHub Issues)"; clicked => { root.open-feedback(); } }
                     }
-                    Card { title: "About"; body: "FixItGarage 0.2.6 — scheduled date alarms, multi-due notifications, OCR clipboard assist, upcoming reminders."; }
+                    Card { title: "About"; body: "FixItGarage 0.2.7 — imperial or metric units (mi/km, gal/L, MPG or L/100km, tread 32nds or mm)."; }
                     if status-message != "": Text { text: status-message; color: Theme.ok; wrap: word-wrap; }
                 }
             }
@@ -802,7 +839,7 @@ export component MainWindow inherits Window {
                         LineEdit { placeholder-text: "Brand"; text <=> root.part-brand; }
                         LineEdit { placeholder-text: "Part number"; text <=> root.part-number; }
                         LineEdit { placeholder-text: "Oil viscosity (if oil type)"; text <=> root.part-oil; }
-                        LineEdit { placeholder-text: "Installed mileage"; text <=> root.part-mileage; }
+                        LineEdit { placeholder-text: "Installed " + root.label-distance; text <=> root.part-mileage; }
                         LineEdit { placeholder-text: "Notes"; text <=> root.part-notes; }
                         Button { text: "Save part"; primary: true; clicked => { root.save-part(); } }
                     }
@@ -822,7 +859,7 @@ export component MainWindow inherits Window {
                     Card {
                         title: "Update"; body: "Date as YYYY-MM-DD";
                         LineEdit { placeholder-text: "Install date YYYY-MM-DD"; text <=> root.comp-date; }
-                        LineEdit { placeholder-text: "Mileage at install"; text <=> root.comp-mileage; }
+                        LineEdit { placeholder-text: root.label-distance + " at install"; text <=> root.comp-mileage; }
                         LineEdit { placeholder-text: "Notes (brand, CCA…)"; text <=> root.comp-notes; }
                         Button {
                             text: "Save battery"; primary: true;
@@ -876,7 +913,7 @@ export component MainWindow inherits Window {
                         }
                         LineEdit { placeholder-text: "Blade size (e.g. 26 in / 650 mm)"; text <=> root.comp-notes; }
                         LineEdit { placeholder-text: "Install date YYYY-MM-DD"; text <=> root.comp-date; }
-                        LineEdit { placeholder-text: "Mileage at install"; text <=> root.comp-mileage; }
+                        LineEdit { placeholder-text: root.label-distance + " at install"; text <=> root.comp-mileage; }
                         Button { text: "Save this blade"; primary: true; clicked => { root.save-component(); } }
                     }
                     Button { text: "Back"; clicked => { root.navigate(5); } }
@@ -905,7 +942,7 @@ export component MainWindow inherits Window {
                         }
                         ChoiceBtn { label: "Fluid"; active: root.comp-type == "BRAKE_FLUID"; clicked => { root.comp-type = "BRAKE_FLUID"; } }
                         LineEdit { placeholder-text: "Service date YYYY-MM-DD"; text <=> root.comp-date; }
-                        LineEdit { placeholder-text: "Mileage"; text <=> root.comp-mileage; }
+                        LineEdit { placeholder-text: root.label-distance; text <=> root.comp-mileage; }
                         LineEdit { placeholder-text: "Notes"; text <=> root.comp-notes; }
                         Button { text: "Save brakes"; primary: true; clicked => { root.save-component(); } }
                     }
@@ -953,36 +990,36 @@ export component MainWindow inherits Window {
                             text: "When you check the oil, choose the level that matches the stick:";
                             font-size: 13px; color: Theme.text; wrap: word-wrap;
                         }
-                        // Easy choices — like a dropdown, as big tap targets
+                        // Easy choices — labels follow imperial (qt) or metric (L)
                         ChoiceBtn {
-                            label: "Full";
-                            active: root.oil-level-choice == "Full";
-                            clicked => { root.set-oil-level-choice("Full"); }
+                            label: root.oil-opt-0;
+                            active: root.oil-level-choice == root.oil-opt-0 || root.oil-level-choice == "Full";
+                            clicked => { root.set-oil-level-choice(root.oil-opt-0); }
                         }
                         ChoiceBtn {
-                            label: "½ quart low";
-                            active: root.oil-level-choice == "½ quart low";
-                            clicked => { root.set-oil-level-choice("½ quart low"); }
+                            label: root.oil-opt-1;
+                            active: root.oil-level-choice == root.oil-opt-1;
+                            clicked => { root.set-oil-level-choice(root.oil-opt-1); }
                         }
                         ChoiceBtn {
-                            label: "1 quart low";
-                            active: root.oil-level-choice == "1 quart low";
-                            clicked => { root.set-oil-level-choice("1 quart low"); }
+                            label: root.oil-opt-2;
+                            active: root.oil-level-choice == root.oil-opt-2;
+                            clicked => { root.set-oil-level-choice(root.oil-opt-2); }
                         }
                         ChoiceBtn {
-                            label: "2 quarts low";
-                            active: root.oil-level-choice == "2 quarts low";
-                            clicked => { root.set-oil-level-choice("2 quarts low"); }
+                            label: root.oil-opt-3;
+                            active: root.oil-level-choice == root.oil-opt-3;
+                            clicked => { root.set-oil-level-choice(root.oil-opt-3); }
                         }
                         ChoiceBtn {
-                            label: "3 quarts low";
-                            active: root.oil-level-choice == "3 quarts low";
-                            clicked => { root.set-oil-level-choice("3 quarts low"); }
+                            label: root.oil-opt-4;
+                            active: root.oil-level-choice == root.oil-opt-4;
+                            clicked => { root.set-oil-level-choice(root.oil-opt-4); }
                         }
                         ChoiceBtn {
-                            label: "Overfilled";
-                            active: root.oil-level-choice == "Overfilled";
-                            clicked => { root.set-oil-level-choice("Overfilled"); }
+                            label: root.oil-opt-5;
+                            active: root.oil-level-choice == root.oil-opt-5 || root.oil-level-choice == "Overfilled";
+                            clicked => { root.set-oil-level-choice(root.oil-opt-5); }
                         }
                         Text {
                             text: "Selected: " + root.oil-level-choice;
@@ -991,10 +1028,10 @@ export component MainWindow inherits Window {
                     }
 
                     Card {
-                        title: "Add reminder"; body: "Date YYYY-MM-DD and/or mileage. On Android, date dues schedule a wake alarm so the app can notify when due.";
+                        title: "Add reminder"; body: "Date YYYY-MM-DD and/or odometer. On Android, date dues schedule a wake alarm so the app can notify when due.";
                         LineEdit { placeholder-text: "Title"; text <=> root.rem-title; }
                         LineEdit { placeholder-text: "Due date YYYY-MM-DD"; text <=> root.rem-date; }
-                        LineEdit { placeholder-text: "Due mileage"; text <=> root.rem-mileage; }
+                        LineEdit { placeholder-text: "Due " + root.label-distance; text <=> root.rem-mileage; }
                         Button { text: "Save reminder"; primary: true; clicked => { root.add-reminder(); } }
                     }
                     for r in reminders: Card {
@@ -1069,8 +1106,8 @@ export component MainWindow inherits Window {
                         Button { text: "Auto-fill from pasted text"; primary: true; clicked => { root.parse-receipt-text(); } }
                         LineEdit { placeholder-text: "Title (e.g. Oil change shop)"; text <=> root.rcp-title; }
                         LineEdit { placeholder-text: "Date YYYY-MM-DD"; text <=> root.rcp-date; }
-                        LineEdit { placeholder-text: "Mileage"; text <=> root.rcp-mileage; }
-                        LineEdit { placeholder-text: "Gallons (fuel)"; text <=> root.rcp-gallons; }
+                        LineEdit { placeholder-text: root.label-distance; text <=> root.rcp-mileage; }
+                        LineEdit { placeholder-text: root.label-fuel + " (fuel)"; text <=> root.rcp-gallons; }
                         LineEdit { placeholder-text: "Parts cost"; text <=> root.rcp-parts; }
                         LineEdit { placeholder-text: "Labor cost"; text <=> root.rcp-labor; }
                         LineEdit { placeholder-text: "Fuel cost (optional)"; text <=> root.rcp-fuel; }
