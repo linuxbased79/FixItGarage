@@ -4,7 +4,8 @@ use chrono::{TimeZone, Utc};
 use fixitgarage_core::models::{ServiceRecord, ServiceSource, UserMode, Vehicle};
 use fixitgarage_core::reminders::{is_due_by_date, is_due_by_mileage, oil_level_due_after};
 use fixitgarage_core::{
-    apply_rotation, average_mpg, services_to_csv, summarize_costs, RotationPattern, TireLayout,
+    apply_rotation, average_mpg, map_corners, services_to_csv, summarize_costs, RotationPattern,
+    TireLayout,
 };
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -522,10 +523,9 @@ impl AppState {
     }
 
     pub fn tire_preview(&self) -> String {
-        let layout = TireLayout::from(&self.tire_layout);
+        let after = self.preview_after_layout();
         let pattern =
             RotationPattern::from_str(&self.tire_pattern).unwrap_or(RotationPattern::ForwardCross);
-        let after = apply_rotation(&layout, pattern);
         format!(
             "After {}: {} {} / {} {}",
             pattern.label(),
@@ -534,6 +534,14 @@ impl AppState {
             after.rl,
             after.rr
         )
+    }
+
+    /// Positions after applying the currently selected pattern (preview only).
+    pub fn preview_after_layout(&self) -> TireLayout {
+        let layout = TireLayout::from(&self.tire_layout);
+        let pattern =
+            RotationPattern::from_str(&self.tire_pattern).unwrap_or(RotationPattern::ForwardCross);
+        apply_rotation(&layout, pattern)
     }
 
     pub fn apply_tire_rotation(&mut self) {
@@ -562,8 +570,44 @@ impl AppState {
                 mileage,
                 date_epoch_ms: Utc::now().timestamp_millis(),
             });
+            // Spec: mileage per tire + tread follow the rubber through rotation
+            self.remap_corner_data_for_vehicle(vid, pattern);
         }
         self.tire_layout = after_stored;
+    }
+
+    fn remap_corner_data_for_vehicle(&mut self, vehicle_id: u64, pattern: RotationPattern) {
+        if let Some(slot) = self
+            .tire_mileage_by_vehicle
+            .iter_mut()
+            .find(|t| t.vehicle_id == vehicle_id)
+        {
+            let (fl, fr, rl, rr) = map_corners(
+                &slot.miles.fl,
+                &slot.miles.fr,
+                &slot.miles.rl,
+                &slot.miles.rr,
+                pattern,
+            );
+            slot.miles = TireCornerMiles { fl, fr, rl, rr };
+        }
+        if let Some(slot) = self
+            .tread_by_vehicle
+            .iter_mut()
+            .find(|t| t.vehicle_id == vehicle_id)
+        {
+            let (fl, fr, rl, rr) = map_corners(
+                &slot.depths.fl,
+                &slot.depths.fr,
+                &slot.depths.rl,
+                &slot.depths.rr,
+                pattern,
+            );
+            slot.depths.fl = fl;
+            slot.depths.fr = fr;
+            slot.depths.rl = rl;
+            slot.depths.rr = rr;
+        }
     }
 
     pub fn export_csv(&self) -> String {
@@ -1244,6 +1288,106 @@ impl AppState {
         self.battery_age_warning().contains('⚠')
     }
 
+    /// Home alert when front/rear pads or fluid auto-reminders are due (spec: brake tracker + reminders).
+    pub fn brake_due_warning(&self) -> String {
+        let Some(vid) = self.selected_vehicle_id else {
+            return String::new();
+        };
+        let now = Utc::now().timestamp_millis();
+        let odo = self.selected_vehicle().map(|v| v.current_mileage).unwrap_or(0);
+        let mut due: Vec<&str> = Vec::new();
+        for r in &self.reminders {
+            if r.vehicle_id != vid || r.completed {
+                continue;
+            }
+            let title_l = r.title.to_ascii_lowercase();
+            if !title_l.contains("brake") {
+                continue;
+            }
+            let date_due = is_due_by_date(r.due_epoch_ms, now);
+            let mi_due = is_due_by_mileage(r.due_mileage, odo);
+            if date_due || mi_due {
+                due.push(r.title.as_str());
+            }
+        }
+        if due.is_empty() {
+            // Age check from component install even if reminder was cleared
+            for ctype in ["BRAKE_PADS_FRONT", "BRAKE_PADS_REAR", "BRAKE_FLUID"] {
+                if let Some(c) = self
+                    .components
+                    .iter()
+                    .find(|c| c.vehicle_id == vid && c.component_type == ctype)
+                {
+                    if let Some(ms) = c.installed_epoch_ms {
+                        let years =
+                            (now - ms) as f64 / (86_400_000.0 * 365.25);
+                        if years >= 2.0 {
+                            due.push(ctype);
+                        }
+                    }
+                    if let Some(mi) = c.installed_mileage {
+                        if odo.saturating_sub(mi) >= 30_000
+                            && (ctype == "BRAKE_PADS_FRONT" || ctype == "BRAKE_PADS_REAR")
+                        {
+                            due.push(ctype);
+                        }
+                    }
+                }
+            }
+        }
+        if due.is_empty() {
+            "Brakes look on schedule.".into()
+        } else {
+            format!("⚠ Brake service due: {}", due.join(", "))
+        }
+    }
+
+    pub fn has_brakes_due(&self) -> bool {
+        self.brake_due_warning().contains('⚠')
+    }
+
+    /// Wiper blades past ~1 year install age.
+    pub fn wiper_due_warning(&self) -> String {
+        let Some(vid) = self.selected_vehicle_id else {
+            return String::new();
+        };
+        let now = Utc::now().timestamp_millis();
+        let mut old = Vec::new();
+        for ctype in ["WIPER_DRIVER", "WIPER_PASSENGER", "WIPER_REAR", "WIPER_FRONT"] {
+            if let Some(c) = self
+                .components
+                .iter()
+                .find(|c| c.vehicle_id == vid && c.component_type == ctype)
+            {
+                if let Some(ms) = c.installed_epoch_ms {
+                    let years = (now - ms) as f64 / (86_400_000.0 * 365.25);
+                    if years >= 1.0 {
+                        old.push(format!(
+                            "{} (~{years:.1}y)",
+                            ctype.replace("WIPER_", "").replace('_', " ")
+                        ));
+                    }
+                }
+            }
+        }
+        if old.is_empty() {
+            "Wipers look fresh.".into()
+        } else {
+            format!("⚠ Replace wiper blades: {}", old.join(", "))
+        }
+    }
+
+    pub fn has_old_wipers(&self) -> bool {
+        self.wiper_due_warning().contains('⚠')
+    }
+
+    /// US coin gauge assist for camera tread measurement (approx legal / mid wear).
+    pub fn tread_coin_guide(&self) -> String {
+        "Coin gauge (camera assist): US penny Lincoln head ~1.6 mm (2/32\") wear limit; \
+         quarter Washington head ~3.2 mm (4/32\") mid wear. Place coin in groove, photo, then enter mm."
+            .into()
+    }
+
     pub fn set_tire_corner_miles(
         &mut self,
         fl: Option<u32>,
@@ -1581,6 +1725,20 @@ mod tests {
         s.apply_tire_rotation();
         assert_eq!(s.tire_layout.fl, "B");
         assert_eq!(s.tire_layout.fr, "A");
+    }
+
+    #[test]
+    fn rotation_moves_mileage_with_tires() {
+        let mut s = AppState::default();
+        s.add_vehicle("Daily".into(), "".into(), "".into(), None, 10000);
+        s.set_tire_corner_miles(Some(1), Some(2), Some(3), Some(4));
+        s.tire_pattern = "side_to_side".into();
+        s.apply_tire_rotation();
+        let m = s.tire_miles_for_selected();
+        assert_eq!(m.fl, Some(2));
+        assert_eq!(m.fr, Some(1));
+        assert_eq!(m.rl, Some(4));
+        assert_eq!(m.rr, Some(3));
     }
 
     #[test]

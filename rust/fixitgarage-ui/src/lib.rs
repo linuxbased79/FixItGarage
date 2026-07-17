@@ -10,7 +10,7 @@ use platform::{
     capture_issue_photo_path, notify, open_url, share_text, share_text_to_cloud, PKG_DROPBOX,
     PKG_GOOGLE_DRIVE, PKG_ONEDRIVE, PKG_PROTON_DRIVE,
 };
-use receipt_parse::parse_receipt_text;
+use receipt_parse::{parse_receipt_text, parse_tire_receipt_text};
 use state::{reminder_status_line, AppState};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -35,8 +35,12 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let s = state.borrow();
         if s.has_due_reminders() {
             notify("FixItGarage", &s.due_reminders_summary());
+        } else if s.has_brakes_due() {
+            notify("FixItGarage", &s.brake_due_warning());
         } else if s.has_old_battery() {
             notify("FixItGarage", &s.battery_age_warning());
+        } else if s.has_old_wipers() {
+            notify("FixItGarage", &s.wiper_due_warning());
         } else if s.has_low_tread() {
             notify("FixItGarage", &s.tread_warning());
         }
@@ -225,8 +229,51 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                 let path = capture_issue_photo_path();
                 ui.set_tread_photo_path(path.into());
                 ui.set_status_message(
-                    "Camera opened — measure/estimate each corner in mm, then Save tread depths."
+                    "Camera opened — use coin gauge (penny ~1.6 mm), enter mm, then Save tread depths."
                         .into(),
+                );
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        ui.on_parse_tire_receipt(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let paste = ui.get_tire_rcp_paste().to_string();
+                if paste.trim().is_empty() {
+                    ui.set_status_message("Paste tire receipt text first.".into());
+                    return;
+                }
+                let p = parse_tire_receipt_text(&paste);
+                let mut filled = 0u32;
+                if let Some(b) = p.brand {
+                    ui.set_tire_brand(b.into());
+                    filled += 1;
+                }
+                if let Some(m) = p.model {
+                    ui.set_tire_model(m.into());
+                    filled += 1;
+                }
+                if let Some(sz) = p.size {
+                    ui.set_tire_size(sz.into());
+                    filled += 1;
+                }
+                if let Some(c) = p.cost {
+                    ui.set_tire_cost(format!("{c:.2}").into());
+                    filled += 1;
+                }
+                if let Some(mi) = p.mileage {
+                    ui.set_tire_buy_mileage(mi.to_string().into());
+                    filled += 1;
+                }
+                if let Some(n) = p.notes {
+                    if ui.get_tire_buy_notes().is_empty() {
+                        ui.set_tire_buy_notes(n.into());
+                    }
+                }
+                ui.set_status_message(
+                    format!("Tire receipt parsed ({filled} fields). Review and Save.").into(),
                 );
             }
         });
@@ -280,6 +327,15 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                         g.parse().ok()
                     }
                 };
+                let fuel_cost = {
+                    let f = ui.get_svc_fuel().to_string();
+                    if f.trim().is_empty() {
+                        None
+                    } else {
+                        f.parse().ok()
+                    }
+                };
+                let shop = ui.get_svc_shop().to_string();
                 let source = ui.get_svc_source().to_string();
                 s.add_service_full(
                     title,
@@ -288,15 +344,17 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     parts,
                     labor,
                     gallons,
-                    None,
+                    fuel_cost,
                     chrono::Utc::now().timestamp_millis(),
-                    String::new(),
+                    shop,
                 );
                 ui.set_svc_title("".into());
                 ui.set_svc_mileage("".into());
                 ui.set_svc_cost("".into());
                 ui.set_svc_labor("".into());
                 ui.set_svc_gallons("".into());
+                ui.set_svc_fuel("".into());
+                ui.set_svc_shop("".into());
                 ui.set_status_message("Service saved.".into());
                 refresh_ui(&ui, &s);
             }
@@ -872,6 +930,11 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     ui.set_tire_fr(state.tire_layout.fr.clone().into());
     ui.set_tire_rl(state.tire_layout.rl.clone().into());
     ui.set_tire_rr(state.tire_layout.rr.clone().into());
+    let after = state.preview_after_layout();
+    ui.set_tire_after_fl(after.fl.into());
+    ui.set_tire_after_fr(after.fr.into());
+    ui.set_tire_after_rl(after.rl.into());
+    ui.set_tire_after_rr(after.rr.into());
     ui.set_tire_pattern(state.tire_pattern.clone().into());
     ui.set_tire_preview(state.tire_preview().into());
 
@@ -1109,6 +1172,11 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     ui.set_has_low_tread(state.has_low_tread());
     ui.set_battery_warning(state.battery_age_warning().into());
     ui.set_has_old_battery(state.has_old_battery());
+    ui.set_brake_warning(state.brake_due_warning().into());
+    ui.set_has_brakes_due(state.has_brakes_due());
+    ui.set_wiper_warning(state.wiper_due_warning().into());
+    ui.set_has_old_wipers(state.has_old_wipers());
+    ui.set_tread_coin_guide(state.tread_coin_guide().into());
     ui.set_tire_miles_summary(state.tire_miles_summary().into());
     let tm = state.tire_miles_for_selected();
     ui.set_mi_fl(tm.fl.map(|v| v.to_string()).unwrap_or_default().into());

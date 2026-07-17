@@ -72,31 +72,30 @@ impl fmt::Display for TireLayout {
 
 /// Apply a rotation pattern and return the new layout (does not mutate input).
 pub fn apply_rotation(current: &TireLayout, pattern: RotationPattern) -> TireLayout {
+    let (fl, fr, rl, rr) = map_corners(
+        &current.fl,
+        &current.fr,
+        &current.rl,
+        &current.rr,
+        pattern,
+    );
+    TireLayout { fl, fr, rl, rr }
+}
+
+/// Remap any per-corner values the same way tire positions move.
+/// Used for labels, tread depths, and mileage-per-tire so data follows the rubber.
+pub fn map_corners<T: Clone>(
+    fl: &T,
+    fr: &T,
+    rl: &T,
+    rr: &T,
+    pattern: RotationPattern,
+) -> (T, T, T, T) {
     match pattern {
-        RotationPattern::ForwardCross => TireLayout {
-            fl: current.rl.clone(),
-            fr: current.rr.clone(),
-            rl: current.fr.clone(),
-            rr: current.fl.clone(),
-        },
-        RotationPattern::RearwardCross => TireLayout {
-            fl: current.rr.clone(),
-            fr: current.rl.clone(),
-            rl: current.fl.clone(),
-            rr: current.fr.clone(),
-        },
-        RotationPattern::XPattern => TireLayout {
-            fl: current.rr.clone(),
-            fr: current.rl.clone(),
-            rl: current.fr.clone(),
-            rr: current.fl.clone(),
-        },
-        RotationPattern::SideToSide => TireLayout {
-            fl: current.fr.clone(),
-            fr: current.fl.clone(),
-            rl: current.rr.clone(),
-            rr: current.rl.clone(),
-        },
+        RotationPattern::ForwardCross => (rl.clone(), rr.clone(), fr.clone(), fl.clone()),
+        RotationPattern::RearwardCross => (rr.clone(), rl.clone(), fl.clone(), fr.clone()),
+        RotationPattern::XPattern => (rr.clone(), rl.clone(), fr.clone(), fl.clone()),
+        RotationPattern::SideToSide => (fr.clone(), fl.clone(), rr.clone(), rl.clone()),
     }
 }
 
@@ -132,5 +131,11 @@ mod tests {
         assert_eq!(after.fr, "A");
         assert_eq!(after.rl, "D");
         assert_eq!(after.rr, "C");
+    }
+
+    #[test]
+    fn map_corners_matches_layout() {
+        let (fl, fr, rl, rr) = map_corners(&10u32, &20, &30, &40, RotationPattern::ForwardCross);
+        assert_eq!((fl, fr, rl, rr), (30, 40, 20, 10));
     }
 }

@@ -193,6 +193,8 @@ export component MainWindow inherits Window {
     in-out property <string> svc-cost: "";
     in-out property <string> svc-labor: "";
     in-out property <string> svc-gallons: "";
+    in-out property <string> svc-fuel: "";
+    in-out property <string> svc-shop: "";
     in-out property <string> svc-source: "DIY";
     in-out property <string> mpg-label: "MPG: —";
 
@@ -200,6 +202,11 @@ export component MainWindow inherits Window {
     in-out property <string> tire-fr: "B";
     in-out property <string> tire-rl: "C";
     in-out property <string> tire-rr: "D";
+    // Live after-rotation preview corners (spec: before/after graphical display)
+    in-out property <string> tire-after-fl: "C";
+    in-out property <string> tire-after-fr: "D";
+    in-out property <string> tire-after-rl: "B";
+    in-out property <string> tire-after-rr: "A";
     in-out property <string> tire-pattern: "forward_cross";
     in-out property <string> tire-preview: "Preview";
 
@@ -255,6 +262,7 @@ export component MainWindow inherits Window {
     in-out property <string> tire-cost: "";
     in-out property <string> tire-buy-mileage: "";
     in-out property <string> tire-buy-notes: "";
+    in-out property <string> tire-rcp-paste: "";
 
     // Oil dipstick reading when completing an oil-level check
     in-out property <string> oil-level-choice: "Full";
@@ -273,6 +281,11 @@ export component MainWindow inherits Window {
     in-out property <string> rcp-paste: "";
     in-out property <string> battery-warning: "";
     in-out property <bool> has-old-battery: false;
+    in-out property <string> brake-warning: "";
+    in-out property <bool> has-brakes-due: false;
+    in-out property <string> wiper-warning: "";
+    in-out property <bool> has-old-wipers: false;
+    in-out property <string> tread-coin-guide: "";
     in-out property <string> tire-miles-summary: "FL — · FR — · RL — · RR —";
     in-out property <string> mi-fl: "";
     in-out property <string> mi-fr: "";
@@ -313,6 +326,7 @@ export component MainWindow inherits Window {
     callback delete-note(int);
     callback save-tread();
     callback capture-tread-photo();
+    callback parse-tire-receipt();
     callback save-tire-miles();
     callback export-csv();
     callback share-csv();
@@ -392,6 +406,16 @@ export component MainWindow inherits Window {
                         title: "Battery age";
                         body: battery-warning;
                         Button { text: "Open battery tracker"; primary: true; clicked => { root.navigate(7); } }
+                    }
+                    if has-brakes-due: Card {
+                        title: "Brake service";
+                        body: brake-warning;
+                        Button { text: "Open brake tracker"; primary: true; clicked => { root.navigate(9); } }
+                    }
+                    if has-old-wipers: Card {
+                        title: "Wiper blades";
+                        body: wiper-warning;
+                        Button { text: "Open wiper tracker"; primary: true; clicked => { root.navigate(8); } }
                     }
                     Card {
                         title: "Last service"; body: "";
@@ -486,6 +510,8 @@ export component MainWindow inherits Window {
                         LineEdit { placeholder-text: "Parts cost"; text <=> root.svc-cost; }
                         LineEdit { placeholder-text: "Labor cost"; text <=> root.svc-labor; }
                         LineEdit { placeholder-text: "Gallons (fuel, optional)"; text <=> root.svc-gallons; }
+                        LineEdit { placeholder-text: "Fuel cost (optional)"; text <=> root.svc-fuel; }
+                        if root.svc-source == "SHOP": LineEdit { placeholder-text: "Shop name"; text <=> root.svc-shop; }
                         Button { text: "Save service"; primary: true; clicked => { root.add-service(); } }
                     }
                     for s in services: Card {
@@ -504,7 +530,7 @@ export component MainWindow inherits Window {
                     if !show-tires: Text { text: "Hidden in shop-only mode. Switch feature focus in Settings."; color: Theme.text-muted; wrap: word-wrap; }
                     if show-tires: VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     if show-tires: Card {
-                        title: "Current positions"; body: "FRONT";
+                        title: "Current positions (before)"; body: "FRONT · top-down view";
                         Rectangle {
                             height: 220px; background: transparent;
                             Rectangle {
@@ -516,7 +542,24 @@ export component MainWindow inherits Window {
                             TireCorner { x: 12px; y: parent.height - 60px; label: root.tire-rl; }
                             TireCorner { x: parent.width - 68px; y: parent.height - 60px; label: root.tire-rr; }
                         }
-                        Text { text: tire-preview; font-size: 13px; color: Theme.text; wrap: word-wrap; }
+                    }
+                    if show-tires: Card {
+                        title: "After rotation (preview)"; body: tire-preview;
+                        Rectangle {
+                            height: 220px; background: transparent;
+                            Rectangle {
+                                x: (parent.width - 140px) / 2; y: 20px; width: 140px; height: 180px;
+                                border-radius: 28px; background: Theme.car-body; border-width: 2px; border-color: Theme.ok;
+                            }
+                            TireCorner { x: 12px; y: 12px; label: root.tire-after-fl; }
+                            TireCorner { x: parent.width - 68px; y: 12px; label: root.tire-after-fr; }
+                            TireCorner { x: 12px; y: parent.height - 60px; label: root.tire-after-rl; }
+                            TireCorner { x: parent.width - 68px; y: parent.height - 60px; label: root.tire-after-rr; }
+                        }
+                        Text {
+                            text: "Tread depths and mileage per tire move with each corner when you apply.";
+                            font-size: 12px; color: Theme.text-muted; wrap: word-wrap;
+                        }
                     }
                     if show-tires: Card {
                         title: "Rotation pattern"; body: "";
@@ -540,7 +583,7 @@ export component MainWindow inherits Window {
                             font-size: 13px; font-weight: 600; color: Theme.ok; wrap: word-wrap;
                         }
                         Text {
-                            text: "Legal wear limit is usually 1.6 mm (2/32\"). Use the camera to help measure, then enter mm for each corner.";
+                            text: tread-coin-guide;
                             font-size: 12px; color: Theme.text-muted; wrap: word-wrap;
                         }
                         Button { text: "Camera assist (photo)"; clicked => { root.capture-tread-photo(); } }
@@ -576,7 +619,9 @@ export component MainWindow inherits Window {
                         Button { text: "Save tire mileage"; primary: true; clicked => { root.save-tire-miles(); } }
                     }
                     if show-tires: Card {
-                        title: "Tire purchase"; body: "Log a new set (receipt scan later).";
+                        title: "Tire purchase"; body: "Log a new set. Paste receipt text (OCR / email) to auto-fill.";
+                        LineEdit { placeholder-text: "Paste tire receipt text"; text <=> root.tire-rcp-paste; }
+                        Button { text: "Parse receipt text"; clicked => { root.parse-tire-receipt(); } }
                         LineEdit { placeholder-text: "Brand"; text <=> root.tire-brand; }
                         LineEdit { placeholder-text: "Model"; text <=> root.tire-model; }
                         LineEdit { placeholder-text: "Size (e.g. 225/65R17)"; text <=> root.tire-size; }
@@ -701,7 +746,7 @@ export component MainWindow inherits Window {
                         Button { text: "Donate"; clicked => { root.open-donate(); } }
                         Button { text: "Send feedback (GitHub Issues)"; clicked => { root.open-feedback(); } }
                     }
-                    Card { title: "About"; body: "FixItGarage 0.2.4 — OneDrive, component reminders, tire mileage, camera tread assist."; }
+                    Card { title: "About"; body: "FixItGarage 0.2.5 — rotation before/after diagram, tire receipt scan, brake/wiper home alerts, shop/fuel on services."; }
                     if status-message != "": Text { text: status-message; color: Theme.ok; wrap: word-wrap; }
                 }
             }

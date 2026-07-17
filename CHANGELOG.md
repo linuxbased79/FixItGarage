@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.5
+- Tire rotation: live before/after top-down diagrams; tread + mileage follow corners
+- Tire purchase receipt text parse (brand/model/size/cost/mileage)
+- Service log: shop name + fuel cost fields
+- Home alerts for brake service and aged wiper blades
+- Coin-gauge guide for camera tread assist (penny ~1.6 mm)
+
 ## 0.2.2
 - Home dashboard: MPG, month/year costs, reminder status
 - Service history search/filter

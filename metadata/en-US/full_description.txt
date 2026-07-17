@@ -1,7 +1,7 @@
 FixItGarage is a free (GPL-3.0) local-first vehicle maintenance tracker.
 
-Track unlimited vehicles, DIY and shop service history, fuel MPG, oil level checks, tires (rotation diagram, purchases, tread depth), filters and oil part numbers, brakes, battery, wipers (driver/passenger/rear sizes), costs, reminders, notes, and issue photos.
+Track unlimited vehicles, DIY and shop service history, fuel MPG, oil level checks, tires (before/after rotation diagrams, purchases with receipt text parse, tread depth with coin-gauge assist), filters and oil part numbers, brakes, battery, wipers (driver/passenger/rear sizes), costs, reminders, notes, and issue photos.
 
-Optional: export CSV, full JSON backup, share data, and upload backups to Nextcloud/ownCloud/WebDAV. No account required. Designed for GrapheneOS — no Google Play Services required for core features.
+Optional: export CSV, full JSON backup, share to Proton Drive / Google Drive / Dropbox / OneDrive, and upload to Nextcloud/ownCloud/WebDAV. No account required. Designed for GrapheneOS — no Google Play Services required for core features.
 
 Send feedback via GitHub Issues from Settings.

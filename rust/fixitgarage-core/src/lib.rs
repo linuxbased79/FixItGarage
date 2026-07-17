@@ -20,4 +20,4 @@ pub use mpg::average_mpg;
 pub use reminders::{
     is_due_by_date, is_due_by_mileage, oil_level_due_after, OIL_LEVEL_INTERVAL_MONTHS,
 };
-pub use tires::{apply_rotation, RotationPattern, TireLayout};
+pub use tires::{apply_rotation, map_corners, RotationPattern, TireLayout};

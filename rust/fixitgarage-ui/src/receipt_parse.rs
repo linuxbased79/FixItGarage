@@ -161,4 +161,108 @@ mod tests {
         let p = parse_receipt_text("Fuel stop 12.4 gal $45.00");
         assert_eq!(p.gallons, Some(12.4));
     }
+
+    #[test]
+    fn parses_tire_receipt() {
+        let text = r#"
+        Discount Tire
+        Michelin Defender LTX
+        Size: 265/70R17
+        Total $612.00
+        Odometer: 45,200 mi
+        "#;
+        let p = parse_tire_receipt_text(text);
+        assert!(p.brand.as_deref().unwrap_or("").contains("Michelin") || p.model.is_some());
+        assert_eq!(p.size.as_deref(), Some("265/70R17"));
+        assert_eq!(p.cost, Some(612.0));
+        assert_eq!(p.mileage, Some(45200));
+    }
+}
+
+/// Tire-shop receipt fields (brand / model / size / cost) for the tire tracker.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ParsedTireReceipt {
+    pub brand: Option<String>,
+    pub model: Option<String>,
+    pub size: Option<String>,
+    pub cost: Option<f64>,
+    pub mileage: Option<u32>,
+    pub shop_name: Option<String>,
+    pub notes: Option<String>,
+}
+
+/// Parse free-form tire purchase receipt text (paste from OCR / email).
+pub fn parse_tire_receipt_text(text: &str) -> ParsedTireReceipt {
+    let base = parse_receipt_text(text);
+    let mut out = ParsedTireReceipt {
+        cost: base.total_cost.or(base.parts_cost),
+        mileage: base.mileage,
+        shop_name: base.shop_name.clone(),
+        notes: base.shop_name.map(|s| format!("Shop: {s}")),
+        ..Default::default()
+    };
+
+    // Tire size e.g. 225/65R17, P215/60R16, 265/70R17 112T
+    if let Ok(re) = Regex::new(r"(?i)\bP?(\d{3})\s*/\s*(\d{2})\s*[RrZz]\s*(\d{2})\b") {
+        if let Some(c) = re.captures(text) {
+            out.size = Some(format!("{}/{}R{}", &c[1], &c[2], &c[3]));
+        }
+    }
+
+    // Known brands (common NA/EU tire makers)
+    const BRANDS: &[&str] = &[
+        "Michelin",
+        "Goodyear",
+        "Bridgestone",
+        "Continental",
+        "Pirelli",
+        "Yokohama",
+        "Hankook",
+        "Toyo",
+        "Falken",
+        "Cooper",
+        "Firestone",
+        "BFGoodrich",
+        "BF Goodrich",
+        "General",
+        "Kumho",
+        "Nitto",
+        "Dunlop",
+        "Uniroyal",
+        "Nexen",
+        "Kelly",
+        "Mastercraft",
+        "Vredestein",
+        "Sumitomo",
+    ];
+    for brand in BRANDS {
+        let brand_l = brand.to_ascii_lowercase();
+        for line in text.lines() {
+            let line_l = line.to_ascii_lowercase();
+            if let Some(idx) = line_l.find(&brand_l) {
+                out.brand = Some((*brand).to_string());
+                let after = line.get(idx + brand.len()..).unwrap_or("").trim();
+                let mut model = after
+                    .trim_start_matches(|c: char| !c.is_alphanumeric())
+                    .split('$')
+                    .next()
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
+                if let Some(sz) = &out.size {
+                    model = model.replace(sz, "").trim().to_string();
+                }
+                // Strip common size if still in model via regex leftovers
+                if let Ok(re) = Regex::new(r"(?i)P?\d{3}\s*/\s*\d{2}\s*[RrZz]\s*\d{2}") {
+                    model = re.replace_all(&model, "").trim().to_string();
+                }
+                if model.len() >= 2 && model.len() < 48 {
+                    out.model = Some(model);
+                }
+                return out;
+            }
+        }
+    }
+
+    out
 }
