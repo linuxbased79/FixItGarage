@@ -86,7 +86,8 @@ pub fn normalize_oil_level(s: &str) -> String {
 }
 
 fn default_dark_mode() -> String {
-    "LIGHT".into()
+    // Dark by default; user choice is saved in state.json and restored on next launch.
+    "DARK".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

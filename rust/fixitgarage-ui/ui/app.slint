@@ -215,7 +215,7 @@ export component MainWindow inherits Window {
 
     in-out property <string> status-message: "";
     in-out property <string> csv-preview: "";
-    in-out property <string> dark-mode: "LIGHT";
+    in-out property <string> dark-mode: "DARK";
 
     callback finish-wizard(string);
     callback navigate(int);
@@ -256,8 +256,8 @@ export component MainWindow inherits Window {
             ChoiceBtn { label: "Both DIY and shop"; active: false; clicked => { root.finish-wizard("BOTH"); } }
             HorizontalBox {
                 spacing: 8px;
-                ChoiceBtn { label: "Light"; active: root.dark-mode == "LIGHT"; clicked => { root.set-dark-mode("LIGHT"); } }
                 ChoiceBtn { label: "Dark"; active: root.dark-mode == "DARK"; clicked => { root.set-dark-mode("DARK"); } }
+                ChoiceBtn { label: "Light"; active: root.dark-mode == "LIGHT"; clicked => { root.set-dark-mode("LIGHT"); } }
             }
         }
     }
@@ -285,8 +285,10 @@ export component MainWindow inherits Window {
                         Button { text: "Manage vehicles"; clicked => { root.navigate(1); } }
                     }
                     Card {
-                        title: "Quick actions"; body: "";
-                        Button { text: "Log service"; primary: true; clicked => { root.navigate(2); } }
+                        title: "Quick actions";
+                        body: last-oil-level-summary;
+                        Button { text: "Oil level check"; primary: true; clicked => { root.navigate(11); } }
+                        Button { text: "Log service"; clicked => { root.navigate(2); } }
                         if show-tires: Button { text: "Tire rotation"; clicked => { root.navigate(3); } }
                         if show-parts: Button { text: "Parts log"; clicked => { root.navigate(6); } }
                         Button { text: "Reminders"; clicked => { root.navigate(11); } }
@@ -408,11 +410,15 @@ export component MainWindow inherits Window {
                     padding: 16px; spacing: 12px;
                     PageTitle { label: "Settings"; }
                     Card {
-                        title: "Appearance"; body: "Theme is saved on this device.";
+                        title: "Appearance"; body: "Dark is the default. Your choice is remembered on this device.";
                         HorizontalBox {
                             spacing: 8px;
-                            ChoiceBtn { label: "Light"; active: root.dark-mode == "LIGHT"; clicked => { root.set-dark-mode("LIGHT"); } }
                             ChoiceBtn { label: "Dark"; active: root.dark-mode == "DARK"; clicked => { root.set-dark-mode("DARK"); } }
+                            ChoiceBtn { label: "Light"; active: root.dark-mode == "LIGHT"; clicked => { root.set-dark-mode("LIGHT"); } }
+                        }
+                        Text {
+                            text: root.dark-mode == "DARK" ? "Using dark mode (saved)" : "Using light mode (saved)";
+                            font-size: 12px; color: Theme.text-muted; wrap: word-wrap;
                         }
                     }
                     Card {
