@@ -1054,7 +1054,14 @@ export component MainWindow inherits Window {
                         Button { text: root.tr-settings-donate; clicked => { root.open-donate(); } }
                         Button { text: root.tr-settings-feedback; clicked => { root.open-feedback(); } }
                     }
-                    Card { title: root.tr-settings-about; body: "FixItGarage 0.2.14 — OpenDyslexic accessibility font option (SIL OFL)."; }
+                    Card {
+                        title: root.tr-settings-about;
+                        body: "FixItGarage 0.2.15 — boot-resilient date reminders (re-register after reboot). OpenDyslexic + multi-language packs.";
+                    }
+                    Card {
+                        title: "Reminders after reboot";
+                        body: "Date-based alarms are saved on this device. After a phone restart, FixItGarage re-registers them automatically (no need to open the app first). Mileage-only reminders still need you to open the app or update odometer.";
+                    }
                     if status-message != "": Text { text: status-message; color: Theme.ok; wrap: word-wrap; }
                 }
             }

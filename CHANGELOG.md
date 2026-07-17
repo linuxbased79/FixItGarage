@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.15
+- **Boot-resilient reminders**: `BootReceiver` re-registers date alarms after reboot / app update
+- Alarm schedule saved to `fig_alarms.json` (app files dir) for the receiver
+- Packaging script injects Java receiver into APK (`package-apk-with-boot.sh`)
+
 ## 0.2.14
 - Accessibility: optional **OpenDyslexic** font (SIL OFL) for dyslexia-friendly reading
 - Settings → Accessibility · reading: Default font / OpenDyslexic (saved on device)

@@ -12,6 +12,8 @@ android:
       - name: android.permission.SCHEDULE_EXACT_ALARM
       - name: android.permission.USE_EXACT_ALARM
       - name: android.permission.RECEIVE_BOOT_COMPLETED
+      - name: android.permission.WAKE_LOCK
     application:
       label: FixItGarage
-      has_code: false
+      # true once package-apk-with-boot.sh injects BootReceiver classes.dex
+      has_code: true

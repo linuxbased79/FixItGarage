@@ -447,6 +447,93 @@ pub fn schedule_app_wake(request_code: i32, trigger_epoch_ms: i64, _label: &str)
     }
 }
 
+/// Persist alarm schedule for BootReceiver (`fig_alarms.json` in app files dir).
+/// Format: `[{"code":50001,"due_ms":...,"title":"..."}, ...]`
+pub fn write_alarm_schedule(entries: &[(i32, i64, String)]) {
+    let mut body = String::from("[");
+    for (i, (code, due, title)) in entries.iter().enumerate() {
+        if i > 0 {
+            body.push(',');
+        }
+        let safe: String = title
+            .chars()
+            .map(|c| match c {
+                '"' | '\\' => ' ',
+                c if c.is_control() => ' ',
+                c => c,
+            })
+            .collect();
+        body.push_str(&format!(
+            r#"{{"code":{code},"due_ms":{due},"title":"{safe}"}}"#
+        ));
+    }
+    body.push(']');
+
+    #[cfg(target_os = "android")]
+    {
+        if let Err(e) = write_alarm_schedule_android(&body) {
+            eprintln!("write alarm schedule failed: {e}");
+            // Fallback path used by some NativeActivity builds
+            let path = android_files_fallback_path().join("fig_alarms.json");
+            let _ = std::fs::create_dir_all(path.parent().unwrap_or(std::path::Path::new(".")));
+            let _ = std::fs::write(&path, &body);
+        }
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let path = dirs::data_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join("fixitgarage")
+            .join("fig_alarms.json");
+        let _ = std::fs::create_dir_all(path.parent().unwrap_or(std::path::Path::new(".")));
+        let _ = std::fs::write(&path, body);
+    }
+}
+
+#[cfg(target_os = "android")]
+fn android_files_fallback_path() -> std::path::PathBuf {
+    dirs::data_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("fixitgarage")
+}
+
+#[cfg(target_os = "android")]
+fn write_alarm_schedule_android(json: &str) -> Result<(), String> {
+    use jni::objects::{JObject, JValue};
+    use jni::JavaVM;
+
+    let ctx = ndk_context::android_context();
+    let vm =
+        unsafe { JavaVM::from_raw(ctx.vm().cast()) }.map_err(|e| format!("JavaVM: {e}"))?;
+    let mut env = vm
+        .attach_current_thread()
+        .map_err(|e| format!("attach: {e}"))?;
+    let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+
+    // File dir = context.getFilesDir()
+    let files_dir = env
+        .call_method(&context, "getFilesDir", "()Ljava/io/File;", &[])
+        .map_err(|e| format!("getFilesDir: {e}"))?
+        .l()
+        .map_err(|e| format!("filesDir: {e}"))?;
+    let path_j = env
+        .call_method(&files_dir, "getAbsolutePath", "()Ljava/lang/String;", &[])
+        .map_err(|e| format!("getAbsolutePath: {e}"))?
+        .l()
+        .map_err(|e| format!("path obj: {e}"))?;
+    let jstr: jni::objects::JString = path_j.into();
+    let s = env
+        .get_string(&jstr)
+        .map_err(|e| format!("get_string: {e}"))?;
+    let dir: String = s.into();
+    let path = std::path::PathBuf::from(dir).join("fig_alarms.json");
+    std::fs::write(&path, json).map_err(|e| format!("write {}: {e}", path.display()))?;
+    // Touch: also try openFileOutput for consistency with Context
+    let _ = env;
+    let _ = JValue::Void;
+    Ok(())
+}
+
 /// Cancel a previously scheduled app-wake alarm.
 pub fn cancel_app_wake(request_code: i32) {
     #[cfg(target_os = "android")]

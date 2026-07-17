@@ -12,7 +12,7 @@ use i18n::{resolve_lang, t, LanguagePref};
 use platform::{
     cancel_app_wake, capture_issue_photo_path, notify, notify_with_id, open_ocr_helper, open_url,
     read_clipboard, schedule_app_wake, share_text, share_text_to_cloud, system_locale,
-    PKG_DROPBOX, PKG_GOOGLE_DRIVE, PKG_ONEDRIVE, PKG_PROTON_DRIVE,
+    write_alarm_schedule, PKG_DROPBOX, PKG_GOOGLE_DRIVE, PKG_ONEDRIVE, PKG_PROTON_DRIVE,
 };
 use receipt_parse::{parse_receipt_text, parse_tire_receipt_text};
 use state::{reminder_status_line_units, AppState};
@@ -1650,11 +1650,15 @@ fn fire_due_notifications(s: &mut AppState) {
 }
 
 /// Register AlarmManager wakes for open date-based reminders (Android).
+/// Also writes `fig_alarms.json` so BootReceiver can re-register after reboot.
 fn reschedule_reminder_alarms(s: &AppState) {
     // Cap concurrent alarms to avoid binder spam
-    for (code, due, label) in s.future_date_alarms().into_iter().take(24) {
-        schedule_app_wake(code, due, &label);
+    let alarms: Vec<(i32, i64, String)> = s.future_date_alarms().into_iter().take(24).collect();
+    for (code, due, label) in &alarms {
+        schedule_app_wake(*code, *due, label);
     }
+    // Persist full list (may be empty) so boot does not keep stale alarms forever
+    write_alarm_schedule(&alarms);
 }
 
 /// Android entry point (NativeActivity / android-activity).
