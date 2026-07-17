@@ -936,16 +936,17 @@ impl AppState {
     pub fn export_all_csv(&self) -> String {
         let mut out = String::new();
         out.push_str("### vehicles\n");
-        out.push_str("id,name,make,model,year,mileage\n");
+        out.push_str("id,name,make,model,year,mileage,vin\n");
         for v in &self.vehicles {
             out.push_str(&format!(
-                "{},{},{},{},{},{}\n",
+                "{},{},{},{},{},{},{}\n",
                 v.id,
                 csv_esc(&v.name),
                 csv_esc(&v.make),
                 csv_esc(&v.model),
                 v.year.map(|y| y.to_string()).unwrap_or_default(),
-                v.current_mileage
+                v.current_mileage,
+                csv_esc(&v.vin),
             ));
         }
         out.push('\n');

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.23
+- **Selling my car**: professional seller maintenance packet (PDF + shareable text)
+- Includes vehicle, VIN, services, tires, parts, components, issue photos, cost totals
+- Share PDF via system sheet; text summary for email/messaging
+
 ## 0.2.22
 - **VIN** field on vehicles (optional, 17-character)
 - **Safety recalls**: Check recalls via free NHTSA APIs (VIN decode → make/model/year campaigns)

@@ -5,6 +5,7 @@ mod ondevice_ocr;
 mod platform;
 mod receipt_parse;
 mod recalls;
+mod seller_packet;
 mod state;
 mod tread_cv;
 mod units;
@@ -15,9 +16,9 @@ use i18n::{resolve_lang, t, LanguagePref};
 use platform::{
     cancel_app_wake, capture_issue_photo_path, capture_receipt_for_ocr, notify, notify_with_id,
     ocr_target, open_ocr_helper, open_ocr_helper_for_tire, open_url, pending_ocr_image_path,
-    read_clipboard, schedule_app_wake, send_pending_image_to_ocr, set_ocr_target, share_text,
-    share_text_to_cloud, system_locale, take_pending_ocr_text, write_alarm_schedule, PKG_DROPBOX,
-    PKG_GOOGLE_DRIVE, PKG_ONEDRIVE, PKG_PROTON_DRIVE,
+    read_clipboard, schedule_app_wake, send_pending_image_to_ocr, set_ocr_target, share_file,
+    share_text, share_text_to_cloud, system_locale, take_pending_ocr_text, write_alarm_schedule,
+    PKG_DROPBOX, PKG_GOOGLE_DRIVE, PKG_ONEDRIVE, PKG_PROTON_DRIVE,
 };
 use receipt_parse::{parse_receipt_text, parse_tire_receipt_text};
 use state::{reminder_status_line_units, AppState};
@@ -1571,6 +1572,78 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         // Project website donate page (Liberapay / Sponsors / Ko-fi / PayPal)
         open_url("https://linuxbased79.github.io/FixItGarage/donate.html");
     });
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_create_seller_packet(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let s = state.borrow();
+                match seller_packet::build_seller_packet(&s) {
+                    Ok((path, text)) => {
+                        // Also write text alongside PDF
+                        let txt_path = path.with_extension("txt");
+                        let _ = std::fs::write(&txt_path, &text);
+                        ui.set_status_message(
+                            format!(
+                                "Seller packet ready: {}. Sharing PDF…",
+                                path.display()
+                            )
+                            .into(),
+                        );
+                        let subject = format!(
+                            "Maintenance packet — {}",
+                            s.selected_vehicle()
+                                .map(|v| v.name.as_str())
+                                .unwrap_or("vehicle")
+                        );
+                        if let Err(e) = share_file(
+                            &subject,
+                            &path.display().to_string(),
+                            "application/pdf",
+                        ) {
+                            // Fallback: share text summary
+                            share_text(&subject, &text);
+                            ui.set_status_message(
+                                format!("PDF saved ({}). Share PDF failed ({e}); shared text summary.", path.display())
+                                    .into(),
+                            );
+                        }
+                    }
+                    Err(e) => ui.set_status_message(format!("Seller packet: {e}").into()),
+                }
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_share_seller_summary(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let s = state.borrow();
+                match seller_packet::build_seller_packet(&s) {
+                    Ok((path, text)) => {
+                        let subject = format!(
+                            "Maintenance packet — {}",
+                            s.selected_vehicle()
+                                .map(|v| v.name.as_str())
+                                .unwrap_or("vehicle")
+                        );
+                        share_text(&subject, &text);
+                        ui.set_status_message(
+                            format!(
+                                "Seller summary shared. PDF also at {}",
+                                path.display()
+                            )
+                            .into(),
+                        );
+                    }
+                    Err(e) => ui.set_status_message(format!("Seller packet: {e}").into()),
+                }
+            }
+        });
+    }
 
     ui.run()
 }

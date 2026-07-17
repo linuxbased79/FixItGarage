@@ -184,6 +184,219 @@ pub fn share_text(subject: &str, text: &str) {
     share_text_prefer_package(subject, text, None);
 }
 
+/// Share a local file (e.g. seller PDF) via ACTION_SEND when possible.
+pub fn share_file(subject: &str, path: &str, mime: &str) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        return share_file_android(subject, path, mime);
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let p = std::path::Path::new(path);
+        if !p.is_file() {
+            return Err(format!("file missing: {path}"));
+        }
+        let _ = subject;
+        let _ = mime;
+        let _ = std::process::Command::new("xdg-open").arg(p).spawn();
+        Ok(())
+    }
+}
+
+#[cfg(target_os = "android")]
+fn share_file_android(subject: &str, path: &str, mime: &str) -> Result<(), String> {
+    use jni::objects::{JObject, JValue};
+    use jni::JavaVM;
+
+    let bytes = std::fs::read(path).map_err(|e| format!("read file: {e}"))?;
+    if bytes.is_empty() {
+        return Err("empty file".into());
+    }
+
+    let ctx = ndk_context::android_context();
+    let vm =
+        unsafe { JavaVM::from_raw(ctx.vm().cast()) }.map_err(|e| format!("JavaVM: {e}"))?;
+    let mut env = vm
+        .attach_current_thread()
+        .map_err(|e| format!("attach: {e}"))?;
+    let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+
+    // Publish into MediaStore Downloads/Documents for a shareable content URI
+    let resolver = env
+        .call_method(
+            &context,
+            "getContentResolver",
+            "()Landroid/content/ContentResolver;",
+            &[],
+        )
+        .map_err(|e| format!("resolver: {e}"))?
+        .l()
+        .map_err(|e| format!("resolver l: {e}"))?;
+
+    let cv_class = env
+        .find_class("android/content/ContentValues")
+        .map_err(|e| format!("CV: {e}"))?;
+    let cv = env
+        .new_object(&cv_class, "()V", &[])
+        .map_err(|e| format!("new CV: {e}"))?;
+
+    let name = std::path::Path::new(path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("fixitgarage-packet.pdf");
+    for (k, v) in [
+        ("_display_name", name),
+        ("mime_type", mime),
+        ("relative_path", "Download/FixItGarage"),
+    ] {
+        let kj = env.new_string(k).map_err(|e| format!("k: {e}"))?;
+        let vj = env.new_string(v).map_err(|e| format!("v: {e}"))?;
+        env.call_method(
+            &cv,
+            "put",
+            "(Ljava/lang/String;Ljava/lang/String;)V",
+            &[JValue::Object(&kj), JValue::Object(&vj)],
+        )
+        .map_err(|e| format!("put: {e}"))?;
+    }
+
+    // MediaStore.Downloads.EXTERNAL_CONTENT_URI (API 29+) or Files
+    let media_class = env
+        .find_class("android/provider/MediaStore$Downloads")
+        .or_else(|_| env.find_class("android/provider/MediaStore$Files"))
+        .map_err(|e| format!("MediaStore: {e}"))?;
+    let ext_uri = env
+        .get_static_field(
+            &media_class,
+            "EXTERNAL_CONTENT_URI",
+            "Landroid/net/Uri;",
+        )
+        .map_err(|e| format!("EXTERNAL: {e}"))?
+        .l()
+        .map_err(|e| format!("uri: {e}"))?;
+
+    let inserted = env
+        .call_method(
+            &resolver,
+            "insert",
+            "(Landroid/net/Uri;Landroid/content/ContentValues;)Landroid/net/Uri;",
+            &[JValue::Object(&ext_uri), JValue::Object(&cv)],
+        )
+        .map_err(|e| format!("insert: {e}"))?
+        .l()
+        .map_err(|e| format!("inserted: {e}"))?;
+    if inserted.is_null() {
+        return Err("MediaStore insert null — try Share seller summary (text)".into());
+    }
+
+    let out_stream = env
+        .call_method(
+            &resolver,
+            "openOutputStream",
+            "(Landroid/net/Uri;)Ljava/io/OutputStream;",
+            &[JValue::Object(&inserted)],
+        )
+        .map_err(|e| format!("openOutputStream: {e}"))?
+        .l()
+        .map_err(|e| format!("ostream: {e}"))?;
+    if out_stream.is_null() {
+        return Err("openOutputStream null".into());
+    }
+    let jbytes = env
+        .byte_array_from_slice(&bytes)
+        .map_err(|e| format!("jbytes: {e}"))?;
+    env.call_method(
+        &out_stream,
+        "write",
+        "([B)V",
+        &[JValue::Object(jbytes.as_ref())],
+    )
+    .map_err(|e| format!("write: {e}"))?;
+    let _ = env.call_method(&out_stream, "flush", "()V", &[]);
+    let _ = env.call_method(&out_stream, "close", "()V", &[]);
+
+    // ACTION_SEND with stream
+    let intent_class = env
+        .find_class("android/content/Intent")
+        .map_err(|e| format!("Intent: {e}"))?;
+    let action = env
+        .new_string("android.intent.action.SEND")
+        .map_err(|e| format!("SEND: {e}"))?;
+    let intent = env
+        .new_object(
+            &intent_class,
+            "(Ljava/lang/String;)V",
+            &[JValue::Object(&action)],
+        )
+        .map_err(|e| format!("new Intent: {e}"))?;
+    let mime_j = env.new_string(mime).map_err(|e| format!("mime: {e}"))?;
+    env.call_method(
+        &intent,
+        "setType",
+        "(Ljava/lang/String;)Landroid/content/Intent;",
+        &[JValue::Object(&mime_j)],
+    )
+    .map_err(|e| format!("setType: {e}"))?;
+    let stream_key = env
+        .new_string("android.intent.extra.STREAM")
+        .map_err(|e| format!("STREAM: {e}"))?;
+    env.call_method(
+        &intent,
+        "putExtra",
+        "(Ljava/lang/String;Landroid/os/Parcelable;)Landroid/content/Intent;",
+        &[JValue::Object(&stream_key), JValue::Object(&inserted)],
+    )
+    .map_err(|e| format!("putExtra STREAM: {e}"))?;
+    let sub_key = env
+        .new_string("android.intent.extra.SUBJECT")
+        .map_err(|e| format!("SUBJECT: {e}"))?;
+    let sub_j = env.new_string(subject).map_err(|e| format!("sub: {e}"))?;
+    env.call_method(
+        &intent,
+        "putExtra",
+        "(Ljava/lang/String;Ljava/lang/String;)Landroid/content/Intent;",
+        &[JValue::Object(&sub_key), JValue::Object(&sub_j)],
+    )
+    .map_err(|e| format!("putExtra SUBJECT: {e}"))?;
+    // FLAG_GRANT_READ_URI_PERMISSION | NEW_TASK
+    env.call_method(
+        &intent,
+        "addFlags",
+        "(I)Landroid/content/Intent;",
+        &[JValue::Int(0x0000_0001 | 0x1000_0000)],
+    )
+    .map_err(|e| format!("flags: {e}"))?;
+
+    let title = env
+        .new_string("Share maintenance packet")
+        .map_err(|e| format!("title: {e}"))?;
+    let chooser = env
+        .call_static_method(
+            &intent_class,
+            "createChooser",
+            "(Landroid/content/Intent;Ljava/lang/CharSequence;)Landroid/content/Intent;",
+            &[JValue::Object(&intent), JValue::Object(&title)],
+        )
+        .map_err(|e| format!("chooser: {e}"))?
+        .l()
+        .map_err(|e| format!("chooser l: {e}"))?;
+    env.call_method(
+        &chooser,
+        "addFlags",
+        "(I)Landroid/content/Intent;",
+        &[JValue::Int(0x1000_0000)],
+    )
+    .map_err(|e| format!("chooser flags: {e}"))?;
+    env.call_method(
+        &context,
+        "startActivity",
+        "(Landroid/content/Intent;)V",
+        &[JValue::Object(&chooser)],
+    )
+    .map_err(|e| format!("startActivity: {e}"))?;
+    Ok(())
+}
+
 /// Share to a specific cloud app if installed; otherwise open the full chooser
 /// (and try to open the store listing if the package is missing).
 pub fn share_text_to_cloud(subject: &str, text: &str, package: &str, app_label: &str) {

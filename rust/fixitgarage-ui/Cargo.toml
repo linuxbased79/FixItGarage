@@ -39,6 +39,8 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png"]
 imageproc = "0.25"
 ocrs = "0.12"
 rten = "0.24"
+# Seller packet PDF (“Selling my car”)
+printpdf = "0.7"
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"

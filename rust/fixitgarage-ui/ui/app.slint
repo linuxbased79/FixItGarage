@@ -474,6 +474,9 @@ export component MainWindow inherits Window {
     callback set-service-search(string);
     callback open-feedback();
     callback open-donate();
+    /// PDF + text packet for selling the selected vehicle.
+    callback create-seller-packet();
+    callback share-seller-summary();
 
     changed dark-mode => { Theme.dark = (root.dark-mode == "DARK"); }
     changed dyslexia-font => { Theme.dyslexia-font = root.dyslexia-font; }
@@ -944,6 +947,12 @@ export component MainWindow inherits Window {
                         Button { text: root.nav-costs; clicked => { root.navigate(4); } }
                         Button { text: root.tr-more-open-settings; primary: true; clicked => { root.navigate(15); } }
                     }
+                    Card {
+                        title: "Selling my car";
+                        body: "Build a professional maintenance packet (PDF + shareable text) for the selected vehicle — services, tires, parts, costs, photos. Great for proving upkeep to a buyer.";
+                        Button { text: "Create seller packet (PDF)"; primary: true; clicked => { root.create-seller-packet(); } }
+                        Button { text: "Share seller summary (text)"; clicked => { root.share-seller-summary(); } }
+                    }
                 }
             }
 
@@ -1100,7 +1109,7 @@ export component MainWindow inherits Window {
                     }
                     Card {
                         title: root.tr-settings-about;
-                        body: "FixItGarage 0.2.22 — VIN field + NHTSA safety recall checker.";
+                        body: "FixItGarage 0.2.23 — Selling my car: professional maintenance PDF packet.";
                     }
                     Card {
                         title: "Reminders after reboot";
