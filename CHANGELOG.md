@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.18
+- **Deep OCR pipeline**: Capture for OCR (MediaStore) → Send photo to Text Fairy / Lens → Share text back into FixItGarage
+- Share target activity receives text/image from any OCR app (`ShareReceiveActivity`)
+- Apply shared OCR / auto-fill on Receipt & Tires pages; OCR noise cleanup (Total/Oil/0↔O)
+- Packaging compiles all Java bridges (Boot + Share)
+
 ## 0.2.17
 - Receipt OCR assist: **Paste & fill** (clipboard + auto-parse in one tap) for service and tire receipts
 - Metric receipts: km→mi, L→gal storage; €/£ amounts; EU DD/MM/YYYY dates

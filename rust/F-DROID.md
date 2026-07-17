@@ -55,3 +55,8 @@ Local-first; no required account. See root `PRIVACY.md`.
 ## Source
 https://github.com/linuxbased79/FixItGarage  
 Issues: https://github.com/linuxbased79/FixItGarage/issues
+
+## Deep OCR (0.2.18+)
+- `ShareReceiveActivity` is a share target for `text/plain` and `image/*` (OCR apps → FixItGarage).
+- Capture uses MediaStore; “Send photo to OCR” uses `ACTION_SEND` image/* to Text Fairy / Lens / chooser.
+- No bundled Tesseract/ML Kit (keeps APK size + GrapheneOS-friendly; free OCR via F-Droid Text Fairy).

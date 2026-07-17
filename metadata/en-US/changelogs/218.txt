@@ -1,0 +1,1 @@
+Deep OCR: capture photo, send to OCR app, share text back into FixItGarage. Share target for text/images. OCR noise cleanup.

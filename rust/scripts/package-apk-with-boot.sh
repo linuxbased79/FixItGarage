@@ -8,8 +8,8 @@ set -euo pipefail
 
 IN_APK="${1:?input apk}"
 OUT_APK="${2:?output apk}"
-VERSION_NAME="${3:-0.2.17}"
-VERSION_CODE="${4:-2017}"
+VERSION_NAME="${3:-0.2.18}"
+VERSION_CODE="${4:-2018}"
 
 export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}"
 if [[ ! -d "$ANDROID_HOME/platform-tools" && -d /root/Android/Sdk/platform-tools ]]; then
@@ -55,11 +55,16 @@ fi
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# --- Compile BootReceiver → classes.dex ---
+# --- Compile Java bridges (BootReceiver + ShareReceiveActivity) → classes.dex ---
 mkdir -p "$WORK/classes"
+mapfile -t JAVA_FILES < <(find "$JAVA_SRC" -name '*.java' | sort)
+if [[ ${#JAVA_FILES[@]} -eq 0 ]]; then
+  echo "No Java sources under $JAVA_SRC" >&2
+  exit 1
+fi
 "$JAVAC" -source 8 -target 8 -bootclasspath "$ANDROID_JAR" \
   -d "$WORK/classes" \
-  "$JAVA_SRC/org/fixitgarage/app/BootReceiver.java"
+  "${JAVA_FILES[@]}"
 # d8 may be a shell script or binary
 if [[ -x "$D8" ]]; then
   (cd "$WORK" && "$D8" --lib "$ANDROID_JAR" --min-api 26 --output "$WORK" \
@@ -72,6 +77,7 @@ if [[ ! -f "$WORK/classes.dex" ]]; then
   echo "d8 did not produce classes.dex" >&2
   exit 1
 fi
+echo "Java classes: ${JAVA_FILES[*]}"
 
 # --- Manifest with version ---
 sed -e "s/package=\"org.fixitgarage.app\"/package=\"org.fixitgarage.app\" android:versionCode=\"${VERSION_CODE}\" android:versionName=\"${VERSION_NAME}\"/" \

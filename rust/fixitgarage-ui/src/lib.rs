@@ -10,9 +10,11 @@ mod webdav;
 use chrono::{TimeZone, Utc};
 use i18n::{resolve_lang, t, LanguagePref};
 use platform::{
-    cancel_app_wake, capture_issue_photo_path, notify, notify_with_id, open_ocr_helper, open_url,
-    read_clipboard, schedule_app_wake, share_text, share_text_to_cloud, system_locale,
-    write_alarm_schedule, PKG_DROPBOX, PKG_GOOGLE_DRIVE, PKG_ONEDRIVE, PKG_PROTON_DRIVE,
+    cancel_app_wake, capture_issue_photo_path, capture_receipt_for_ocr, notify, notify_with_id,
+    ocr_target, open_ocr_helper, open_ocr_helper_for_tire, open_url, pending_ocr_image_path,
+    read_clipboard, schedule_app_wake, send_pending_image_to_ocr, set_ocr_target, share_text,
+    share_text_to_cloud, system_locale, take_pending_ocr_text, write_alarm_schedule, PKG_DROPBOX,
+    PKG_GOOGLE_DRIVE, PKG_ONEDRIVE, PKG_PROTON_DRIVE,
 };
 use receipt_parse::{parse_receipt_text, parse_tire_receipt_text};
 use state::{reminder_status_line_units, AppState};
@@ -67,6 +69,10 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
             if let Some(ui) = ui_weak.upgrade() {
                 ui.set_page(page);
                 refresh_ui(&ui, &s);
+                // Receipt or tire pages: pull shared OCR text / image if any
+                if page == 13 || page == 3 {
+                    try_consume_pending_ocr(&ui, &s, page == 3);
+                }
             }
         });
     }
@@ -1030,7 +1036,73 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
             if let Some(ui) = ui_weak.upgrade() {
                 let path = capture_issue_photo_path();
                 ui.set_rcp_photo_path(path.into());
-                ui.set_status_message("Camera opened for receipt (paste OCR text to auto-fill).".into());
+                ui.set_status_message(
+                    "Camera opened — after photo, use Send photo to OCR or Paste & fill.".into(),
+                );
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        ui.on_capture_receipt_for_ocr(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                set_ocr_target("receipt");
+                let path = capture_receipt_for_ocr();
+                ui.set_rcp_photo_path(path.into());
+                // Best-effort: if a previous share image exists, show it
+                if let Some(img) = pending_ocr_image_path() {
+                    ui.set_rcp_photo_path(img.into());
+                }
+                ui.set_status_message(
+                    "Camera for OCR — take the photo, return here, then Send photo to OCR.".into(),
+                );
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        ui.on_send_receipt_to_ocr(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                set_ocr_target("receipt");
+                // Finalize camera URI → local file if needed
+                if let Some(img) = pending_ocr_image_path() {
+                    ui.set_rcp_photo_path(img.into());
+                }
+                match send_pending_image_to_ocr() {
+                    Ok(()) => ui.set_status_message(
+                        "Opened OCR app with photo. Share text back to FixItGarage or Copy, then Apply shared OCR / Paste & fill.".into(),
+                    ),
+                    Err(e) => ui.set_status_message(format!("Send to OCR: {e}").into()),
+                }
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_apply_pending_ocr(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let s = state.borrow();
+                let tire = ocr_target() == "tire" || ui.get_page() == 3;
+                if try_consume_pending_ocr(&ui, &s, tire) {
+                    // status set inside helper
+                } else {
+                    // Soft fallback: clipboard
+                    if let Some(text) = read_clipboard() {
+                        if tire {
+                            apply_tire_ocr_text(&ui, &s, &text);
+                        } else {
+                            apply_receipt_ocr_text(&ui, &s, &text);
+                        }
+                    } else {
+                        ui.set_status_message(
+                            "No shared OCR text yet. In OCR app: Share → FixItGarage, or Copy then Paste & fill.".into(),
+                        );
+                    }
+                }
             }
         });
     }
@@ -1194,8 +1266,17 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
     }
 
     {
+        let ui_weak = ui.as_weak();
         ui.on_open_ocr_helper(move || {
-            open_ocr_helper();
+            if let Some(ui) = ui_weak.upgrade() {
+                if ui.get_page() == 3 {
+                    open_ocr_helper_for_tire();
+                } else {
+                    open_ocr_helper();
+                }
+            } else {
+                open_ocr_helper();
+            }
         });
     }
 
@@ -1267,6 +1348,107 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
     });
 
     ui.run()
+}
+
+/// Consume ShareReceiveActivity text / pending image and auto-fill the form.
+/// Returns true if shared OCR text was applied.
+fn try_consume_pending_ocr(ui: &MainWindow, state: &AppState, tire: bool) -> bool {
+    if let Some(img) = pending_ocr_image_path() {
+        if !tire {
+            ui.set_rcp_photo_path(img.into());
+        }
+    }
+    if let Some(text) = take_pending_ocr_text() {
+        if tire || ocr_target() == "tire" {
+            apply_tire_ocr_text(ui, state, &text);
+        } else {
+            apply_receipt_ocr_text(ui, state, &text);
+        }
+        return true;
+    }
+    false
+}
+
+fn apply_receipt_ocr_text(ui: &MainWindow, state: &AppState, text: &str) {
+    ui.set_rcp_paste(text.into());
+    let p = parse_receipt_text(text);
+    let u = state.unit_system();
+    let mut filled = 0u32;
+    if let Some(d) = p.date {
+        ui.set_rcp_date(d.into());
+        filled += 1;
+    }
+    if let Some(m) = p.mileage {
+        ui.set_rcp_mileage(miles_to_display(m, u).to_string().into());
+        filled += 1;
+    }
+    if let Some(g) = p.gallons {
+        let shown = gallons_to_display(g, u);
+        ui.set_rcp_gallons(format!("{shown:.3}").into());
+        filled += 1;
+    }
+    if let Some(v) = p.parts_cost {
+        ui.set_rcp_parts(format!("{v:.2}").into());
+        filled += 1;
+    }
+    if let Some(v) = p.labor_cost {
+        ui.set_rcp_labor(format!("{v:.2}").into());
+        filled += 1;
+    }
+    if let Some(v) = p.fuel_cost {
+        ui.set_rcp_fuel(format!("{v:.2}").into());
+        filled += 1;
+    }
+    if let Some(s) = p.shop_name {
+        ui.set_rcp_shop(s.into());
+        filled += 1;
+    }
+    if let Some(t) = p.title {
+        if ui.get_rcp_title().is_empty() {
+            ui.set_rcp_title(t.into());
+            filled += 1;
+        }
+    } else if ui.get_rcp_title().is_empty() {
+        ui.set_rcp_title("Receipt import".into());
+    }
+    ui.set_status_message(
+        format!("OCR text applied — {filled} field(s). Review and save.").into(),
+    );
+}
+
+fn apply_tire_ocr_text(ui: &MainWindow, state: &AppState, text: &str) {
+    ui.set_tire_rcp_paste(text.into());
+    let p = parse_tire_receipt_text(text);
+    let u = state.unit_system();
+    let mut filled = 0u32;
+    if let Some(b) = p.brand {
+        ui.set_tire_brand(b.into());
+        filled += 1;
+    }
+    if let Some(m) = p.model {
+        ui.set_tire_model(m.into());
+        filled += 1;
+    }
+    if let Some(sz) = p.size {
+        ui.set_tire_size(sz.into());
+        filled += 1;
+    }
+    if let Some(c) = p.cost {
+        ui.set_tire_cost(format!("{c:.2}").into());
+        filled += 1;
+    }
+    if let Some(mi) = p.mileage {
+        ui.set_tire_buy_mileage(miles_to_display(mi, u).to_string().into());
+        filled += 1;
+    }
+    if let Some(n) = p.notes {
+        if ui.get_tire_buy_notes().is_empty() {
+            ui.set_tire_buy_notes(n.into());
+        }
+    }
+    ui.set_status_message(
+        format!("OCR tire text applied — {filled} field(s). Review and Save.").into(),
+    );
 }
 
 fn refresh_ui(ui: &MainWindow, state: &AppState) {

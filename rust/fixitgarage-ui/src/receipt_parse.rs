@@ -1,5 +1,5 @@
-//! Lightweight "OCR assist": parse common fields from pasted receipt text.
-//! Real camera OCR can fill this same form later.
+//! Receipt OCR assist: normalize noisy OCR text and parse common fields.
+//! Camera / share pipeline feeds this same form (see platform OCR helpers).
 
 use regex::Regex;
 
@@ -17,8 +17,62 @@ pub struct ParsedReceipt {
     pub title: Option<String>,
 }
 
+/// Clean typical OCR noise before field extraction.
+/// Soft fixes only — does not invent values.
+pub fn normalize_ocr_text(text: &str) -> String {
+    let mut s = text.replace('\u{00a0}', " ").replace('\u{fffd}', "");
+    // Normalize newlines (OCR often uses CR or vertical bars as line breaks)
+    s = s.replace("\r\n", "\n").replace('\r', "\n");
+    s = s.replace('|', "\n");
+    // Currency glued with space: "$ 42.50" / "€ 12,00"
+    if let Ok(re) = Regex::new(r"([\$€£])\s+(\d)") {
+        s = re.replace_all(&s, "$1$2").into_owned();
+    }
+    // "42 . 50" → "42.50" (digit space punct space digit)
+    if let Ok(re) = Regex::new(r"(\d)\s+([.,])\s+(\d)") {
+        s = re.replace_all(&s, "$1$2$3").into_owned();
+    }
+    // Collapse runs of spaces/tabs (keep newlines)
+    if let Ok(re) = Regex::new(r"[^\S\n]+") {
+        s = re.replace_all(&s, " ").into_owned();
+    }
+    // Common OCR word fixes (case-insensitive whole words)
+    let word_fixes: &[(&str, &str)] = &[
+        (r"(?i)\btotai\b", "Total"),
+        (r"(?i)\btota1\b", "Total"),
+        (r"(?i)\boii\b", "Oil"),
+        (r"(?i)\boil\s+change\b", "oil change"),
+        (r"(?i)\blab0r\b", "Labor"),
+        (r"(?i)\blabour\b", "Labour"),
+        (r"(?i)\bodosmeter\b", "Odometer"),
+        (r"(?i)\bodometer\b", "Odometer"),
+        (r"(?i)\bmi1es\b", "miles"),
+        (r"(?i)\bga11ons\b", "gallons"),
+        (r"(?i)\bgailons\b", "gallons"),
+    ];
+    for (pat, rep) in word_fixes {
+        if let Ok(re) = Regex::new(pat) {
+            s = re.replace_all(&s, *rep).into_owned();
+        }
+    }
+    // Fix letter O/o as zero inside digit runs: "98O32" → "98032", "12.4O" → "12.40"
+    if let Ok(re) = Regex::new(r"(\d)[Oo](\d)") {
+        s = re.replace_all(&s, "${1}0${2}").into_owned();
+    }
+    if let Ok(re) = Regex::new(r"(\d)[Oo]\b") {
+        s = re.replace_all(&s, "${1}0").into_owned();
+    }
+    // Fix l/I as 1 inside digit runs: "98l32" / "98I32"
+    if let Ok(re) = Regex::new(r"(\d)[lI](\d)") {
+        s = re.replace_all(&s, "${1}1${2}").into_owned();
+    }
+    s.trim().to_string()
+}
+
 /// Extract date / mileage / gallons / money from free-form receipt text.
 pub fn parse_receipt_text(text: &str) -> ParsedReceipt {
+    let text = normalize_ocr_text(text);
+    let text = text.as_str();
     let mut out = ParsedReceipt::default();
 
     // Dates: 2024-07-16, 07/16/2024, 16/07/2024 (EU), 7/16/24
@@ -258,6 +312,18 @@ mod tests {
     }
 
     #[test]
+    fn normalizes_ocr_noise() {
+        let raw = "Joe's Auto\nTota1 $1O2.50\nOii change\nOdometer: 98O32 mi\n";
+        let n = normalize_ocr_text(raw);
+        assert!(n.contains("Total"), "got: {n}");
+        assert!(n.contains("Oil") || n.to_ascii_lowercase().contains("oil"), "got: {n}");
+        assert!(n.contains("98032"), "got: {n}");
+        let p = parse_receipt_text(raw);
+        assert_eq!(p.mileage, Some(98032));
+        assert_eq!(p.total_cost, Some(102.50));
+    }
+
+    #[test]
     fn parses_metric_fuel_and_odometer() {
         // 45.2 L ≈ 11.94 gal; 158200 km ≈ 98326 mi
         let text = "Tankstelle Muster\nKm-Stand: 158200 km\n45.2 L\nTotal €72.50\n";
@@ -312,7 +378,9 @@ pub struct ParsedTireReceipt {
 
 /// Parse free-form tire purchase receipt text (paste from OCR / email).
 pub fn parse_tire_receipt_text(text: &str) -> ParsedTireReceipt {
-    let base = parse_receipt_text(text);
+    let text = normalize_ocr_text(text);
+    let base = parse_receipt_text(&text);
+    let text = text.as_str();
     let mut out = ParsedTireReceipt {
         cost: base.total_cost.or(base.parts_cost),
         mileage: base.mileage,

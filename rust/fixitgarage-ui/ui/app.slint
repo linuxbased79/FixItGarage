@@ -444,6 +444,12 @@ export component MainWindow inherits Window {
     callback paste-receipt-clipboard();
     callback paste-tire-clipboard();
     callback open-ocr-helper();
+    /// Capture photo into MediaStore + remember for OCR share.
+    callback capture-receipt-for-ocr();
+    /// ACTION_SEND image to Text Fairy / Lens / chooser.
+    callback send-receipt-to-ocr();
+    /// Consume shared OCR text (Share → FixItGarage) and auto-fill.
+    callback apply-pending-ocr();
     callback save-cloud-settings();
     callback upload-cloud-backup();
     callback update-selected-vehicle();
@@ -1056,7 +1062,7 @@ export component MainWindow inherits Window {
                     }
                     Card {
                         title: root.tr-settings-about;
-                        body: "FixItGarage 0.2.17 — paste & fill OCR, metric receipts (km/L/€), F-Droid OCR apps; boot-resilient reminders; OpenDyslexic.";
+                        body: "FixItGarage 0.2.18 — deep OCR: capture → send to OCR app → Share text back; share-target; OCR noise cleanup.";
                     }
                     Card {
                         title: "Reminders after reboot";
@@ -1343,22 +1349,31 @@ export component MainWindow inherits Window {
                     PageTitle { label: "Receipt log"; }
                     VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text {
-                        text: "1) Take photo or open OCR helper  2) Copy text in that app  3) Paste & fill here (one tap). Metric receipts (km, L, €) supported.";
+                        text: "Deep OCR: 1) Capture for OCR  2) Send photo to OCR app  3) In that app: Share text → FixItGarage (or Copy)  4) Apply shared OCR / Paste & fill. Metric km/L/€ OK.";
                         font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
                     }
                     Card {
                         title: "Receipt fields"; body: "Saves into maintenance history for this vehicle.";
-                        Button { text: "Take receipt photo"; clicked => { root.capture-receipt-photo(); } }
+                        HorizontalBox {
+                            spacing: 6px;
+                            Button { text: "Capture for OCR"; primary: true; clicked => { root.capture-receipt-for-ocr(); } }
+                            Button { text: "Send photo to OCR"; clicked => { root.send-receipt-to-ocr(); } }
+                        }
+                        HorizontalBox {
+                            spacing: 6px;
+                            Button { text: "Apply shared OCR"; clicked => { root.apply-pending-ocr(); } }
+                            Button { text: "Paste & fill"; clicked => { root.paste-receipt-clipboard(); } }
+                        }
                         Text {
-                            text: rcp-photo-path == "" ? "No photo yet" : ("Photo: " + rcp-photo-path);
+                            text: rcp-photo-path == "" ? "No photo yet — capture or Share an image to FixItGarage." : ("Photo: " + rcp-photo-path);
                             font-size: 12px; color: Theme.text-soft; wrap: word-wrap;
                         }
                         HorizontalBox {
                             spacing: 6px;
-                            Button { text: "Open OCR helper"; clicked => { root.open-ocr-helper(); } }
-                            Button { text: "Paste & fill"; primary: true; clicked => { root.paste-receipt-clipboard(); } }
+                            Button { text: "Open OCR app"; clicked => { root.open-ocr-helper(); } }
+                            Button { text: "Quick camera"; clicked => { root.capture-receipt-photo(); } }
                         }
-                        LineEdit { placeholder-text: "Paste receipt text (from OCR app or email)"; text <=> root.rcp-paste; }
+                        LineEdit { placeholder-text: "Paste receipt text (OCR share / email / clipboard)"; text <=> root.rcp-paste; }
                         Button { text: "Auto-fill from text above"; clicked => { root.parse-receipt-text(); } }
                         LineEdit { placeholder-text: "Title (e.g. Oil change shop)"; text <=> root.rcp-title; }
                         LineEdit { placeholder-text: "Date YYYY-MM-DD"; text <=> root.rcp-date; }

@@ -10,7 +10,7 @@ Planned distribution: **F-Droid** and **Google Play**. Designed for **GrapheneOS
 
 ## Status
 
-**0.2.17** — primary product is the **Rust + Slint** APK (`org.fixitgarage.app`).
+**0.2.18** — primary product is the **Rust + Slint** APK (`org.fixitgarage.app`).
 
 | Area | Status |
 |------|--------|
@@ -29,7 +29,7 @@ Planned distribution: **F-Droid** and **Google Play**. Designed for **GrapheneOS
 | Units (imperial / metric) | Done |
 | Languages (system + EN/ES/FR/DE/JA/KO/ZH) | Done |
 | OpenDyslexic accessibility font | Done |
-| Receipt OCR (in-app from photo) | Partial (paste & fill + OCR apps; no on-device CV yet) |
+| Receipt OCR (in-app from photo) | Partial (capture→OCR app→share-back; no bundled on-device engine yet) |
 | Camera tread auto-measure | Partial (camera assist + manual entry) |
 | F-Droid / Play public listing | Packaging ready — **not yet submitted** |
 

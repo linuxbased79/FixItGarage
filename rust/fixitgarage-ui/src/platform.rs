@@ -548,27 +548,157 @@ pub fn cancel_app_wake(request_code: i32) {
     }
 }
 
-/// Open a text-from-image / OCR helper.
+/// Files written by ShareReceiveActivity / native OCR capture (app files dir).
+pub const OCR_TEXT_FILE: &str = "fig_ocr_text.txt";
+pub const OCR_IMAGE_FILE: &str = "fig_ocr_image.jpg";
+#[allow(dead_code)] // written/read on Android MediaStore path
+pub const OCR_URI_FILE: &str = "fig_ocr_uri.txt";
+pub const OCR_TARGET_FILE: &str = "fig_ocr_target.txt";
+
+/// F-Droid / Play OCR packages (Graphene-friendly first).
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+const OCR_APP_PACKAGES: &[&str] = &[
+    "com.renard.ocr",                          // Text Fairy (F-Droid)
+    "com.google.android.apps.lens",            // Google Lens
+    "com.google.ar.lens",
+    "com.google.android.googlequicksearchbox",
+    "com.microsoft.office.officehubrow",
+    "com.microsoft.office.officelens",
+];
+
+/// Open a text-from-image / OCR helper (receipt form target).
 /// Prefers an installed OCR app (GrapheneOS / F-Droid friendly), then store
 /// search, then Lens web as last resort.
 pub fn open_ocr_helper() {
+    set_ocr_target("receipt");
+    open_ocr_helper_inner();
+}
+
+/// Remember which form should consume the next shared OCR text (`receipt` / `tire`).
+pub fn set_ocr_target(target: &str) {
+    if let Some(path) = ocr_files_dir().map(|d| d.join(OCR_TARGET_FILE)) {
+        let _ = std::fs::create_dir_all(path.parent().unwrap_or(std::path::Path::new(".")));
+        let _ = std::fs::write(path, target);
+    }
+}
+
+/// Read OCR target (`receipt` default).
+pub fn ocr_target() -> String {
+    ocr_files_dir()
+        .and_then(|d| std::fs::read_to_string(d.join(OCR_TARGET_FILE)).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "receipt".into())
+}
+
+/// Take pending shared/captured OCR text (consumes file). Also checks clipboard
+/// as a soft fallback when the share target was not used.
+pub fn take_pending_ocr_text() -> Option<String> {
+    if let Some(dir) = ocr_files_dir() {
+        let path = dir.join(OCR_TEXT_FILE);
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            let _ = std::fs::remove_file(&path);
+            let t = text.trim().to_string();
+            if !t.is_empty() {
+                return Some(t);
+            }
+        }
+    }
+    None
+}
+
+/// Path to pending OCR image if present (does not delete).
+pub fn pending_ocr_image_path() -> Option<String> {
+    let dir = ocr_files_dir()?;
+    let path = dir.join(OCR_IMAGE_FILE);
+    if path.is_file() {
+        if let Ok(meta) = std::fs::metadata(&path) {
+            if meta.len() > 32 {
+                return Some(path.display().to_string());
+            }
+        }
+    }
+    // Also try content URI → copy into image file
     #[cfg(target_os = "android")]
     {
-        // Text Fairy is on F-Droid and works without Google Play Services.
-        const OCR_APP_PACKAGES: &[&str] = &[
-            "com.renard.ocr",                          // Text Fairy (F-Droid)
-            "com.google.android.apps.lens",            // Google Lens
-            "com.google.ar.lens",                      // Lens alternate id
-            "com.google.android.googlequicksearchbox", // Google app (Lens entry)
-            "com.microsoft.office.officehubrow",       // Microsoft Office / Lens
-            "com.microsoft.office.officelens",
-        ];
+        if let Ok(Some(p)) = finalize_pending_camera_uri() {
+            return Some(p);
+        }
+    }
+    None
+}
+
+/// Capture a receipt photo into MediaStore (Android) and remember URI for OCR share.
+/// Returns a display path / URI string.
+pub fn capture_receipt_for_ocr() -> String {
+    set_ocr_target("receipt");
+    #[cfg(target_os = "android")]
+    {
+        match capture_for_ocr_android() {
+            Ok(uri) => {
+                if let Some(dir) = ocr_files_dir() {
+                    let _ = std::fs::write(dir.join(OCR_URI_FILE), &uri);
+                }
+                return uri;
+            }
+            Err(e) => {
+                eprintln!("capture for OCR: {e}");
+                // Fall back to generic camera path
+            }
+        }
+    }
+    capture_issue_photo_path()
+}
+
+/// Send the pending OCR image (or last capture URI) to an installed OCR app via
+/// ACTION_SEND. User can then Share text back to FixItGarage or copy + Paste & fill.
+pub fn send_pending_image_to_ocr() -> Result<(), String> {
+    set_ocr_target("receipt");
+    #[cfg(target_os = "android")]
+    {
+        // Prefer content URI (grantable); else try file path via MediaStore re-insert
+        if let Some(dir) = ocr_files_dir() {
+            let uri_path = dir.join(OCR_URI_FILE);
+            if let Ok(uri) = std::fs::read_to_string(&uri_path) {
+                let uri = uri.trim();
+                if !uri.is_empty() {
+                    return send_image_uri_to_ocr_android(uri);
+                }
+            }
+            let img = dir.join(OCR_IMAGE_FILE);
+            if img.is_file() {
+                // Re-publish app file into MediaStore so OCR apps can read it
+                match publish_file_to_mediastore_android(&img.display().to_string()) {
+                    Ok(uri) => {
+                        let _ = std::fs::write(&uri_path, &uri);
+                        return send_image_uri_to_ocr_android(&uri);
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+        }
+        Err("No receipt photo yet — capture first.".into())
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        Err("Send photo to OCR is available on Android.".into())
+    }
+}
+
+/// Launch OCR helper targeted at tire receipt form.
+pub fn open_ocr_helper_for_tire() {
+    set_ocr_target("tire");
+    open_ocr_helper_inner();
+}
+
+fn open_ocr_helper_inner() {
+    #[cfg(target_os = "android")]
+    {
         for pkg in OCR_APP_PACKAGES {
             if try_launch_package(pkg) {
                 return;
             }
         }
-        // F-Droid listing for Text Fairy, then Play search, then Lens web
         open_url("https://f-droid.org/packages/com.renard.ocr/");
         open_url("market://search?q=OCR%20text%20scanner&c=apps");
         open_url("https://lens.google.com/");
@@ -577,6 +707,53 @@ pub fn open_ocr_helper() {
     {
         eprintln!("OCR helper: paste text from any OCR tool into FixItGarage");
     }
+}
+
+fn ocr_files_dir() -> Option<std::path::PathBuf> {
+    #[cfg(target_os = "android")]
+    {
+        if let Ok(p) = android_files_dir() {
+            return Some(p);
+        }
+        return Some(android_files_fallback_path());
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let p = dirs::data_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join("fixitgarage");
+        let _ = std::fs::create_dir_all(&p);
+        Some(p)
+    }
+}
+
+#[cfg(target_os = "android")]
+fn android_files_dir() -> Result<std::path::PathBuf, String> {
+    use jni::objects::JObject;
+    use jni::JavaVM;
+
+    let ctx = ndk_context::android_context();
+    let vm =
+        unsafe { JavaVM::from_raw(ctx.vm().cast()) }.map_err(|e| format!("JavaVM: {e}"))?;
+    let mut env = vm
+        .attach_current_thread()
+        .map_err(|e| format!("attach: {e}"))?;
+    let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+    let files_dir = env
+        .call_method(&context, "getFilesDir", "()Ljava/io/File;", &[])
+        .map_err(|e| format!("getFilesDir: {e}"))?
+        .l()
+        .map_err(|e| format!("filesDir: {e}"))?;
+    let path_j = env
+        .call_method(&files_dir, "getAbsolutePath", "()Ljava/lang/String;", &[])
+        .map_err(|e| format!("getAbsolutePath: {e}"))?
+        .l()
+        .map_err(|e| format!("path obj: {e}"))?;
+    let jstr: jni::objects::JString = path_j.into();
+    let s = env
+        .get_string(&jstr)
+        .map_err(|e| format!("get_string: {e}"))?;
+    Ok(std::path::PathBuf::from(Into::<String>::into(s)))
 }
 
 /// Launch an app by package name if installed. Returns true on success.
@@ -647,6 +824,544 @@ fn try_launch_package_android(package: &str) -> Result<(), String> {
         &[JValue::Object(&launch)],
     )
     .map_err(|e| format!("startActivity: {e}"))?;
+    Ok(())
+}
+
+#[cfg(target_os = "android")]
+fn capture_for_ocr_android() -> Result<String, String> {
+    use jni::objects::{JObject, JValue};
+    use jni::JavaVM;
+
+    let ctx = ndk_context::android_context();
+    let vm =
+        unsafe { JavaVM::from_raw(ctx.vm().cast()) }.map_err(|e| format!("JavaVM: {e}"))?;
+    let mut env = vm
+        .attach_current_thread()
+        .map_err(|e| format!("attach: {e}"))?;
+    let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+
+    // ContentResolver
+    let resolver = env
+        .call_method(
+            &context,
+            "getContentResolver",
+            "()Landroid/content/ContentResolver;",
+            &[],
+        )
+        .map_err(|e| format!("getContentResolver: {e}"))?
+        .l()
+        .map_err(|e| format!("resolver: {e}"))?;
+
+    // ContentValues
+    let cv_class = env
+        .find_class("android/content/ContentValues")
+        .map_err(|e| format!("ContentValues: {e}"))?;
+    let cv = env
+        .new_object(&cv_class, "()V", &[])
+        .map_err(|e| format!("new ContentValues: {e}"))?;
+
+    let put_string = |env: &mut jni::JNIEnv, cv: &JObject, key: &str, val: &str| -> Result<(), String> {
+        let k = env.new_string(key).map_err(|e| format!("key: {e}"))?;
+        let v = env.new_string(val).map_err(|e| format!("val: {e}"))?;
+        env.call_method(
+            cv,
+            "put",
+            "(Ljava/lang/String;Ljava/lang/String;)V",
+            &[JValue::Object(&k), JValue::Object(&v)],
+        )
+        .map_err(|e| format!("put: {e}"))?;
+        Ok(())
+    };
+
+    let stamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+    // MediaStore.Images.Media.DISPLAY_NAME / MIME_TYPE / RELATIVE_PATH
+    put_string(&mut env, &cv, "_display_name", &format!("fixitgarage_receipt_{stamp}.jpg"))?;
+    put_string(&mut env, &cv, "mime_type", "image/jpeg")?;
+    put_string(&mut env, &cv, "relative_path", "Pictures/FixItGarage")?;
+
+    // MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+    let media_class = env
+        .find_class("android/provider/MediaStore$Images$Media")
+        .map_err(|e| format!("MediaStore.Images.Media: {e}"))?;
+    let ext_uri = env
+        .get_static_field(
+            media_class,
+            "EXTERNAL_CONTENT_URI",
+            "Landroid/net/Uri;",
+        )
+        .map_err(|e| format!("EXTERNAL_CONTENT_URI: {e}"))?
+        .l()
+        .map_err(|e| format!("uri: {e}"))?;
+
+    let inserted = env
+        .call_method(
+            &resolver,
+            "insert",
+            "(Landroid/net/Uri;Landroid/content/ContentValues;)Landroid/net/Uri;",
+            &[JValue::Object(&ext_uri), JValue::Object(&cv)],
+        )
+        .map_err(|e| format!("insert: {e}"))?
+        .l()
+        .map_err(|e| format!("inserted: {e}"))?;
+    if inserted.is_null() {
+        return Err("MediaStore insert returned null".into());
+    }
+
+    let uri_str_j = env
+        .call_method(&inserted, "toString", "()Ljava/lang/String;", &[])
+        .map_err(|e| format!("uri toString: {e}"))?
+        .l()
+        .map_err(|e| format!("uri str: {e}"))?;
+    let jstr: jni::objects::JString = uri_str_j.into();
+    let uri_string: String = env
+        .get_string(&jstr)
+        .map_err(|e| format!("get_string: {e}"))?
+        .into();
+
+    // IMAGE_CAPTURE with EXTRA_OUTPUT
+    let intent_class = env
+        .find_class("android/content/Intent")
+        .map_err(|e| format!("Intent: {e}"))?;
+    let action = env
+        .new_string("android.media.action.IMAGE_CAPTURE")
+        .map_err(|e| format!("action: {e}"))?;
+    let intent = env
+        .new_object(
+            &intent_class,
+            "(Ljava/lang/String;)V",
+            &[JValue::Object(&action)],
+        )
+        .map_err(|e| format!("new Intent: {e}"))?;
+
+    let extra_output = env
+        .new_string("output")
+        .map_err(|e| format!("extra: {e}"))?;
+    // MediaStore.EXTRA_OUTPUT = "output"
+    env.call_method(
+        &intent,
+        "putExtra",
+        "(Ljava/lang/String;Landroid/os/Parcelable;)Landroid/content/Intent;",
+        &[JValue::Object(&extra_output), JValue::Object(&inserted)],
+    )
+    .map_err(|e| format!("putExtra OUTPUT: {e}"))?;
+
+    // FLAG_GRANT_WRITE_URI_PERMISSION | FLAG_GRANT_READ_URI_PERMISSION | NEW_TASK
+    let flags = 0x0000_0002i32 | 0x0000_0001 | 0x1000_0000;
+    env.call_method(
+        &intent,
+        "addFlags",
+        "(I)Landroid/content/Intent;",
+        &[JValue::Int(flags)],
+    )
+    .map_err(|e| format!("addFlags: {e}"))?;
+
+    // Grant URI perms to camera packages (best-effort)
+    let _ = env.call_method(
+        &intent,
+        "addFlags",
+        "(I)Landroid/content/Intent;",
+        &[JValue::Int(0x0000_0040)], // FLAG_GRANT_PERSISTABLE? skip
+    );
+
+    env.call_method(
+        &context,
+        "startActivity",
+        "(Landroid/content/Intent;)V",
+        &[JValue::Object(&intent)],
+    )
+    .map_err(|e| format!("startActivity: {e}"))?;
+
+    Ok(uri_string)
+}
+
+/// If a pending MediaStore URI has content, copy into fig_ocr_image.jpg.
+#[cfg(target_os = "android")]
+fn finalize_pending_camera_uri() -> Result<Option<String>, String> {
+    let dir = android_files_dir().unwrap_or_else(|_| android_files_fallback_path());
+    let uri_file = dir.join(OCR_URI_FILE);
+    let uri = match std::fs::read_to_string(&uri_file) {
+        Ok(u) => u.trim().to_string(),
+        Err(_) => return Ok(None),
+    };
+    if uri.is_empty() {
+        return Ok(None);
+    }
+    let out = dir.join(OCR_IMAGE_FILE);
+    // Skip if already have a recent image
+    if out.is_file() {
+        if let Ok(meta) = std::fs::metadata(&out) {
+            if meta.len() > 1000 {
+                return Ok(Some(out.display().to_string()));
+            }
+        }
+    }
+    copy_content_uri_to_file_android(&uri, &out.display().to_string())?;
+    if out.is_file() {
+        Ok(Some(out.display().to_string()))
+    } else {
+        Ok(None)
+    }
+}
+
+#[cfg(target_os = "android")]
+fn copy_content_uri_to_file_android(uri: &str, dest: &str) -> Result<(), String> {
+    use jni::objects::{JObject, JValue};
+    use jni::JavaVM;
+
+    let ctx = ndk_context::android_context();
+    let vm =
+        unsafe { JavaVM::from_raw(ctx.vm().cast()) }.map_err(|e| format!("JavaVM: {e}"))?;
+    let mut env = vm
+        .attach_current_thread()
+        .map_err(|e| format!("attach: {e}"))?;
+    let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+
+    let resolver = env
+        .call_method(
+            &context,
+            "getContentResolver",
+            "()Landroid/content/ContentResolver;",
+            &[],
+        )
+        .map_err(|e| format!("resolver: {e}"))?
+        .l()
+        .map_err(|e| format!("resolver l: {e}"))?;
+
+    let uri_class = env
+        .find_class("android/net/Uri")
+        .map_err(|e| format!("Uri: {e}"))?;
+    let uri_j = env
+        .new_string(uri)
+        .map_err(|e| format!("uri str: {e}"))?;
+    let uri_obj = env
+        .call_static_method(
+            uri_class,
+            "parse",
+            "(Ljava/lang/String;)Landroid/net/Uri;",
+            &[JValue::Object(&uri_j)],
+        )
+        .map_err(|e| format!("Uri.parse: {e}"))?
+        .l()
+        .map_err(|e| format!("uri obj: {e}"))?;
+
+    let input = env
+        .call_method(
+            &resolver,
+            "openInputStream",
+            "(Landroid/net/Uri;)Ljava/io/InputStream;",
+            &[JValue::Object(&uri_obj)],
+        )
+        .map_err(|e| format!("openInputStream: {e}"))?
+        .l()
+        .map_err(|e| format!("stream: {e}"))?;
+    if input.is_null() {
+        return Err("openInputStream null (photo not ready?)".into());
+    }
+
+    // Read all bytes via available/read loop into Rust Vec, then write file
+    let mut data: Vec<u8> = Vec::new();
+    let buf = env
+        .new_byte_array(8192)
+        .map_err(|e| format!("byte array: {e}"))?;
+    loop {
+        let n = env
+            .call_method(
+                &input,
+                "read",
+                "([B)I",
+                &[JValue::Object(buf.as_ref())],
+            )
+            .map_err(|e| format!("read: {e}"))?
+            .i()
+            .map_err(|e| format!("read i: {e}"))?;
+        if n <= 0 {
+            break;
+        }
+        let chunk = env
+            .convert_byte_array(&buf)
+            .map_err(|e| format!("convert: {e}"))?;
+        data.extend_from_slice(&chunk[..n as usize]);
+        if data.len() > 25 * 1024 * 1024 {
+            break;
+        }
+    }
+    let _ = env.call_method(&input, "close", "()V", &[]);
+    if data.is_empty() {
+        return Err("empty image stream".into());
+    }
+    if let Some(parent) = std::path::Path::new(dest).parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    std::fs::write(dest, data).map_err(|e| format!("write dest: {e}"))?;
+    Ok(())
+}
+
+#[cfg(target_os = "android")]
+fn publish_file_to_mediastore_android(path: &str) -> Result<String, String> {
+    use jni::objects::{JObject, JValue};
+    use jni::JavaVM;
+
+    let ctx = ndk_context::android_context();
+    let vm =
+        unsafe { JavaVM::from_raw(ctx.vm().cast()) }.map_err(|e| format!("JavaVM: {e}"))?;
+    let mut env = vm
+        .attach_current_thread()
+        .map_err(|e| format!("attach: {e}"))?;
+    let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+
+    let bytes = std::fs::read(path).map_err(|e| format!("read file: {e}"))?;
+    if bytes.is_empty() {
+        return Err("empty image file".into());
+    }
+
+    let resolver = env
+        .call_method(
+            &context,
+            "getContentResolver",
+            "()Landroid/content/ContentResolver;",
+            &[],
+        )
+        .map_err(|e| format!("resolver: {e}"))?
+        .l()
+        .map_err(|e| format!("resolver l: {e}"))?;
+
+    let cv_class = env
+        .find_class("android/content/ContentValues")
+        .map_err(|e| format!("CV: {e}"))?;
+    let cv = env
+        .new_object(&cv_class, "()V", &[])
+        .map_err(|e| format!("new CV: {e}"))?;
+    let stamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+    let name = format!("fixitgarage_ocr_{stamp}.jpg");
+    for (k, v) in [
+        ("_display_name", name.as_str()),
+        ("mime_type", "image/jpeg"),
+        ("relative_path", "Pictures/FixItGarage"),
+    ] {
+        let kj = env.new_string(k).map_err(|e| format!("k: {e}"))?;
+        let vj = env.new_string(v).map_err(|e| format!("v: {e}"))?;
+        env.call_method(
+            &cv,
+            "put",
+            "(Ljava/lang/String;Ljava/lang/String;)V",
+            &[JValue::Object(&kj), JValue::Object(&vj)],
+        )
+        .map_err(|e| format!("put: {e}"))?;
+    }
+
+    let media_class = env
+        .find_class("android/provider/MediaStore$Images$Media")
+        .map_err(|e| format!("Media: {e}"))?;
+    let ext_uri = env
+        .get_static_field(
+            media_class,
+            "EXTERNAL_CONTENT_URI",
+            "Landroid/net/Uri;",
+        )
+        .map_err(|e| format!("EXTERNAL: {e}"))?
+        .l()
+        .map_err(|e| format!("uri: {e}"))?;
+
+    let inserted = env
+        .call_method(
+            &resolver,
+            "insert",
+            "(Landroid/net/Uri;Landroid/content/ContentValues;)Landroid/net/Uri;",
+            &[JValue::Object(&ext_uri), JValue::Object(&cv)],
+        )
+        .map_err(|e| format!("insert: {e}"))?
+        .l()
+        .map_err(|e| format!("inserted: {e}"))?;
+    if inserted.is_null() {
+        return Err("insert null".into());
+    }
+
+    let out_stream = env
+        .call_method(
+            &resolver,
+            "openOutputStream",
+            "(Landroid/net/Uri;)Ljava/io/OutputStream;",
+            &[JValue::Object(&inserted)],
+        )
+        .map_err(|e| format!("openOutputStream: {e}"))?
+        .l()
+        .map_err(|e| format!("ostream: {e}"))?;
+    if out_stream.is_null() {
+        return Err("openOutputStream null".into());
+    }
+
+    let jbytes = env
+        .byte_array_from_slice(&bytes)
+        .map_err(|e| format!("jbytes: {e}"))?;
+    env.call_method(
+        &out_stream,
+        "write",
+        "([B)V",
+        &[JValue::Object(jbytes.as_ref())],
+    )
+    .map_err(|e| format!("write: {e}"))?;
+    let _ = env.call_method(&out_stream, "flush", "()V", &[]);
+    let _ = env.call_method(&out_stream, "close", "()V", &[]);
+
+    let uri_str_j = env
+        .call_method(&inserted, "toString", "()Ljava/lang/String;", &[])
+        .map_err(|e| format!("toString: {e}"))?
+        .l()
+        .map_err(|e| format!("uri str: {e}"))?;
+    let jstr: jni::objects::JString = uri_str_j.into();
+    let s = env
+        .get_string(&jstr)
+        .map_err(|e| format!("get_string: {e}"))?;
+    Ok(s.into())
+}
+
+#[cfg(target_os = "android")]
+fn send_image_uri_to_ocr_android(uri: &str) -> Result<(), String> {
+    use jni::objects::{JObject, JValue};
+    use jni::JavaVM;
+
+    let ctx = ndk_context::android_context();
+    let vm =
+        unsafe { JavaVM::from_raw(ctx.vm().cast()) }.map_err(|e| format!("JavaVM: {e}"))?;
+    let mut env = vm
+        .attach_current_thread()
+        .map_err(|e| format!("attach: {e}"))?;
+    let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+
+    let intent_class = env
+        .find_class("android/content/Intent")
+        .map_err(|e| format!("Intent: {e}"))?;
+    let action = env
+        .new_string("android.intent.action.SEND")
+        .map_err(|e| format!("SEND: {e}"))?;
+    let intent = env
+        .new_object(
+            &intent_class,
+            "(Ljava/lang/String;)V",
+            &[JValue::Object(&action)],
+        )
+        .map_err(|e| format!("new Intent: {e}"))?;
+
+    let mime = env
+        .new_string("image/jpeg")
+        .map_err(|e| format!("mime: {e}"))?;
+    env.call_method(
+        &intent,
+        "setType",
+        "(Ljava/lang/String;)Landroid/content/Intent;",
+        &[JValue::Object(&mime)],
+    )
+    .map_err(|e| format!("setType: {e}"))?;
+
+    let uri_class = env
+        .find_class("android/net/Uri")
+        .map_err(|e| format!("Uri: {e}"))?;
+    let uri_j = env.new_string(uri).map_err(|e| format!("uri: {e}"))?;
+    let uri_obj = env
+        .call_static_method(
+            uri_class,
+            "parse",
+            "(Ljava/lang/String;)Landroid/net/Uri;",
+            &[JValue::Object(&uri_j)],
+        )
+        .map_err(|e| format!("parse: {e}"))?
+        .l()
+        .map_err(|e| format!("uri obj: {e}"))?;
+
+    let stream_key = env
+        .new_string("android.intent.extra.STREAM")
+        .map_err(|e| format!("STREAM: {e}"))?;
+    env.call_method(
+        &intent,
+        "putExtra",
+        "(Ljava/lang/String;Landroid/os/Parcelable;)Landroid/content/Intent;",
+        &[JValue::Object(&stream_key), JValue::Object(&uri_obj)],
+    )
+    .map_err(|e| format!("putExtra STREAM: {e}"))?;
+
+    // FLAG_GRANT_READ_URI_PERMISSION | NEW_TASK
+    env.call_method(
+        &intent,
+        "addFlags",
+        "(I)Landroid/content/Intent;",
+        &[JValue::Int(0x0000_0001 | 0x1000_0000)],
+    )
+    .map_err(|e| format!("flags: {e}"))?;
+
+    // Prefer a known OCR package if installed
+    for pkg in OCR_APP_PACKAGES {
+        let pkg_j = env.new_string(*pkg).map_err(|e| format!("pkg: {e}"))?;
+        // clone intent for setPackage trial
+        let trial = env
+            .call_method(
+                &intent,
+                "setPackage",
+                "(Ljava/lang/String;)Landroid/content/Intent;",
+                &[JValue::Object(&pkg_j)],
+            )
+            .ok();
+        let _ = trial;
+        // Check resolve
+        let pm = env
+            .call_method(
+                &context,
+                "getPackageManager",
+                "()Landroid/content/pm/PackageManager;",
+                &[],
+            )
+            .map_err(|e| format!("pm: {e}"))?
+            .l()
+            .map_err(|e| format!("pm l: {e}"))?;
+        // Prefer simple: setPackage and try start; clear package on failure
+        match env.call_method(
+            &context,
+            "startActivity",
+            "(Landroid/content/Intent;)V",
+            &[JValue::Object(&intent)],
+        ) {
+            Ok(_) => return Ok(()),
+            Err(_) => {
+                // clear package
+                let null_str: JObject = JObject::null();
+                let _ = env.call_method(
+                    &intent,
+                    "setPackage",
+                    "(Ljava/lang/String;)Landroid/content/Intent;",
+                    &[JValue::Object(&null_str)],
+                );
+                let _ = pm;
+            }
+        }
+    }
+
+    // Chooser fallback
+    let title = env
+        .new_string("OCR this receipt")
+        .map_err(|e| format!("title: {e}"))?;
+    let chooser = env
+        .call_static_method(
+            &intent_class,
+            "createChooser",
+            "(Landroid/content/Intent;Ljava/lang/CharSequence;)Landroid/content/Intent;",
+            &[JValue::Object(&intent), JValue::Object(&title)],
+        )
+        .map_err(|e| format!("chooser: {e}"))?
+        .l()
+        .map_err(|e| format!("chooser l: {e}"))?;
+    env.call_method(
+        &chooser,
+        "addFlags",
+        "(I)Landroid/content/Intent;",
+        &[JValue::Int(0x1000_0000)],
+    )
+    .map_err(|e| format!("chooser flags: {e}"))?;
+    env.call_method(
+        &context,
+        "startActivity",
+        "(Landroid/content/Intent;)V",
+        &[JValue::Object(&chooser)],
+    )
+    .map_err(|e| format!("start chooser: {e}"))?;
     Ok(())
 }
 
