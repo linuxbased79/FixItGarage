@@ -260,6 +260,10 @@ export component MainWindow inherits Window {
     in-out property <string> tread-fr: "";
     in-out property <string> tread-rl: "";
     in-out property <string> tread-rr: "";
+    in-out property <string> tread-warning: "No tread measurement yet.";
+    in-out property <bool> has-low-tread: false;
+    in-out property <string> backup-path: "";
+    in-out property <string> rcp-photo-path: "";
 
     in-out property <string> status-message: "";
     in-out property <string> csv-preview: "";
@@ -291,6 +295,11 @@ export component MainWindow inherits Window {
     callback delete-note(int);
     callback save-tread();
     callback export-csv();
+    callback share-csv();
+    callback backup-json();
+    callback restore-json();
+    callback share-backup();
+    callback capture-receipt-photo();
     callback open-feedback();
     callback open-donate();
 
@@ -336,6 +345,11 @@ export component MainWindow inherits Window {
                         title: "Due reminders";
                         body: due-reminders-banner;
                         Button { text: "Open reminders"; primary: true; clicked => { root.navigate(11); } }
+                    }
+                    if has-low-tread: Card {
+                        title: "Tread warning";
+                        body: tread-warning;
+                        Button { text: "Open tires"; primary: true; clicked => { root.navigate(3); } }
                     }
                     Card {
                         title: "Last service"; body: "";
@@ -467,7 +481,11 @@ export component MainWindow inherits Window {
                         title: "Tread depth (mm)";
                         body: tread-summary;
                         Text {
-                            text: "Measure each tire (or estimate). Camera assist is planned.";
+                            text: tread-warning;
+                            font-size: 13px; font-weight: 600; color: Theme.ok; wrap: word-wrap;
+                        }
+                        Text {
+                            text: "Legal wear limit is usually 1.6 mm (2/32\"). Enter depth per corner.";
                             font-size: 12px; color: Theme.text-muted; wrap: word-wrap;
                         }
                         HorizontalBox {
@@ -558,8 +576,13 @@ export component MainWindow inherits Window {
                         Button { text: "Receipt log"; clicked => { root.navigate(13); } }
                     }
                     Card {
-                        title: "Data"; body: "Local-first. Cloud backup planned.";
+                        title: "Data & backup"; body: "Local-first. Full JSON backup for restore or Nextcloud/USB copy.";
                         Button { text: "Export CSV"; primary: true; clicked => { root.export-csv(); } }
+                        Button { text: "Share CSV"; clicked => { root.share-csv(); } }
+                        Button { text: "Create JSON backup"; clicked => { root.backup-json(); } }
+                        Button { text: "Share backup JSON"; clicked => { root.share-backup(); } }
+                        LineEdit { placeholder-text: "Backup file path to restore"; text <=> root.backup-path; }
+                        Button { text: "Restore from path"; clicked => { root.restore-json(); } }
                         if csv-preview != "": Text { text: csv-preview; font-size: 11px; color: Theme.mono; wrap: word-wrap; font-family: "monospace"; }
                     }
                     Card {
@@ -567,7 +590,7 @@ export component MainWindow inherits Window {
                         Button { text: "Donate"; clicked => { root.open-donate(); } }
                         Button { text: "Send feedback (GitHub Issues)"; clicked => { root.open-feedback(); } }
                     }
-                    Card { title: "About"; body: "FixItGarage 0.1.2 — Rust + Slint. Receipts, photos, tread, export."; }
+                    Card { title: "About"; body: "FixItGarage 0.2.0 — backup/restore, share, tread warnings, multi-vehicle trackers."; }
                     if status-message != "": Text { text: status-message; color: Theme.ok; wrap: word-wrap; }
                 }
             }
@@ -849,6 +872,11 @@ export component MainWindow inherits Window {
                     }
                     Card {
                         title: "Receipt fields"; body: "Saves into maintenance history for this vehicle.";
+                        Button { text: "Take receipt photo"; clicked => { root.capture-receipt-photo(); } }
+                        Text {
+                            text: rcp-photo-path == "" ? "No photo yet (OCR later)" : ("Photo: " + rcp-photo-path);
+                            font-size: 12px; color: Theme.text-soft; wrap: word-wrap;
+                        }
                         LineEdit { placeholder-text: "Title (e.g. Oil change shop)"; text <=> root.rcp-title; }
                         LineEdit { placeholder-text: "Date YYYY-MM-DD"; text <=> root.rcp-date; }
                         LineEdit { placeholder-text: "Mileage"; text <=> root.rcp-mileage; }

@@ -4,7 +4,7 @@ mod platform;
 mod state;
 
 use chrono::{TimeZone, Utc};
-use platform::{capture_issue_photo_path, open_url};
+use platform::{capture_issue_photo_path, open_url, share_text};
 use state::{reminder_status_line, AppState};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -512,6 +512,96 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         });
     }
 
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_share_csv(move || {
+            let s = state.borrow();
+            let csv = s.export_csv();
+            share_text("FixItGarage CSV export", &csv);
+            if let Some(ui) = ui_weak.upgrade() {
+                ui.set_status_message("Share sheet opened (or file saved).".into());
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_backup_json(move || {
+            let s = state.borrow();
+            match s.write_backup_file() {
+                Ok(path) => {
+                    if let Some(ui) = ui_weak.upgrade() {
+                        ui.set_backup_path(path.display().to_string().into());
+                        ui.set_status_message(format!("Backup written: {}", path.display()).into());
+                        refresh_ui(&ui, &s);
+                    }
+                }
+                Err(e) => {
+                    if let Some(ui) = ui_weak.upgrade() {
+                        ui.set_status_message(format!("Backup failed: {e}").into());
+                    }
+                }
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_restore_json(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let path = ui.get_backup_path().to_string();
+                match AppState::restore_from_file(&path) {
+                    Ok(new_state) => {
+                        *state.borrow_mut() = new_state;
+                        ui.set_status_message("Backup restored.".into());
+                        refresh_ui(&ui, &state.borrow());
+                    }
+                    Err(e) => {
+                        ui.set_status_message(format!("Restore failed: {e}").into());
+                    }
+                }
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_share_backup(move || {
+            let s = state.borrow();
+            match s.write_backup_file() {
+                Ok(path) => {
+                    if let Ok(json) = std::fs::read_to_string(&path) {
+                        share_text("FixItGarage backup", &json);
+                    }
+                    if let Some(ui) = ui_weak.upgrade() {
+                        ui.set_backup_path(path.display().to_string().into());
+                        ui.set_status_message("Backup shared / saved.".into());
+                    }
+                }
+                Err(e) => {
+                    if let Some(ui) = ui_weak.upgrade() {
+                        ui.set_status_message(format!("Share backup failed: {e}").into());
+                    }
+                }
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        ui.on_capture_receipt_photo(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let path = capture_issue_photo_path();
+                ui.set_rcp_photo_path(path.into());
+                ui.set_status_message("Camera opened for receipt (OCR fill-in still manual).".into());
+            }
+        });
+    }
+
     ui.on_open_feedback(|| {
         open_url("https://github.com/linuxbased79/FixItGarage/issues");
     });
@@ -769,6 +859,8 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     ui.set_due_reminders_banner(state.due_reminders_summary().into());
     ui.set_has_due_reminders(state.has_due_reminders());
     ui.set_tread_summary(state.tread_summary().into());
+    ui.set_tread_warning(state.tread_warning().into());
+    ui.set_has_low_tread(state.has_low_tread());
     let t = state.tread_for_selected();
     ui.set_tread_fl(t.fl.map(|v| format!("{v}")).unwrap_or_default().into());
     ui.set_tread_fr(t.fr.map(|v| format!("{v}")).unwrap_or_default().into());

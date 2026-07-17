@@ -297,6 +297,7 @@ impl AppState {
         if let Ok(bytes) = std::fs::read(&path) {
             if let Ok(mut state) = serde_json::from_slice::<AppState>(&bytes) {
                 state.ensure_selection();
+                state.ensure_oil_reminders();
                 return state;
             }
         }
@@ -676,6 +677,90 @@ impl AppState {
         self.open_reminders_for_selected().into_iter().any(|r| {
             is_due_by_date(r.due_epoch_ms, now) || is_due_by_mileage(r.due_mileage, mileage)
         })
+    }
+
+    /// US/EU common legal minimum for passenger tires (~2/32" ≈ 1.6 mm).
+    pub const TREAD_MIN_MM: f64 = 1.6;
+
+    pub fn tread_warning(&self) -> String {
+        let t = self.tread_for_selected();
+        let mut low = Vec::new();
+        let check = |label: &str, v: Option<f64>| {
+            if let Some(mm) = v {
+                if mm < Self::TREAD_MIN_MM {
+                    low.push(format!("{label} {mm:.1} mm"));
+                }
+            }
+        };
+        check("FL", t.fl);
+        check("FR", t.fr);
+        check("RL", t.rl);
+        check("RR", t.rr);
+        if low.is_empty() {
+            if t.measured_epoch_ms.is_none() {
+                "No tread measurement yet. Legal minimum is usually 1.6 mm (2/32\").".into()
+            } else {
+                "All measured corners are at or above 1.6 mm.".into()
+            }
+        } else {
+            format!(
+                "⚠ Below 1.6 mm (replace soon): {}",
+                low.join(", ")
+            )
+        }
+    }
+
+    pub fn has_low_tread(&self) -> bool {
+        let t = self.tread_for_selected();
+        [t.fl, t.fr, t.rl, t.rr]
+            .into_iter()
+            .flatten()
+            .any(|mm| mm < Self::TREAD_MIN_MM)
+    }
+
+    /// Write full app state JSON backup. Returns path written.
+    pub fn write_backup_file(&self) -> Result<PathBuf, String> {
+        let dir = Self::data_path()
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("."));
+        let _ = std::fs::create_dir_all(&dir);
+        let stamp = Utc::now().format("%Y%m%d-%H%M%S");
+        let path = dir.join(format!("fixitgarage-backup-{stamp}.json"));
+        let json = serde_json::to_vec_pretty(self).map_err(|e| e.to_string())?;
+        std::fs::write(&path, json).map_err(|e| e.to_string())?;
+        Ok(path)
+    }
+
+    /// Restore state from a backup JSON file path.
+    pub fn restore_from_file(path: &str) -> Result<Self, String> {
+        let bytes = std::fs::read(path.trim()).map_err(|e| format!("read: {e}"))?;
+        let mut state: AppState =
+            serde_json::from_slice(&bytes).map_err(|e| format!("parse: {e}"))?;
+        state.ensure_selection();
+        state.ensure_oil_reminders();
+        state.save();
+        Ok(state)
+    }
+
+    /// Ensure every vehicle has an open oil-level reminder (for older data).
+    pub fn ensure_oil_reminders(&mut self) {
+        let mut changed = false;
+        for v in self.vehicles.clone() {
+            let has_open = self.reminders.iter().any(|r| {
+                r.vehicle_id == v.id
+                    && !r.completed
+                    && r.title.to_lowercase().contains("oil level")
+            });
+            if !has_open {
+                let due = oil_level_due_after(Utc::now().timestamp_millis());
+                self.add_reminder_raw(v.id, "Oil level check".into(), Some(due), None);
+                changed = true;
+            }
+        }
+        if changed {
+            self.save();
+        }
     }
 
     pub fn add_vehicle(
