@@ -8,6 +8,7 @@ android:
     uses_permission:
       - name: android.permission.INTERNET
       - name: android.permission.CAMERA
+      - name: android.permission.POST_NOTIFICATIONS
     application:
       label: FixItGarage
       has_code: false

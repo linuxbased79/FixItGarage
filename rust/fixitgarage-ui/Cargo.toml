@@ -31,6 +31,9 @@ serde_json = { workspace = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
 dirs = "6"
+regex = "1"
+# Blocking HTTP for WebDAV/Nextcloud backup (TLS via rustls, no OpenSSL)
+ureq = { version = "2", default-features = false, features = ["tls"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"
@@ -58,4 +61,7 @@ name = "android.permission.INTERNET"
 
 [[package.metadata.android.uses_permission]]
 name = "android.permission.CAMERA"
+
+[[package.metadata.android.uses_permission]]
+name = "android.permission.POST_NOTIFICATIONS"
 

@@ -58,6 +58,13 @@ pub struct AppState {
     /// Tread depth in mm per corner, per vehicle (manual or future camera).
     #[serde(default)]
     pub tread_by_vehicle: Vec<VehicleTread>,
+    /// Optional Nextcloud/ownCloud/WebDAV backup (local-first; cloud is opt-in).
+    #[serde(default)]
+    pub cloud_webdav_url: String,
+    #[serde(default)]
+    pub cloud_username: String,
+    #[serde(default)]
+    pub cloud_password: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
@@ -271,6 +278,9 @@ impl Default for AppState {
             },
             tire_pattern: "forward_cross".into(),
             tread_by_vehicle: Vec::new(),
+            cloud_webdav_url: String::new(),
+            cloud_username: String::new(),
+            cloud_password: String::new(),
         }
     }
 }
@@ -569,6 +579,40 @@ impl AppState {
             v.current_mileage = mileage;
             self.save();
         }
+    }
+
+    pub fn update_selected_vehicle_details(
+        &mut self,
+        name: String,
+        make: String,
+        model: String,
+        year: Option<u16>,
+        mileage: Option<u32>,
+    ) {
+        let Some(id) = self.selected_vehicle_id else {
+            return;
+        };
+        if let Some(v) = self.vehicles.iter_mut().find(|v| v.id == id) {
+            if !name.trim().is_empty() {
+                v.name = name.trim().into();
+            }
+            v.make = make.trim().into();
+            v.model = model.trim().into();
+            if year.is_some() {
+                v.year = year;
+            }
+            if let Some(m) = mileage {
+                v.current_mileage = m;
+            }
+            self.save();
+        }
+    }
+
+    pub fn set_cloud_settings(&mut self, url: String, user: String, pass: String) {
+        self.cloud_webdav_url = url.trim().into();
+        self.cloud_username = user.trim().into();
+        self.cloud_password = pass; // stored only on device in state.json
+        self.save();
     }
 
     pub fn delete_vehicle(&mut self, id: u64) {

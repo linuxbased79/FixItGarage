@@ -1,10 +1,13 @@
 //! FixItGarage Slint UI — shared library for desktop binary and Android cdylib.
 
 mod platform;
+mod receipt_parse;
 mod state;
+mod webdav;
 
 use chrono::{TimeZone, Utc};
-use platform::{capture_issue_photo_path, open_url, share_text};
+use platform::{capture_issue_photo_path, notify, open_url, share_text};
+use receipt_parse::parse_receipt_text;
 use state::{reminder_status_line, AppState};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -24,6 +27,13 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
     let state = Rc::new(RefCell::new(AppState::load()));
 
     refresh_ui(&ui, &state.borrow());
+    // Notify if anything is due for the selected vehicle
+    {
+        let s = state.borrow();
+        if s.has_due_reminders() {
+            notify("FixItGarage", &s.due_reminders_summary());
+        }
+    }
 
     {
         let ui_weak = ui.as_weak();
@@ -58,6 +68,15 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
             let mut s = state.borrow_mut();
             s.select_vehicle(id as u64);
             if let Some(ui) = ui_weak.upgrade() {
+                if let Some(v) = s.selected_vehicle() {
+                    ui.set_form_name(v.name.clone().into());
+                    ui.set_form_make(v.make.clone().into());
+                    ui.set_form_model(v.model.clone().into());
+                    ui.set_form_year(
+                        v.year.map(|y| y.to_string()).unwrap_or_default().into(),
+                    );
+                    ui.set_form_mileage(v.current_mileage.to_string().into());
+                }
                 refresh_ui(&ui, &s);
             }
         });
@@ -99,6 +118,25 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                 let mileage = ui.get_form_mileage().parse().unwrap_or(0);
                 s.update_vehicle_mileage(id, mileage);
                 ui.set_status_message(format!("Mileage updated to {mileage}.").into());
+                refresh_ui(&ui, &s);
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_update_selected_vehicle(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let mut s = state.borrow_mut();
+                s.update_selected_vehicle_details(
+                    ui.get_form_name().to_string(),
+                    ui.get_form_make().to_string(),
+                    ui.get_form_model().to_string(),
+                    ui.get_form_year().parse().ok(),
+                    ui.get_form_mileage().parse().ok(),
+                );
+                ui.set_status_message("Vehicle details updated.".into());
                 refresh_ui(&ui, &s);
             }
         });
@@ -597,7 +635,99 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
             if let Some(ui) = ui_weak.upgrade() {
                 let path = capture_issue_photo_path();
                 ui.set_rcp_photo_path(path.into());
-                ui.set_status_message("Camera opened for receipt (OCR fill-in still manual).".into());
+                ui.set_status_message("Camera opened for receipt (paste OCR text to auto-fill).".into());
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        ui.on_parse_receipt_text(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let text = ui.get_rcp_paste().to_string();
+                let p = parse_receipt_text(&text);
+                let mut filled = 0u32;
+                if let Some(d) = p.date {
+                    ui.set_rcp_date(d.into());
+                    filled += 1;
+                }
+                if let Some(m) = p.mileage {
+                    ui.set_rcp_mileage(m.to_string().into());
+                    filled += 1;
+                }
+                if let Some(g) = p.gallons {
+                    ui.set_rcp_gallons(g.to_string().into());
+                    filled += 1;
+                }
+                if let Some(v) = p.parts_cost {
+                    ui.set_rcp_parts(format!("{v:.2}").into());
+                    filled += 1;
+                }
+                if let Some(v) = p.labor_cost {
+                    ui.set_rcp_labor(format!("{v:.2}").into());
+                    filled += 1;
+                }
+                if let Some(v) = p.fuel_cost {
+                    ui.set_rcp_fuel(format!("{v:.2}").into());
+                    filled += 1;
+                }
+                if let Some(s) = p.shop_name {
+                    ui.set_rcp_shop(s.into());
+                    filled += 1;
+                }
+                if ui.get_rcp_title().is_empty() {
+                    ui.set_rcp_title("Receipt import".into());
+                }
+                ui.set_status_message(format!("Parsed {filled} field(s) from text. Review and save.").into());
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_save_cloud_settings(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let mut s = state.borrow_mut();
+                s.set_cloud_settings(
+                    ui.get_cloud_url().to_string(),
+                    ui.get_cloud_user().to_string(),
+                    ui.get_cloud_pass().to_string(),
+                );
+                ui.set_status_message("Cloud settings saved on device.".into());
+                refresh_ui(&ui, &s);
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_upload_cloud_backup(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let s = state.borrow();
+                match s.write_backup_file() {
+                    Ok(path) => match std::fs::read(&path) {
+                        Ok(bytes) => {
+                            let name = path
+                                .file_name()
+                                .and_then(|n| n.to_str())
+                                .unwrap_or("fixitgarage-backup.json");
+                            match webdav::upload_backup(
+                                &s.cloud_webdav_url,
+                                &s.cloud_username,
+                                &s.cloud_password,
+                                name,
+                                &bytes,
+                            ) {
+                                Ok(msg) => ui.set_status_message(msg.into()),
+                                Err(e) => ui.set_status_message(format!("Cloud upload failed: {e}").into()),
+                            }
+                        }
+                        Err(e) => ui.set_status_message(format!("Read backup failed: {e}").into()),
+                    },
+                    Err(e) => ui.set_status_message(format!("Backup failed: {e}").into()),
+                }
             }
         });
     }
@@ -861,6 +991,12 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     ui.set_tread_summary(state.tread_summary().into());
     ui.set_tread_warning(state.tread_warning().into());
     ui.set_has_low_tread(state.has_low_tread());
+    ui.set_cloud_url(state.cloud_webdav_url.clone().into());
+    ui.set_cloud_user(state.cloud_username.clone().into());
+    // Do not push password into UI on every refresh if user is typing — only seed when empty
+    if ui.get_cloud_pass().is_empty() && !state.cloud_password.is_empty() {
+        ui.set_cloud_pass(state.cloud_password.clone().into());
+    }
     let t = state.tread_for_selected();
     ui.set_tread_fl(t.fl.map(|v| format!("{v}")).unwrap_or_default().into());
     ui.set_tread_fr(t.fr.map(|v| format!("{v}")).unwrap_or_default().into());

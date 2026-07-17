@@ -264,6 +264,10 @@ export component MainWindow inherits Window {
     in-out property <bool> has-low-tread: false;
     in-out property <string> backup-path: "";
     in-out property <string> rcp-photo-path: "";
+    in-out property <string> rcp-paste: "";
+    in-out property <string> cloud-url: "";
+    in-out property <string> cloud-user: "";
+    in-out property <string> cloud-pass: "";
 
     in-out property <string> status-message: "";
     in-out property <string> csv-preview: "";
@@ -300,6 +304,10 @@ export component MainWindow inherits Window {
     callback restore-json();
     callback share-backup();
     callback capture-receipt-photo();
+    callback parse-receipt-text();
+    callback save-cloud-settings();
+    callback upload-cloud-backup();
+    callback update-selected-vehicle();
     callback open-feedback();
     callback open-donate();
 
@@ -395,10 +403,17 @@ export component MainWindow inherits Window {
                         Button { text: "Save vehicle"; primary: true; clicked => { root.add-vehicle(); } }
                     }
                     Card {
-                        title: "Selected vehicle tools";
-                        body: "Update mileage for " + selected-vehicle-label;
-                        LineEdit { placeholder-text: "Current mileage"; text <=> root.form-mileage; }
-                        Button { text: "Update mileage"; primary: true; clicked => { root.update-selected-mileage(); } }
+                        title: "Edit selected vehicle";
+                        body: selected-vehicle-label;
+                        LineEdit { placeholder-text: "Name / nickname"; text <=> root.form-name; }
+                        LineEdit { placeholder-text: "Make"; text <=> root.form-make; }
+                        LineEdit { placeholder-text: "Model"; text <=> root.form-model; }
+                        HorizontalBox {
+                            LineEdit { placeholder-text: "Year"; text <=> root.form-year; horizontal-stretch: 1; }
+                            LineEdit { placeholder-text: "Mileage"; text <=> root.form-mileage; horizontal-stretch: 1; }
+                        }
+                        Button { text: "Save changes"; primary: true; clicked => { root.update-selected-vehicle(); } }
+                        Button { text: "Update mileage only"; clicked => { root.update-selected-mileage(); } }
                         Button { text: "Delete selected vehicle"; clicked => { root.delete-selected-vehicle(); } }
                     }
                     for v in vehicles: TouchArea {
@@ -586,11 +601,20 @@ export component MainWindow inherits Window {
                         if csv-preview != "": Text { text: csv-preview; font-size: 11px; color: Theme.mono; wrap: word-wrap; font-family: "monospace"; }
                     }
                     Card {
+                        title: "Optional cloud (WebDAV / Nextcloud)";
+                        body: "Example: https://cloud.example/remote.php/dav/files/USER/FixItGarage/  — password stored only on this device.";
+                        LineEdit { placeholder-text: "WebDAV folder URL"; text <=> root.cloud-url; }
+                        LineEdit { placeholder-text: "Username"; text <=> root.cloud-user; }
+                        LineEdit { placeholder-text: "App password / password"; text <=> root.cloud-pass; }
+                        Button { text: "Save cloud settings"; clicked => { root.save-cloud-settings(); } }
+                        Button { text: "Upload backup now"; primary: true; clicked => { root.upload-cloud-backup(); } }
+                    }
+                    Card {
                         title: "Support"; body: "GPL-3.0 · GrapheneOS friendly";
                         Button { text: "Donate"; clicked => { root.open-donate(); } }
                         Button { text: "Send feedback (GitHub Issues)"; clicked => { root.open-feedback(); } }
                     }
-                    Card { title: "About"; body: "FixItGarage 0.2.0 — backup/restore, share, tread warnings, multi-vehicle trackers."; }
+                    Card { title: "About"; body: "FixItGarage 0.2.1 — notifications, WebDAV backup, receipt text parse, edit vehicle."; }
                     if status-message != "": Text { text: status-message; color: Theme.ok; wrap: word-wrap; }
                 }
             }
@@ -874,9 +898,11 @@ export component MainWindow inherits Window {
                         title: "Receipt fields"; body: "Saves into maintenance history for this vehicle.";
                         Button { text: "Take receipt photo"; clicked => { root.capture-receipt-photo(); } }
                         Text {
-                            text: rcp-photo-path == "" ? "No photo yet (OCR later)" : ("Photo: " + rcp-photo-path);
+                            text: rcp-photo-path == "" ? "No photo yet" : ("Photo: " + rcp-photo-path);
                             font-size: 12px; color: Theme.text-soft; wrap: word-wrap;
                         }
+                        LineEdit { placeholder-text: "Paste receipt text (from OCR app or email)"; text <=> root.rcp-paste; }
+                        Button { text: "Auto-fill from pasted text"; clicked => { root.parse-receipt-text(); } }
                         LineEdit { placeholder-text: "Title (e.g. Oil change shop)"; text <=> root.rcp-title; }
                         LineEdit { placeholder-text: "Date YYYY-MM-DD"; text <=> root.rcp-date; }
                         LineEdit { placeholder-text: "Mileage"; text <=> root.rcp-mileage; }

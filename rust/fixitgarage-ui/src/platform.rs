@@ -312,3 +312,139 @@ fn share_text_android(subject: &str, text: &str) -> Result<(), String> {
 
     Ok(())
 }
+
+/// Show a system notification (Android) or log (desktop).
+pub fn notify(title: &str, body: &str) {
+    #[cfg(target_os = "android")]
+    {
+        if let Err(e) = notify_android(title, body) {
+            eprintln!("notify failed: {e}");
+        }
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        eprintln!("NOTIFY: {title} — {body}");
+    }
+}
+
+#[cfg(target_os = "android")]
+fn notify_android(title: &str, body: &str) -> Result<(), String> {
+    use jni::objects::{JObject, JValue};
+    use jni::sys::jint;
+    use jni::JavaVM;
+
+    let ctx = ndk_context::android_context();
+    let vm =
+        unsafe { JavaVM::from_raw(ctx.vm().cast()) }.map_err(|e| format!("JavaVM: {e}"))?;
+    let mut env = vm
+        .attach_current_thread()
+        .map_err(|e| format!("attach: {e}"))?;
+    let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+
+    // NotificationManager
+    let notif_service = env
+        .new_string("notification")
+        .map_err(|e| format!("svc str: {e}"))?;
+    let nm_obj = env
+        .call_method(
+            &context,
+            "getSystemService",
+            "(Ljava/lang/String;)Ljava/lang/Object;",
+            &[JValue::Object(&notif_service)],
+        )
+        .map_err(|e| format!("getSystemService: {e}"))?
+        .l()
+        .map_err(|e| format!("nm obj: {e}"))?;
+
+    // Channel for API 26+
+    let channel_id = env
+        .new_string("fixitgarage_reminders")
+        .map_err(|e| format!("channel id: {e}"))?;
+    let channel_name = env
+        .new_string("FixItGarage reminders")
+        .map_err(|e| format!("channel name: {e}"))?;
+    // IMPORTANCE_DEFAULT = 3
+    let channel_class = env
+        .find_class("android/app/NotificationChannel")
+        .map_err(|e| format!("NotificationChannel: {e}"))?;
+    let channel = env
+        .new_object(
+            &channel_class,
+            "(Ljava/lang/String;Ljava/lang/CharSequence;I)V",
+            &[
+                JValue::Object(&channel_id),
+                JValue::Object(&channel_name),
+                JValue::Int(3),
+            ],
+        )
+        .map_err(|e| format!("new channel: {e}"))?;
+    let _ = env.call_method(
+        &nm_obj,
+        "createNotificationChannel",
+        "(Landroid/app/NotificationChannel;)V",
+        &[JValue::Object(&channel)],
+    );
+
+    // Builder
+    let builder_class = env
+        .find_class("android/app/Notification$Builder")
+        .map_err(|e| format!("Builder: {e}"))?;
+    // Notification.Builder(Context, String) API 26+
+    let builder = env
+        .new_object(
+            &builder_class,
+            "(Landroid/content/Context;Ljava/lang/String;)V",
+            &[JValue::Object(&context), JValue::Object(&channel_id)],
+        )
+        .map_err(|e| format!("new Builder: {e}"))?;
+
+    let title_j = env.new_string(title).map_err(|e| format!("title: {e}"))?;
+    let body_j = env.new_string(body).map_err(|e| format!("body: {e}"))?;
+    env.call_method(
+        &builder,
+        "setContentTitle",
+        "(Ljava/lang/CharSequence;)Landroid/app/Notification$Builder;",
+        &[JValue::Object(&title_j)],
+    )
+    .map_err(|e| format!("setContentTitle: {e}"))?;
+    env.call_method(
+        &builder,
+        "setContentText",
+        "(Ljava/lang/CharSequence;)Landroid/app/Notification$Builder;",
+        &[JValue::Object(&body_j)],
+    )
+    .map_err(|e| format!("setContentText: {e}"))?;
+    // android.R.drawable.ic_dialog_info = 17301659
+    env.call_method(
+        &builder,
+        "setSmallIcon",
+        "(I)Landroid/app/Notification$Builder;",
+        &[JValue::Int(17301659)],
+    )
+    .map_err(|e| format!("setSmallIcon: {e}"))?;
+    env.call_method(
+        &builder,
+        "setAutoCancel",
+        "(Z)Landroid/app/Notification$Builder;",
+        &[JValue::Bool(1)],
+    )
+    .map_err(|e| format!("setAutoCancel: {e}"))?;
+
+    let notification = env
+        .call_method(&builder, "build", "()Landroid/app/Notification;", &[])
+        .map_err(|e| format!("build: {e}"))?
+        .l()
+        .map_err(|e| format!("notif: {e}"))?;
+
+    // notify(id, notification)
+    let id: jint = 42001;
+    env.call_method(
+        &nm_obj,
+        "notify",
+        "(ILandroid/app/Notification;)V",
+        &[JValue::Int(id), JValue::Object(&notification)],
+    )
+    .map_err(|e| format!("notify: {e}"))?;
+
+    Ok(())
+}
