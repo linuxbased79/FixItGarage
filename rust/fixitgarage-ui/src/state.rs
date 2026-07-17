@@ -58,6 +58,9 @@ pub struct AppState {
     /// Tread depth in mm per corner, per vehicle (manual or future camera).
     #[serde(default)]
     pub tread_by_vehicle: Vec<VehicleTread>,
+    /// Odometer reading "on this tire" per corner (spec: mileage per tire).
+    #[serde(default)]
+    pub tire_mileage_by_vehicle: Vec<VehicleTireMileage>,
     /// Optional Nextcloud/ownCloud/WebDAV backup (local-first; cloud is opt-in).
     #[serde(default)]
     pub cloud_webdav_url: String,
@@ -80,6 +83,20 @@ pub struct TreadDepths {
 pub struct VehicleTread {
     pub vehicle_id: u64,
     pub depths: TreadDepths,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+pub struct TireCornerMiles {
+    pub fl: Option<u32>,
+    pub fr: Option<u32>,
+    pub rl: Option<u32>,
+    pub rr: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct VehicleTireMileage {
+    pub vehicle_id: u64,
+    pub miles: TireCornerMiles,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -278,6 +295,7 @@ impl Default for AppState {
             },
             tire_pattern: "forward_cross".into(),
             tread_by_vehicle: Vec::new(),
+            tire_mileage_by_vehicle: Vec::new(),
             cloud_webdav_url: String::new(),
             cloud_username: String::new(),
             cloud_password: String::new(),
@@ -701,6 +719,7 @@ impl AppState {
         self.tire_purchases.retain(|t| t.vehicle_id != id);
         self.tire_rotations.retain(|t| t.vehicle_id != id);
         self.tread_by_vehicle.retain(|t| t.vehicle_id != id);
+        self.tire_mileage_by_vehicle.retain(|t| t.vehicle_id != id);
         if self.selected_vehicle_id == Some(id) {
             self.selected_vehicle_id = self.vehicles.first().map(|v| v.id);
         }
@@ -1128,6 +1147,7 @@ impl AppState {
         };
         let installed = parse_date_to_epoch(installed_date_str)
             .or_else(|| Some(Utc::now().timestamp_millis()));
+        let ctype = component_type.clone();
         if let Some(existing) = self
             .components
             .iter_mut()
@@ -1148,7 +1168,129 @@ impl AppState {
                 notes,
             });
         }
+        // Spec: smart reminders for brakes/battery/wipers by date + mileage
+        self.schedule_component_reminder(vid, &ctype, installed, mileage);
         self.save();
+    }
+
+    fn schedule_component_reminder(
+        &mut self,
+        vehicle_id: u64,
+        component_type: &str,
+        installed_epoch_ms: Option<i64>,
+        installed_mileage: Option<u32>,
+    ) {
+        let (title, due_date, due_mi): (String, Option<i64>, Option<u32>) = match component_type {
+            "BATTERY" => (
+                "Replace battery".into(),
+                installed_epoch_ms.map(|ms| add_months_approx(ms, 48)), // ~4 years
+                None,
+            ),
+            "BRAKE_PADS_FRONT" => (
+                "Front brake pads service".into(),
+                installed_epoch_ms.map(|ms| add_months_approx(ms, 24)),
+                installed_mileage.map(|m| m.saturating_add(30_000)),
+            ),
+            "BRAKE_PADS_REAR" => (
+                "Rear brake pads service".into(),
+                installed_epoch_ms.map(|ms| add_months_approx(ms, 24)),
+                installed_mileage.map(|m| m.saturating_add(30_000)),
+            ),
+            "BRAKE_FLUID" => (
+                "Brake fluid flush".into(),
+                installed_epoch_ms.map(|ms| add_months_approx(ms, 24)),
+                None,
+            ),
+            "WIPER_DRIVER" | "WIPER_PASSENGER" | "WIPER_REAR" | "WIPER_FRONT" => (
+                format!("Replace {component_type} blades").replace('_', " "),
+                installed_epoch_ms.map(|ms| add_months_approx(ms, 12)),
+                None,
+            ),
+            _ => return,
+        };
+        // Replace prior open reminder with same title for this vehicle
+        self.reminders.retain(|r| {
+            !(r.vehicle_id == vehicle_id && !r.completed && r.title == title)
+        });
+        self.add_reminder_raw(vehicle_id, title, due_date, due_mi);
+    }
+
+    pub fn battery_age_warning(&self) -> String {
+        let Some(vid) = self.selected_vehicle_id else {
+            return String::new();
+        };
+        let Some(c) = self
+            .components
+            .iter()
+            .find(|c| c.vehicle_id == vid && c.component_type == "BATTERY")
+        else {
+            return "No battery install date logged.".into();
+        };
+        let Some(ms) = c.installed_epoch_ms else {
+            return "Battery age unknown.".into();
+        };
+        let age_days = (Utc::now().timestamp_millis() - ms) / (86_400_000);
+        let years = age_days as f64 / 365.25;
+        if years >= 4.0 {
+            format!("⚠ Battery ~{years:.1} years old — plan replacement soon.")
+        } else if years >= 3.0 {
+            format!("Battery age ~{years:.1} years — monitor starting performance.")
+        } else {
+            format!("Battery age ~{years:.1} years.")
+        }
+    }
+
+    pub fn has_old_battery(&self) -> bool {
+        self.battery_age_warning().contains('⚠')
+    }
+
+    pub fn set_tire_corner_miles(
+        &mut self,
+        fl: Option<u32>,
+        fr: Option<u32>,
+        rl: Option<u32>,
+        rr: Option<u32>,
+    ) {
+        let Some(vid) = self.selected_vehicle_id else {
+            return;
+        };
+        let miles = TireCornerMiles { fl, fr, rl, rr };
+        if let Some(slot) = self
+            .tire_mileage_by_vehicle
+            .iter_mut()
+            .find(|t| t.vehicle_id == vid)
+        {
+            slot.miles = miles;
+        } else {
+            self.tire_mileage_by_vehicle.push(VehicleTireMileage {
+                vehicle_id: vid,
+                miles,
+            });
+        }
+        self.save();
+    }
+
+    pub fn tire_miles_for_selected(&self) -> TireCornerMiles {
+        let Some(vid) = self.selected_vehicle_id else {
+            return TireCornerMiles::default();
+        };
+        self.tire_mileage_by_vehicle
+            .iter()
+            .find(|t| t.vehicle_id == vid)
+            .map(|t| t.miles.clone())
+            .unwrap_or_default()
+    }
+
+    pub fn tire_miles_summary(&self) -> String {
+        let m = self.tire_miles_for_selected();
+        let f = |v: Option<u32>| v.map(|x| format!("{x} mi")).unwrap_or_else(|| "—".into());
+        format!(
+            "FL {} · FR {} · RL {} · RR {}",
+            f(m.fl),
+            f(m.fr),
+            f(m.rl),
+            f(m.rr)
+        )
     }
 
     pub fn add_note(&mut self, title: String, body: String) {
@@ -1381,6 +1523,12 @@ fn csv_esc(value: &str) -> String {
     } else {
         value.to_string()
     }
+}
+
+/// Approximate calendar months (30.44 days) for reminder scheduling.
+fn add_months_approx(epoch_ms: i64, months: i32) -> i64 {
+    let days = (f64::from(months) * 30.44) as i64;
+    epoch_ms + days * 86_400_000
 }
 
 pub fn reminder_status_line(r: &ReminderEntry, current_mileage: u32) -> String {

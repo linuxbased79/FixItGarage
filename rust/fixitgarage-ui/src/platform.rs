@@ -176,6 +176,8 @@ fn open_camera_android(output_path: &str) -> Result<(), String> {
 pub const PKG_PROTON_DRIVE: &str = "me.proton.android.drive";
 pub const PKG_GOOGLE_DRIVE: &str = "com.google.android.apps.docs";
 pub const PKG_DROPBOX: &str = "com.dropbox.android";
+/// Microsoft OneDrive
+pub const PKG_ONEDRIVE: &str = "com.microsoft.skydrive";
 
 /// Share plain text (CSV/backup body) via the system share sheet when possible.
 pub fn share_text(subject: &str, text: &str) {

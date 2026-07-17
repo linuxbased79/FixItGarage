@@ -8,7 +8,7 @@ mod webdav;
 use chrono::{TimeZone, Utc};
 use platform::{
     capture_issue_photo_path, notify, open_url, share_text, share_text_to_cloud, PKG_DROPBOX,
-    PKG_GOOGLE_DRIVE, PKG_PROTON_DRIVE,
+    PKG_GOOGLE_DRIVE, PKG_ONEDRIVE, PKG_PROTON_DRIVE,
 };
 use receipt_parse::parse_receipt_text;
 use state::{reminder_status_line, AppState};
@@ -35,6 +35,10 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let s = state.borrow();
         if s.has_due_reminders() {
             notify("FixItGarage", &s.due_reminders_summary());
+        } else if s.has_old_battery() {
+            notify("FixItGarage", &s.battery_age_warning());
+        } else if s.has_low_tread() {
+            notify("FixItGarage", &s.tread_warning());
         }
     }
 
@@ -209,6 +213,46 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     parse(ui.get_tread_rr()),
                 );
                 ui.set_status_message("Tread depths saved.".into());
+                refresh_ui(&ui, &s);
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        ui.on_capture_tread_photo(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let path = capture_issue_photo_path();
+                ui.set_tread_photo_path(path.into());
+                ui.set_status_message(
+                    "Camera opened — measure/estimate each corner in mm, then Save tread depths."
+                        .into(),
+                );
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_save_tire_miles(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let mut s = state.borrow_mut();
+                let parse = |v: slint::SharedString| {
+                    let t = v.to_string();
+                    if t.trim().is_empty() {
+                        None
+                    } else {
+                        t.parse().ok()
+                    }
+                };
+                s.set_tire_corner_miles(
+                    parse(ui.get_mi_fl()),
+                    parse(ui.get_mi_fr()),
+                    parse(ui.get_mi_rl()),
+                    parse(ui.get_mi_rr()),
+                );
+                ui.set_status_message("Mileage per tire saved.".into());
                 refresh_ui(&ui, &s);
             }
         });
@@ -646,6 +690,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                         "proton" => (PKG_PROTON_DRIVE, "Proton Drive"),
                         "gdrive" => (PKG_GOOGLE_DRIVE, "Google Drive"),
                         "dropbox" => (PKG_DROPBOX, "Dropbox"),
+                        "onedrive" => (PKG_ONEDRIVE, "OneDrive"),
                         _ => {
                             share_text(subject, &json);
                             if let Some(ui) = ui_weak.upgrade() {
@@ -1062,6 +1107,14 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     ui.set_tread_summary(state.tread_summary().into());
     ui.set_tread_warning(state.tread_warning().into());
     ui.set_has_low_tread(state.has_low_tread());
+    ui.set_battery_warning(state.battery_age_warning().into());
+    ui.set_has_old_battery(state.has_old_battery());
+    ui.set_tire_miles_summary(state.tire_miles_summary().into());
+    let tm = state.tire_miles_for_selected();
+    ui.set_mi_fl(tm.fl.map(|v| v.to_string()).unwrap_or_default().into());
+    ui.set_mi_fr(tm.fr.map(|v| v.to_string()).unwrap_or_default().into());
+    ui.set_mi_rl(tm.rl.map(|v| v.to_string()).unwrap_or_default().into());
+    ui.set_mi_rr(tm.rr.map(|v| v.to_string()).unwrap_or_default().into());
     ui.set_cloud_url(state.cloud_webdav_url.clone().into());
     ui.set_cloud_user(state.cloud_username.clone().into());
     // Do not push password into UI on every refresh if user is typing — only seed when empty

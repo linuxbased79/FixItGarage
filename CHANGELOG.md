@@ -24,3 +24,9 @@
 ## 0.2.3
 - Cloud backup buttons: Proton Drive (recommended), Google Drive, Dropbox
 - Nextcloud/WebDAV section kept for direct upload
+
+## 0.2.4
+- OneDrive cloud backup share
+- Brake/battery/wiper auto-reminders on save
+- Mileage per tire; camera assist for tread
+- Battery age home alert

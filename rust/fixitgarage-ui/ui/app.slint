@@ -271,6 +271,14 @@ export component MainWindow inherits Window {
     in-out property <string> backup-path: "";
     in-out property <string> rcp-photo-path: "";
     in-out property <string> rcp-paste: "";
+    in-out property <string> battery-warning: "";
+    in-out property <bool> has-old-battery: false;
+    in-out property <string> tire-miles-summary: "FL — · FR — · RL — · RR —";
+    in-out property <string> mi-fl: "";
+    in-out property <string> mi-fr: "";
+    in-out property <string> mi-rl: "";
+    in-out property <string> mi-rr: "";
+    in-out property <string> tread-photo-path: "";
     in-out property <string> cloud-url: "";
     in-out property <string> cloud-user: "";
     in-out property <string> cloud-pass: "";
@@ -304,6 +312,8 @@ export component MainWindow inherits Window {
     callback delete-service(int);
     callback delete-note(int);
     callback save-tread();
+    callback capture-tread-photo();
+    callback save-tire-miles();
     callback export-csv();
     callback share-csv();
     callback backup-json();
@@ -377,6 +387,11 @@ export component MainWindow inherits Window {
                         title: "Tread warning";
                         body: tread-warning;
                         Button { text: "Open tires"; primary: true; clicked => { root.navigate(3); } }
+                    }
+                    if has-old-battery: Card {
+                        title: "Battery age";
+                        body: battery-warning;
+                        Button { text: "Open battery tracker"; primary: true; clicked => { root.navigate(7); } }
                     }
                     Card {
                         title: "Last service"; body: "";
@@ -525,8 +540,13 @@ export component MainWindow inherits Window {
                             font-size: 13px; font-weight: 600; color: Theme.ok; wrap: word-wrap;
                         }
                         Text {
-                            text: "Legal wear limit is usually 1.6 mm (2/32\"). Enter depth per corner.";
+                            text: "Legal wear limit is usually 1.6 mm (2/32\"). Use the camera to help measure, then enter mm for each corner.";
                             font-size: 12px; color: Theme.text-muted; wrap: word-wrap;
+                        }
+                        Button { text: "Camera assist (photo)"; clicked => { root.capture-tread-photo(); } }
+                        Text {
+                            text: tread-photo-path == "" ? "" : ("Photo: " + tread-photo-path);
+                            font-size: 11px; color: Theme.text-soft; wrap: word-wrap;
                         }
                         HorizontalBox {
                             LineEdit { placeholder-text: "FL mm"; text <=> root.tread-fl; horizontal-stretch: 1; }
@@ -537,6 +557,23 @@ export component MainWindow inherits Window {
                             LineEdit { placeholder-text: "RR mm"; text <=> root.tread-rr; horizontal-stretch: 1; }
                         }
                         Button { text: "Save tread depths"; primary: true; clicked => { root.save-tread(); } }
+                    }
+                    if show-tires: Card {
+                        title: "Mileage per tire";
+                        body: tire-miles-summary;
+                        Text {
+                            text: "Odometer (or miles on this tire) for each corner — helps plan rotations.";
+                            font-size: 12px; color: Theme.text-muted; wrap: word-wrap;
+                        }
+                        HorizontalBox {
+                            LineEdit { placeholder-text: "FL mi"; text <=> root.mi-fl; horizontal-stretch: 1; }
+                            LineEdit { placeholder-text: "FR mi"; text <=> root.mi-fr; horizontal-stretch: 1; }
+                        }
+                        HorizontalBox {
+                            LineEdit { placeholder-text: "RL mi"; text <=> root.mi-rl; horizontal-stretch: 1; }
+                            LineEdit { placeholder-text: "RR mi"; text <=> root.mi-rr; horizontal-stretch: 1; }
+                        }
+                        Button { text: "Save tire mileage"; primary: true; clicked => { root.save-tire-miles(); } }
                     }
                     if show-tires: Card {
                         title: "Tire purchase"; body: "Log a new set (receipt scan later).";
@@ -641,13 +678,17 @@ export component MainWindow inherits Window {
                             text: "Dropbox";
                             clicked => { root.share-backup-to("dropbox"); }
                         }
+                        Button {
+                            text: "OneDrive";
+                            clicked => { root.share-backup-to("onedrive"); }
+                        }
                         Text {
-                            text: "If the app is missing, Android may open the store. Then run the button again and save the file in that app.";
+                            text: "If the app is missing, Android may open the store. Then run the button again and save the file in that app. ownCloud uses WebDAV below (same as Nextcloud).";
                             font-size: 12px; color: Theme.text-muted; wrap: word-wrap;
                         }
                     }
                     Card {
-                        title: "Nextcloud / ownCloud / WebDAV";
+                        title: "Nextcloud / ownCloud / WebDAV (direct upload)";
                         body: "Direct upload (no share sheet). Example: https://cloud.example/remote.php/dav/files/USER/FixItGarage/ — password stored only on this device.";
                         LineEdit { placeholder-text: "WebDAV folder URL"; text <=> root.cloud-url; }
                         LineEdit { placeholder-text: "Username"; text <=> root.cloud-user; }
@@ -660,7 +701,7 @@ export component MainWindow inherits Window {
                         Button { text: "Donate"; clicked => { root.open-donate(); } }
                         Button { text: "Send feedback (GitHub Issues)"; clicked => { root.open-feedback(); } }
                     }
-                    Card { title: "About"; body: "FixItGarage 0.2.3 — Proton Drive / Google Drive / Dropbox backup share + WebDAV."; }
+                    Card { title: "About"; body: "FixItGarage 0.2.4 — OneDrive, component reminders, tire mileage, camera tread assist."; }
                     if status-message != "": Text { text: status-message; color: Theme.ok; wrap: word-wrap; }
                 }
             }
@@ -710,6 +751,7 @@ export component MainWindow inherits Window {
                     PageTitle { label: "Battery age"; }
                     VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Card { title: "Current"; body: sum-battery; }
+                    Card { title: "Age check"; body: battery-warning; }
                     Card {
                         title: "Update"; body: "Date as YYYY-MM-DD";
                         LineEdit { placeholder-text: "Install date YYYY-MM-DD"; text <=> root.comp-date; }
@@ -781,6 +823,10 @@ export component MainWindow inherits Window {
                     padding: 16px; spacing: 10px;
                     PageTitle { label: "Brakes"; }
                     VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    Text {
+                        text: "Saving pads/fluid creates smart reminders (~30k mi / 2 years). Check Reminders for due items.";
+                        font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
+                    }
                     Card { title: "Front pads"; body: sum-brake-f; }
                     Card { title: "Rear pads"; body: sum-brake-r; }
                     Card { title: "Brake fluid"; body: sum-brake-fluid; }
