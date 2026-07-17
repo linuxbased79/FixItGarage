@@ -24,30 +24,50 @@ if ! emulator -list-avds | grep -qx "$AVD_NAME"; then
   exit 1
 fi
 
-# Prefer Wayland on KDE/Plasma/GNOME Wayland sessions; override if needed:
-#   QT_QPA_PLATFORM=xcb ./start-emulator.sh
+# Android emulator's bundled Qt does NOT ship a Wayland plugin (only xcb).
+# On KDE/GNOME Wayland this still works via XWayland when QT_QPA_PLATFORM=xcb.
+# Override only if you know what you're doing: QT_QPA_PLATFORM=minimal fig-emulator
 if [[ -z "${QT_QPA_PLATFORM:-}" ]]; then
-  if [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
-    export QT_QPA_PLATFORM=wayland
-  else
-    export QT_QPA_PLATFORM=xcb
-  fi
+  export QT_QPA_PLATFORM=xcb
 fi
+
+# Crash-report / metrics dirs must be writable by the desktop user
+EMU_TMP="${TMPDIR:-/tmp}/android-${USER}"
+mkdir -p "$EMU_TMP"
+# If a root-owned dir was left behind from earlier runs, recreate as this user
+if [[ ! -w "$EMU_TMP" ]]; then
+  rm -rf "$EMU_TMP" 2>/dev/null || true
+  mkdir -p "$EMU_TMP"
+fi
+export ANDROID_EMU_HOME="${ANDROID_EMU_HOME:-$HOME/.android}"
+export ANDROID_EMULATOR_HOME="${ANDROID_EMULATOR_HOME:-$HOME/.android}"
+# Quiet metrics prompt / collection for local dev
+export ANDROID_EMU_DISABLE_METRICS_REPORTING=1
 
 # Ensure AVD config is visible to this user
 if [[ ! -f "$HOME/.android/avd/${AVD_NAME}.ini" && -f /root/.android/avd/${AVD_NAME}.ini ]]; then
   mkdir -p "$HOME/.android/avd"
-  # Symlink root AVD for the desktop user when needed
   if [[ ! -e "$HOME/.android/avd/${AVD_NAME}.avd" ]]; then
     ln -s "/root/.android/avd/${AVD_NAME}.avd" "$HOME/.android/avd/${AVD_NAME}.avd" 2>/dev/null || true
     ln -s "/root/.android/avd/${AVD_NAME}.ini" "$HOME/.android/avd/${AVD_NAME}.ini" 2>/dev/null || true
   fi
 fi
 
-echo "Starting AVD: $AVD_NAME (GPU auto, KVM if available)"
+# Drop stale AVD locks from a previous crash
+rm -f "$HOME/.android/avd/${AVD_NAME}.avd"/*.lock 2>/dev/null || true
+
+# GPU: auto first; if the host driver is flaky, retry with software
+GPU_MODE="${EMU_GPU:-auto}"
+
+echo "Starting AVD: $AVD_NAME"
+echo "  Qt platform: $QT_QPA_PLATFORM  |  GPU: $GPU_MODE  |  KVM if available"
 echo "Stop with: adb emu kill   or close the emulator window"
+echo
+
+# shellcheck disable=SC2086
 exec emulator -avd "$AVD_NAME" \
-  -gpu auto \
+  -gpu "$GPU_MODE" \
+  -no-metrics \
   -no-snapshot-save \
   -netdelay none \
   -netspeed full \

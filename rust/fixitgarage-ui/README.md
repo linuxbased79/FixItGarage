@@ -128,7 +128,7 @@ fig-install
 Use the **x86_64** APK on the emulator (`dist/FixItGarage-0.1.0-x86_64.apk`).  
 Use the **arm64** APK on a real phone.
 
-If the emulator window fails under Wayland:
+Emulator uses X11/XWayland by default (Qt has no Wayland plugin). Soft GPU fallback:
 ```bash
 QT_QPA_PLATFORM=xcb fig-emulator
 ```
