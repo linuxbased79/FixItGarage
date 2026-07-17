@@ -6,7 +6,10 @@ mod state;
 mod webdav;
 
 use chrono::{TimeZone, Utc};
-use platform::{capture_issue_photo_path, notify, open_url, share_text};
+use platform::{
+    capture_issue_photo_path, notify, open_url, share_text, share_text_to_cloud, PKG_DROPBOX,
+    PKG_GOOGLE_DRIVE, PKG_PROTON_DRIVE,
+};
 use receipt_parse::parse_receipt_text;
 use state::{reminder_status_line, AppState};
 use std::cell::RefCell;
@@ -623,6 +626,49 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                 Err(e) => {
                     if let Some(ui) = ui_weak.upgrade() {
                         ui.set_status_message(format!("Share backup failed: {e}").into());
+                    }
+                }
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_share_backup_to(move |target| {
+            let s = state.borrow();
+            let target = target.to_string();
+            match s.write_backup_file() {
+                Ok(path) => {
+                    let json = std::fs::read_to_string(&path).unwrap_or_default();
+                    let subject = "FixItGarage backup";
+                    let (pkg, label) = match target.as_str() {
+                        "proton" => (PKG_PROTON_DRIVE, "Proton Drive"),
+                        "gdrive" => (PKG_GOOGLE_DRIVE, "Google Drive"),
+                        "dropbox" => (PKG_DROPBOX, "Dropbox"),
+                        _ => {
+                            share_text(subject, &json);
+                            if let Some(ui) = ui_weak.upgrade() {
+                                ui.set_backup_path(path.display().to_string().into());
+                                ui.set_status_message("Share sheet opened.".into());
+                            }
+                            return;
+                        }
+                    };
+                    share_text_to_cloud(subject, &json, pkg, label);
+                    if let Some(ui) = ui_weak.upgrade() {
+                        ui.set_backup_path(path.display().to_string().into());
+                        ui.set_status_message(
+                            format!(
+                                "Opening {label}… Install the app if prompted, then save the backup file."
+                            )
+                            .into(),
+                        );
+                    }
+                }
+                Err(e) => {
+                    if let Some(ui) = ui_weak.upgrade() {
+                        ui.set_status_message(format!("Backup failed: {e}").into());
                     }
                 }
             }

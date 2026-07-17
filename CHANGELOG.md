@@ -20,3 +20,7 @@
 
 ## 0.1.x
 - Initial multi-vehicle trackers, dark mode, oil level choices, wipers L/R, tires, parts, brakes, battery, notes, reminders
+
+## 0.2.3
+- Cloud backup buttons: Proton Drive (recommended), Google Drive, Dropbox
+- Nextcloud/WebDAV section kept for direct upload

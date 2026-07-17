@@ -172,17 +172,54 @@ fn open_camera_android(output_path: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Well-known Android package IDs for cloud apps (share-target style backups).
+pub const PKG_PROTON_DRIVE: &str = "me.proton.android.drive";
+pub const PKG_GOOGLE_DRIVE: &str = "com.google.android.apps.docs";
+pub const PKG_DROPBOX: &str = "com.dropbox.android";
+
 /// Share plain text (CSV/backup body) via the system share sheet when possible.
 pub fn share_text(subject: &str, text: &str) {
+    share_text_prefer_package(subject, text, None);
+}
+
+/// Share to a specific cloud app if installed; otherwise open the full chooser
+/// (and try to open the store listing if the package is missing).
+pub fn share_text_to_cloud(subject: &str, text: &str, package: &str, app_label: &str) {
     #[cfg(target_os = "android")]
     {
-        if let Err(e) = share_text_android(subject, text) {
+        match share_text_android(subject, text, Some(package)) {
+            Ok(()) => {}
+            Err(e) => {
+                eprintln!("share to {app_label} ({package}) failed: {e}");
+                // Fall back to chooser so user can still pick another app
+                if let Err(e2) = share_text_android(subject, text, None) {
+                    eprintln!("share chooser failed: {e2}");
+                    let _ = write_share_fallback(subject, text);
+                }
+                // Offer install page for the preferred app
+                let _ = open_url(&format!("market://details?id={package}"));
+            }
+        }
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app_label;
+        let _ = package;
+        share_text_prefer_package(subject, text, None);
+    }
+}
+
+fn share_text_prefer_package(subject: &str, text: &str, package: Option<&str>) {
+    #[cfg(target_os = "android")]
+    {
+        if let Err(e) = share_text_android(subject, text, package) {
             eprintln!("share_text failed: {e}");
             let _ = write_share_fallback(subject, text);
         }
     }
     #[cfg(not(target_os = "android"))]
     {
+        let _ = package;
         let path = write_share_fallback(subject, text);
         eprintln!("Share saved to: {}", path.display());
         let _ = std::process::Command::new("xdg-open")
@@ -207,7 +244,11 @@ fn write_share_fallback(subject: &str, text: &str) -> std::path::PathBuf {
 }
 
 #[cfg(target_os = "android")]
-fn share_text_android(subject: &str, text: &str) -> Result<(), String> {
+fn share_text_android(
+    subject: &str,
+    text: &str,
+    package: Option<&str>,
+) -> Result<(), String> {
     use jni::objects::{JObject, JValue};
     use jni::JavaVM;
 
@@ -279,6 +320,30 @@ fn share_text_android(subject: &str, text: &str) -> Result<(), String> {
         &[JValue::Int(0x1000_0000)],
     )
     .map_err(|e| format!("addFlags: {e}"))?;
+
+    // Prefer a specific cloud app when requested
+    if let Some(pkg) = package {
+        let pkg_j = env
+            .new_string(pkg)
+            .map_err(|e| format!("package str: {e}"))?;
+        env.call_method(
+            &intent,
+            "setPackage",
+            "(Ljava/lang/String;)Landroid/content/Intent;",
+            &[JValue::Object(&pkg_j)],
+        )
+        .map_err(|e| format!("setPackage: {e}"))?;
+
+        // Direct start — fails if app not installed
+        env.call_method(
+            &context,
+            "startActivity",
+            "(Landroid/content/Intent;)V",
+            &[JValue::Object(&intent)],
+        )
+        .map_err(|e| format!("startActivity package {pkg}: {e}"))?;
+        return Ok(());
+    }
 
     let chooser_title = env
         .new_string("Share FixItGarage data")
