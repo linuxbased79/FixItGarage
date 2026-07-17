@@ -69,6 +69,9 @@ pub struct AppState {
     pub cloud_username: String,
     #[serde(default)]
     pub cloud_password: String,
+    /// Throttle system notifications (ms since epoch). Re-notify after 12 hours.
+    #[serde(default)]
+    pub last_notified_epoch_ms: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
@@ -300,6 +303,7 @@ impl Default for AppState {
             cloud_webdav_url: String::new(),
             cloud_username: String::new(),
             cloud_password: String::new(),
+            last_notified_epoch_ms: 0,
         }
     }
 }
@@ -450,10 +454,13 @@ impl AppState {
         let costs = self.cost_labels();
         let month = format!("This month: {}", costs[0].1);
         let year = format!("This year: {}", costs[1].1);
-        let dues = if self.has_due_reminders() {
-            self.due_reminders_summary()
-        } else {
-            "Reminders: all clear".into()
+        let dues = {
+            let s = self.component_alerts_summary();
+            if s == "All clear." {
+                "Reminders: all clear".into()
+            } else {
+                s
+            }
         };
         (mpg, month, year, dues)
     }
@@ -858,6 +865,130 @@ impl AppState {
         self.open_reminders_for_selected().into_iter().any(|r| {
             is_due_by_date(r.due_epoch_ms, now) || is_due_by_mileage(r.due_mileage, mileage)
         })
+    }
+
+    /// Due reminders across **all** vehicles (for launch notifications).
+    /// Returns (notif_id, title, body).
+    pub fn all_due_notification_items(&self) -> Vec<(i32, String, String)> {
+        let now = Utc::now().timestamp_millis();
+        let mut out = Vec::new();
+        for r in self.reminders.iter().filter(|r| !r.completed) {
+            let odo = self
+                .vehicles
+                .iter()
+                .find(|v| v.id == r.vehicle_id)
+                .map(|v| v.current_mileage)
+                .unwrap_or(0);
+            let vname = self
+                .vehicles
+                .iter()
+                .find(|v| v.id == r.vehicle_id)
+                .map(|v| v.name.as_str())
+                .unwrap_or("Vehicle");
+            if is_due_by_date(r.due_epoch_ms, now) || is_due_by_mileage(r.due_mileage, odo) {
+                let detail = reminder_status_line(r, odo);
+                out.push((
+                    43000 + (r.id as i32 % 5000),
+                    format!("Due: {}", r.title),
+                    format!("{vname} · {detail}"),
+                ));
+            }
+        }
+        out
+    }
+
+    /// Open date-based reminders still in the future (for AlarmManager scheduling).
+    /// (request_code, due_epoch_ms, label)
+    pub fn future_date_alarms(&self) -> Vec<(i32, i64, String)> {
+        let now = Utc::now().timestamp_millis();
+        self.reminders
+            .iter()
+            .filter(|r| !r.completed)
+            .filter_map(|r| {
+                let due = r.due_epoch_ms?;
+                if due > now {
+                    Some((
+                        50000 + (r.id as i32 % 10000),
+                        due,
+                        r.title.clone(),
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// Upcoming open reminders for selected vehicle (next 90 days or within 5k mi).
+    pub fn upcoming_reminders_lines(&self) -> Vec<(String, String)> {
+        let Some(vid) = self.selected_vehicle_id else {
+            return Vec::new();
+        };
+        let now = Utc::now().timestamp_millis();
+        let horizon = now + 90 * 86_400_000;
+        let odo = self.selected_vehicle().map(|v| v.current_mileage).unwrap_or(0);
+        let mut rows: Vec<_> = self
+            .reminders
+            .iter()
+            .filter(|r| r.vehicle_id == vid && !r.completed)
+            .filter(|r| {
+                let date_soon = r
+                    .due_epoch_ms
+                    .map(|d| d <= horizon)
+                    .unwrap_or(false);
+                let mi_soon = r
+                    .due_mileage
+                    .map(|m| m <= odo.saturating_add(5_000))
+                    .unwrap_or(false);
+                date_soon || mi_soon || is_due_by_date(r.due_epoch_ms, now) || is_due_by_mileage(r.due_mileage, odo)
+            })
+            .map(|r| {
+                (
+                    r.title.clone(),
+                    reminder_status_line(r, odo),
+                )
+            })
+            .collect();
+        rows.sort_by(|a, b| a.0.cmp(&b.0));
+        rows.truncate(12);
+        rows
+    }
+
+    /// True if we should fire notifications (not more than once per 12 hours unless forced).
+    pub fn should_notify_now(&self) -> bool {
+        let now = Utc::now().timestamp_millis();
+        now.saturating_sub(self.last_notified_epoch_ms) >= 12 * 3_600_000
+            || self.last_notified_epoch_ms == 0
+    }
+
+    pub fn mark_notified(&mut self) {
+        self.last_notified_epoch_ms = Utc::now().timestamp_millis();
+        self.save();
+    }
+
+    /// Combined home alert text for any vehicle-level component issues.
+    pub fn component_alerts_summary(&self) -> String {
+        let mut bits = Vec::new();
+        if self.has_due_reminders() {
+            bits.push(self.due_reminders_summary());
+        }
+        if self.has_brakes_due() {
+            bits.push(self.brake_due_warning());
+        }
+        if self.has_old_battery() {
+            bits.push(self.battery_age_warning());
+        }
+        if self.has_old_wipers() {
+            bits.push(self.wiper_due_warning());
+        }
+        if self.has_low_tread() {
+            bits.push(self.tread_warning());
+        }
+        if bits.is_empty() {
+            "All clear.".into()
+        } else {
+            bits.join(" · ")
+        }
     }
 
     /// US/EU common legal minimum for passenger tires (~2/32" ≈ 1.6 mm).
@@ -1739,6 +1870,19 @@ mod tests {
         assert_eq!(m.fr, Some(1));
         assert_eq!(m.rl, Some(4));
         assert_eq!(m.rr, Some(3));
+    }
+
+    #[test]
+    fn all_due_notifications_and_upcoming() {
+        let mut s = AppState::default();
+        s.add_vehicle("Daily".into(), "".into(), "".into(), None, 50000);
+        s.add_reminder("Inspect belts".into(), "2000-01-01", None);
+        assert!(!s.all_due_notification_items().is_empty());
+        assert!(s.should_notify_now());
+        s.mark_notified();
+        assert!(!s.should_notify_now());
+        // Upcoming includes due/soon items
+        assert!(!s.upcoming_reminders_lines().is_empty());
     }
 
     #[test]

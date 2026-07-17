@@ -380,22 +380,101 @@ fn share_text_android(
     Ok(())
 }
 
-/// Show a system notification (Android) or log (desktop).
+/// Show a system notification (Android) or log (desktop). Fixed id 42001.
 pub fn notify(title: &str, body: &str) {
+    notify_with_id(42001, title, body);
+}
+
+/// Notification with a stable integer id (multiple due items can stack).
+pub fn notify_with_id(id: i32, title: &str, body: &str) {
     #[cfg(target_os = "android")]
     {
-        if let Err(e) = notify_android(title, body) {
+        if let Err(e) = notify_android(id, title, body) {
             eprintln!("notify failed: {e}");
         }
     }
     #[cfg(not(target_os = "android"))]
     {
-        eprintln!("NOTIFY: {title} — {body}");
+        eprintln!("NOTIFY[{id}]: {title} — {body}");
+    }
+}
+
+/// Read primary clipboard text (Android) or xclip/wl-paste (desktop best-effort).
+pub fn read_clipboard() -> Option<String> {
+    #[cfg(target_os = "android")]
+    {
+        match read_clipboard_android() {
+            Ok(s) if !s.trim().is_empty() => Some(s),
+            Ok(_) => None,
+            Err(e) => {
+                eprintln!("clipboard: {e}");
+                None
+            }
+        }
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        for cmd in [
+            ("wl-paste", vec![] as Vec<&str>),
+            ("xclip", vec!["-selection", "clipboard", "-o"]),
+            ("xsel", vec!["--clipboard", "--output"]),
+        ] {
+            if let Ok(out) = std::process::Command::new(cmd.0).args(&cmd.1).output() {
+                if out.status.success() {
+                    let s = String::from_utf8_lossy(&out.stdout).to_string();
+                    if !s.trim().is_empty() {
+                        return Some(s);
+                    }
+                }
+            }
+        }
+        None
+    }
+}
+
+/// Schedule AlarmManager to re-open the app at `trigger_epoch_ms` (RTC_WAKEUP).
+/// When the alarm fires, Android launches FixItGarage so launch-time due checks run.
+pub fn schedule_app_wake(request_code: i32, trigger_epoch_ms: i64, _label: &str) {
+    #[cfg(target_os = "android")]
+    {
+        if let Err(e) = schedule_app_wake_android(request_code, trigger_epoch_ms) {
+            eprintln!("schedule wake failed: {e}");
+        }
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (request_code, trigger_epoch_ms, _label);
+    }
+}
+
+/// Cancel a previously scheduled app-wake alarm.
+pub fn cancel_app_wake(request_code: i32) {
+    #[cfg(target_os = "android")]
+    {
+        if let Err(e) = cancel_app_wake_android(request_code) {
+            eprintln!("cancel wake failed: {e}");
+        }
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = request_code;
+    }
+}
+
+/// Open a text-from-image / OCR helper (Lens / store search).
+pub fn open_ocr_helper() {
+    #[cfg(target_os = "android")]
+    {
+        open_url("https://lens.google.com/");
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        eprintln!("OCR helper: paste text from any OCR tool into FixItGarage");
     }
 }
 
 #[cfg(target_os = "android")]
-fn notify_android(title: &str, body: &str) -> Result<(), String> {
+fn notify_android(id: i32, title: &str, body: &str) -> Result<(), String> {
     use jni::objects::{JObject, JValue};
     use jni::sys::jint;
     use jni::JavaVM;
@@ -481,6 +560,23 @@ fn notify_android(title: &str, body: &str) -> Result<(), String> {
         &[JValue::Object(&body_j)],
     )
     .map_err(|e| format!("setContentText: {e}"))?;
+    // Expanded body for longer due lists
+    if let Ok(style_class) = env.find_class("android/app/Notification$BigTextStyle") {
+        if let Ok(style) = env.new_object(&style_class, "()V", &[]) {
+            let _ = env.call_method(
+                &style,
+                "bigText",
+                "(Ljava/lang/CharSequence;)Landroid/app/Notification$BigTextStyle;",
+                &[JValue::Object(&body_j)],
+            );
+            let _ = env.call_method(
+                &builder,
+                "setStyle",
+                "(Landroid/app/Notification$Style;)Landroid/app/Notification$Builder;",
+                &[JValue::Object(&style)],
+            );
+        }
+    }
     // android.R.drawable.ic_dialog_info = 17301659
     env.call_method(
         &builder,
@@ -503,8 +599,7 @@ fn notify_android(title: &str, body: &str) -> Result<(), String> {
         .l()
         .map_err(|e| format!("notif: {e}"))?;
 
-    // notify(id, notification)
-    let id: jint = 42001;
+    let id: jint = id;
     env.call_method(
         &nm_obj,
         "notify",
@@ -513,5 +608,310 @@ fn notify_android(title: &str, body: &str) -> Result<(), String> {
     )
     .map_err(|e| format!("notify: {e}"))?;
 
+    Ok(())
+}
+
+#[cfg(target_os = "android")]
+fn read_clipboard_android() -> Result<String, String> {
+    use jni::objects::{JObject, JString, JValue};
+    use jni::JavaVM;
+
+    let ctx = ndk_context::android_context();
+    let vm =
+        unsafe { JavaVM::from_raw(ctx.vm().cast()) }.map_err(|e| format!("JavaVM: {e}"))?;
+    let mut env = vm
+        .attach_current_thread()
+        .map_err(|e| format!("attach: {e}"))?;
+    let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+
+    let clip_svc = env
+        .new_string("clipboard")
+        .map_err(|e| format!("str: {e}"))?;
+    let cm = env
+        .call_method(
+            &context,
+            "getSystemService",
+            "(Ljava/lang/String;)Ljava/lang/Object;",
+            &[JValue::Object(&clip_svc)],
+        )
+        .map_err(|e| format!("getSystemService: {e}"))?
+        .l()
+        .map_err(|e| format!("cm: {e}"))?;
+
+    let has = env
+        .call_method(&cm, "hasPrimaryClip", "()Z", &[])
+        .map_err(|e| format!("hasPrimaryClip: {e}"))?
+        .z()
+        .map_err(|e| format!("has z: {e}"))?;
+    if !has {
+        return Ok(String::new());
+    }
+
+    let clip = env
+        .call_method(&cm, "getPrimaryClip", "()Landroid/content/ClipData;", &[])
+        .map_err(|e| format!("getPrimaryClip: {e}"))?
+        .l()
+        .map_err(|e| format!("clip: {e}"))?;
+    if clip.is_null() {
+        return Ok(String::new());
+    }
+
+    let item = env
+        .call_method(
+            &clip,
+            "getItemAt",
+            "(I)Landroid/content/ClipData$Item;",
+            &[JValue::Int(0)],
+        )
+        .map_err(|e| format!("getItemAt: {e}"))?
+        .l()
+        .map_err(|e| format!("item: {e}"))?;
+
+    let coerce = env
+        .call_method(
+            &item,
+            "coerceToText",
+            "(Landroid/content/Context;)Ljava/lang/CharSequence;",
+            &[JValue::Object(&context)],
+        )
+        .map_err(|e| format!("coerceToText: {e}"))?
+        .l()
+        .map_err(|e| format!("text: {e}"))?;
+    if coerce.is_null() {
+        return Ok(String::new());
+    }
+
+    let s = env
+        .call_method(&coerce, "toString", "()Ljava/lang/String;", &[])
+        .map_err(|e| format!("toString: {e}"))?
+        .l()
+        .map_err(|e| format!("str obj: {e}"))?;
+    let jstr: JString = s.into();
+    let rust: String = env
+        .get_string(&jstr)
+        .map_err(|e| format!("get_string: {e}"))?
+        .into();
+    Ok(rust)
+}
+
+#[cfg(target_os = "android")]
+fn schedule_app_wake_android(request_code: i32, trigger_epoch_ms: i64) -> Result<(), String> {
+    use jni::objects::{JObject, JValue};
+    use jni::JavaVM;
+
+    let now = chrono::Utc::now().timestamp_millis();
+    if trigger_epoch_ms <= now {
+        return Ok(());
+    }
+    if trigger_epoch_ms - now > 365 * 86_400_000 {
+        return Ok(());
+    }
+
+    let ctx = ndk_context::android_context();
+    let vm =
+        unsafe { JavaVM::from_raw(ctx.vm().cast()) }.map_err(|e| format!("JavaVM: {e}"))?;
+    let mut env = vm
+        .attach_current_thread()
+        .map_err(|e| format!("attach: {e}"))?;
+    let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+
+    let alarm_svc = env
+        .new_string("alarm")
+        .map_err(|e| format!("alarm str: {e}"))?;
+    let am = env
+        .call_method(
+            &context,
+            "getSystemService",
+            "(Ljava/lang/String;)Ljava/lang/Object;",
+            &[JValue::Object(&alarm_svc)],
+        )
+        .map_err(|e| format!("getSystemService alarm: {e}"))?
+        .l()
+        .map_err(|e| format!("am: {e}"))?;
+
+    let pkg = env
+        .call_method(&context, "getPackageName", "()Ljava/lang/String;", &[])
+        .map_err(|e| format!("getPackageName: {e}"))?
+        .l()
+        .map_err(|e| format!("pkg: {e}"))?;
+
+    let pm = env
+        .call_method(
+            &context,
+            "getPackageManager",
+            "()Landroid/content/pm/PackageManager;",
+            &[],
+        )
+        .map_err(|e| format!("getPackageManager: {e}"))?
+        .l()
+        .map_err(|e| format!("pm: {e}"))?;
+
+    let launch = env
+        .call_method(
+            &pm,
+            "getLaunchIntentForPackage",
+            "(Ljava/lang/String;)Landroid/content/Intent;",
+            &[JValue::Object(&pkg)],
+        )
+        .map_err(|e| format!("getLaunchIntentForPackage: {e}"))?
+        .l()
+        .map_err(|e| format!("launch: {e}"))?;
+    if launch.is_null() {
+        return Err("no launch intent".into());
+    }
+
+    // FLAG_ACTIVITY_NEW_TASK | CLEAR_TOP | SINGLE_TOP
+    let flags = 0x1000_0000i32 | 0x0400_0000 | 0x2000_0000;
+    env.call_method(
+        &launch,
+        "addFlags",
+        "(I)Landroid/content/Intent;",
+        &[JValue::Int(flags)],
+    )
+    .map_err(|e| format!("addFlags: {e}"))?;
+
+    let extra_key = env
+        .new_string("org.fixitgarage.app.DUE_CHECK")
+        .map_err(|e| format!("extra key: {e}"))?;
+    env.call_method(
+        &launch,
+        "putExtra",
+        "(Ljava/lang/String;Z)Landroid/content/Intent;",
+        &[JValue::Object(&extra_key), JValue::Bool(1)],
+    )
+    .map_err(|e| format!("putExtra: {e}"))?;
+
+    let pi_class = env
+        .find_class("android/app/PendingIntent")
+        .map_err(|e| format!("PendingIntent: {e}"))?;
+    // FLAG_UPDATE_CURRENT | FLAG_IMMUTABLE
+    let pi_flags = 0x0800_0000i32 | 0x0400_0000;
+    let pi = env
+        .call_static_method(
+            &pi_class,
+            "getActivity",
+            "(Landroid/content/Context;ILandroid/content/Intent;I)Landroid/app/PendingIntent;",
+            &[
+                JValue::Object(&context),
+                JValue::Int(request_code),
+                JValue::Object(&launch),
+                JValue::Int(pi_flags),
+            ],
+        )
+        .map_err(|e| format!("getActivity: {e}"))?
+        .l()
+        .map_err(|e| format!("pi: {e}"))?;
+
+    // RTC_WAKEUP = 0
+    let set_res = env.call_method(
+        &am,
+        "setAndAllowWhileIdle",
+        "(IJLandroid/app/PendingIntent;)V",
+        &[
+            JValue::Int(0),
+            JValue::Long(trigger_epoch_ms),
+            JValue::Object(&pi),
+        ],
+    );
+    if set_res.is_err() {
+        env.call_method(
+            &am,
+            "set",
+            "(IJLandroid/app/PendingIntent;)V",
+            &[
+                JValue::Int(0),
+                JValue::Long(trigger_epoch_ms),
+                JValue::Object(&pi),
+            ],
+        )
+        .map_err(|e| format!("AlarmManager.set: {e}"))?;
+    }
+
+    Ok(())
+}
+
+#[cfg(target_os = "android")]
+fn cancel_app_wake_android(request_code: i32) -> Result<(), String> {
+    use jni::objects::{JObject, JValue};
+    use jni::JavaVM;
+
+    let ctx = ndk_context::android_context();
+    let vm =
+        unsafe { JavaVM::from_raw(ctx.vm().cast()) }.map_err(|e| format!("JavaVM: {e}"))?;
+    let mut env = vm
+        .attach_current_thread()
+        .map_err(|e| format!("attach: {e}"))?;
+    let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+
+    let alarm_svc = env
+        .new_string("alarm")
+        .map_err(|e| format!("alarm str: {e}"))?;
+    let am = env
+        .call_method(
+            &context,
+            "getSystemService",
+            "(Ljava/lang/String;)Ljava/lang/Object;",
+            &[JValue::Object(&alarm_svc)],
+        )
+        .map_err(|e| format!("getSystemService: {e}"))?
+        .l()
+        .map_err(|e| format!("am: {e}"))?;
+
+    let pkg = env
+        .call_method(&context, "getPackageName", "()Ljava/lang/String;", &[])
+        .map_err(|e| format!("pkg: {e}"))?
+        .l()
+        .map_err(|e| format!("pkg l: {e}"))?;
+    let pm = env
+        .call_method(
+            &context,
+            "getPackageManager",
+            "()Landroid/content/pm/PackageManager;",
+            &[],
+        )
+        .map_err(|e| format!("pm: {e}"))?
+        .l()
+        .map_err(|e| format!("pm l: {e}"))?;
+    let launch = env
+        .call_method(
+            &pm,
+            "getLaunchIntentForPackage",
+            "(Ljava/lang/String;)Landroid/content/Intent;",
+            &[JValue::Object(&pkg)],
+        )
+        .map_err(|e| format!("launch: {e}"))?
+        .l()
+        .map_err(|e| format!("launch l: {e}"))?;
+    if launch.is_null() {
+        return Ok(());
+    }
+
+    let pi_class = env
+        .find_class("android/app/PendingIntent")
+        .map_err(|e| format!("PendingIntent: {e}"))?;
+    let pi_flags = 0x0800_0000i32 | 0x0400_0000;
+    let pi = env
+        .call_static_method(
+            &pi_class,
+            "getActivity",
+            "(Landroid/content/Context;ILandroid/content/Intent;I)Landroid/app/PendingIntent;",
+            &[
+                JValue::Object(&context),
+                JValue::Int(request_code),
+                JValue::Object(&launch),
+                JValue::Int(pi_flags),
+            ],
+        )
+        .map_err(|e| format!("getActivity: {e}"))?
+        .l()
+        .map_err(|e| format!("pi: {e}"))?;
+
+    env.call_method(
+        &am,
+        "cancel",
+        "(Landroid/app/PendingIntent;)V",
+        &[JValue::Object(&pi)],
+    )
+    .map_err(|e| format!("cancel: {e}"))?;
     Ok(())
 }

@@ -176,6 +176,7 @@ export component MainWindow inherits Window {
     in-out property <[HistoryRow]> tire-purchases: [];
     in-out property <[HistoryRow]> tire-rotations: [];
     in-out property <[HistoryRow]> fuel-history: [];
+    in-out property <[HistoryRow]> upcoming-reminders: [];
     in-out property <string> service-search: "";
     in-out property <string> dash-mpg: "MPG: —";
     in-out property <string> dash-month: "This month: $0";
@@ -337,6 +338,9 @@ export component MainWindow inherits Window {
     callback share-backup-to(string);
     callback capture-receipt-photo();
     callback parse-receipt-text();
+    callback paste-receipt-clipboard();
+    callback paste-tire-clipboard();
+    callback open-ocr-helper();
     callback save-cloud-settings();
     callback upload-cloud-backup();
     callback update-selected-vehicle();
@@ -396,6 +400,19 @@ export component MainWindow inherits Window {
                         title: "Due reminders";
                         body: due-reminders-banner;
                         Button { text: "Open reminders"; primary: true; clicked => { root.navigate(11); } }
+                    }
+                    Card {
+                        title: "Upcoming (90 days / 5k mi)";
+                        body: "";
+                        if upcoming-reminders.length == 0: Text {
+                            text: "No upcoming items for this vehicle.";
+                            font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
+                        }
+                        for u in upcoming-reminders: Text {
+                            text: u.title + " — " + u.detail;
+                            font-size: 13px; color: Theme.text; wrap: word-wrap;
+                        }
+                        Button { text: "Manage reminders"; clicked => { root.navigate(11); } }
                     }
                     if has-low-tread: Card {
                         title: "Tread warning";
@@ -619,8 +636,13 @@ export component MainWindow inherits Window {
                         Button { text: "Save tire mileage"; primary: true; clicked => { root.save-tire-miles(); } }
                     }
                     if show-tires: Card {
-                        title: "Tire purchase"; body: "Log a new set. Paste receipt text (OCR / email) to auto-fill.";
+                        title: "Tire purchase"; body: "Log a new set. Paste receipt text (OCR / email / clipboard) to auto-fill.";
                         LineEdit { placeholder-text: "Paste tire receipt text"; text <=> root.tire-rcp-paste; }
+                        HorizontalBox {
+                            spacing: 6px;
+                            Button { text: "From clipboard"; clicked => { root.paste-tire-clipboard(); } }
+                            Button { text: "OCR helper"; clicked => { root.open-ocr-helper(); } }
+                        }
                         Button { text: "Parse receipt text"; clicked => { root.parse-tire-receipt(); } }
                         LineEdit { placeholder-text: "Brand"; text <=> root.tire-brand; }
                         LineEdit { placeholder-text: "Model"; text <=> root.tire-model; }
@@ -746,7 +768,7 @@ export component MainWindow inherits Window {
                         Button { text: "Donate"; clicked => { root.open-donate(); } }
                         Button { text: "Send feedback (GitHub Issues)"; clicked => { root.open-feedback(); } }
                     }
-                    Card { title: "About"; body: "FixItGarage 0.2.5 — rotation before/after diagram, tire receipt scan, brake/wiper home alerts, shop/fuel on services."; }
+                    Card { title: "About"; body: "FixItGarage 0.2.6 — scheduled date alarms, multi-due notifications, OCR clipboard assist, upcoming reminders."; }
                     if status-message != "": Text { text: status-message; color: Theme.ok; wrap: word-wrap; }
                 }
             }
@@ -969,7 +991,7 @@ export component MainWindow inherits Window {
                     }
 
                     Card {
-                        title: "Add reminder"; body: "Date YYYY-MM-DD and/or mileage";
+                        title: "Add reminder"; body: "Date YYYY-MM-DD and/or mileage. On Android, date dues schedule a wake alarm so the app can notify when due.";
                         LineEdit { placeholder-text: "Title"; text <=> root.rem-title; }
                         LineEdit { placeholder-text: "Due date YYYY-MM-DD"; text <=> root.rem-date; }
                         LineEdit { placeholder-text: "Due mileage"; text <=> root.rem-mileage; }
@@ -1028,7 +1050,7 @@ export component MainWindow inherits Window {
                     PageTitle { label: "Receipt log"; }
                     VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text {
-                        text: "OCR camera fill-in is next. Enter values from the receipt (date, mileage, gallons, parts, labor).";
+                        text: "Photo the receipt, run an OCR app (or Open OCR helper), copy text, then Paste from clipboard and Auto-fill.";
                         font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
                     }
                     Card {
@@ -1038,8 +1060,13 @@ export component MainWindow inherits Window {
                             text: rcp-photo-path == "" ? "No photo yet" : ("Photo: " + rcp-photo-path);
                             font-size: 12px; color: Theme.text-soft; wrap: word-wrap;
                         }
+                        HorizontalBox {
+                            spacing: 6px;
+                            Button { text: "Open OCR helper"; clicked => { root.open-ocr-helper(); } }
+                            Button { text: "Paste clipboard"; clicked => { root.paste-receipt-clipboard(); } }
+                        }
                         LineEdit { placeholder-text: "Paste receipt text (from OCR app or email)"; text <=> root.rcp-paste; }
-                        Button { text: "Auto-fill from pasted text"; clicked => { root.parse-receipt-text(); } }
+                        Button { text: "Auto-fill from pasted text"; primary: true; clicked => { root.parse-receipt-text(); } }
                         LineEdit { placeholder-text: "Title (e.g. Oil change shop)"; text <=> root.rcp-title; }
                         LineEdit { placeholder-text: "Date YYYY-MM-DD"; text <=> root.rcp-date; }
                         LineEdit { placeholder-text: "Mileage"; text <=> root.rcp-mileage; }

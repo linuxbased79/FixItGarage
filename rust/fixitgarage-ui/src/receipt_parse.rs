@@ -13,6 +13,8 @@ pub struct ParsedReceipt {
     pub labor_cost: Option<f64>,
     pub fuel_cost: Option<f64>,
     pub shop_name: Option<String>,
+    /// Suggested service title from keywords (oil change, rotation, …).
+    pub title: Option<String>,
 }
 
 /// Extract date / mileage / gallons / money from free-form receipt text.
@@ -130,6 +132,38 @@ pub fn parse_receipt_text(text: &str) -> ParsedReceipt {
         }
     }
 
+    // Title keywords (order = priority)
+    let lower_all = text.to_ascii_lowercase();
+    let title_rules: &[(&str, &str)] = &[
+        ("oil change", "Oil change"),
+        ("oil filter", "Oil & filter"),
+        ("synthetic oil", "Oil change"),
+        ("tire rotation", "Tire rotation"),
+        ("rotation", "Tire rotation"),
+        ("alignment", "Wheel alignment"),
+        ("brake pad", "Brake service"),
+        ("brake fluid", "Brake fluid"),
+        ("wiper", "Wiper blades"),
+        ("battery", "Battery"),
+        ("air filter", "Air filter"),
+        ("cabin filter", "Cabin filter"),
+        ("inspection", "Inspection"),
+        ("tune-up", "Tune-up"),
+        ("tune up", "Tune-up"),
+        ("fuel", "Fuel fill-up"),
+        ("gasoline", "Fuel fill-up"),
+        ("diesel", "Fuel fill-up"),
+    ];
+    for (key, title) in title_rules {
+        if lower_all.contains(key) {
+            out.title = Some((*title).into());
+            break;
+        }
+    }
+    if out.title.is_none() && out.gallons.is_some() {
+        out.title = Some("Fuel fill-up".into());
+    }
+
     out
 }
 
@@ -154,6 +188,7 @@ mod tests {
         assert_eq!(p.parts_cost, Some(42.50));
         assert_eq!(p.labor_cost, Some(60.00));
         assert!(p.shop_name.as_deref().unwrap_or("").contains("Joe"));
+        assert_eq!(p.title.as_deref(), Some("Oil change"));
     }
 
     #[test]

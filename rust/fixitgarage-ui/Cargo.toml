@@ -65,3 +65,9 @@ name = "android.permission.CAMERA"
 [[package.metadata.android.uses_permission]]
 name = "android.permission.POST_NOTIFICATIONS"
 
+[[package.metadata.android.uses_permission]]
+name = "android.permission.SCHEDULE_EXACT_ALARM"
+
+[[package.metadata.android.uses_permission]]
+name = "android.permission.USE_EXACT_ALARM"
+

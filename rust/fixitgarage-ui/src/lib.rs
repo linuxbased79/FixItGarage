@@ -7,7 +7,8 @@ mod webdav;
 
 use chrono::{TimeZone, Utc};
 use platform::{
-    capture_issue_photo_path, notify, open_url, share_text, share_text_to_cloud, PKG_DROPBOX,
+    cancel_app_wake, capture_issue_photo_path, notify, notify_with_id, open_ocr_helper, open_url,
+    read_clipboard, schedule_app_wake, share_text, share_text_to_cloud, PKG_DROPBOX,
     PKG_GOOGLE_DRIVE, PKG_ONEDRIVE, PKG_PROTON_DRIVE,
 };
 use receipt_parse::{parse_receipt_text, parse_tire_receipt_text};
@@ -30,20 +31,11 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
     let state = Rc::new(RefCell::new(AppState::load()));
 
     refresh_ui(&ui, &state.borrow());
-    // Notify if anything is due for the selected vehicle
+    // Due notifications (all vehicles) + schedule future date alarms
     {
-        let s = state.borrow();
-        if s.has_due_reminders() {
-            notify("FixItGarage", &s.due_reminders_summary());
-        } else if s.has_brakes_due() {
-            notify("FixItGarage", &s.brake_due_warning());
-        } else if s.has_old_battery() {
-            notify("FixItGarage", &s.battery_age_warning());
-        } else if s.has_old_wipers() {
-            notify("FixItGarage", &s.wiper_due_warning());
-        } else if s.has_low_tread() {
-            notify("FixItGarage", &s.tread_warning());
-        }
+        let mut s = state.borrow_mut();
+        fire_due_notifications(&mut s);
+        reschedule_reminder_alarms(&s);
     }
 
     {
@@ -494,10 +486,11 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     &ui.get_rem_date().to_string(),
                     ui.get_rem_mileage().parse().ok(),
                 );
+                reschedule_reminder_alarms(&s);
                 ui.set_rem_title("".into());
                 ui.set_rem_date("".into());
                 ui.set_rem_mileage("".into());
-                ui.set_status_message("Reminder saved.".into());
+                ui.set_status_message("Reminder saved (date alarms scheduled on Android).".into());
                 refresh_ui(&ui, &s);
             }
         });
@@ -510,7 +503,9 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
             if let Some(ui) = ui_weak.upgrade() {
                 let mut s = state.borrow_mut();
                 let oil = ui.get_oil_level_choice().to_string();
+                cancel_app_wake(50000 + (id % 10000));
                 s.complete_reminder(id as u64, Some(&oil));
+                reschedule_reminder_alarms(&s);
                 ui.set_status_message(format!("Logged oil level: {oil}").into());
                 refresh_ui(&ui, &s);
             }
@@ -824,11 +819,56 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     ui.set_rcp_shop(s.into());
                     filled += 1;
                 }
-                if ui.get_rcp_title().is_empty() {
+                if let Some(t) = p.title {
+                    if ui.get_rcp_title().is_empty() {
+                        ui.set_rcp_title(t.into());
+                        filled += 1;
+                    }
+                } else if ui.get_rcp_title().is_empty() {
                     ui.set_rcp_title("Receipt import".into());
                 }
                 ui.set_status_message(format!("Parsed {filled} field(s) from text. Review and save.").into());
             }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        ui.on_paste_receipt_clipboard(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                match read_clipboard() {
+                    Some(text) => {
+                        ui.set_rcp_paste(text.into());
+                        ui.set_status_message(
+                            "Clipboard pasted — tap Auto-fill from pasted text.".into(),
+                        );
+                    }
+                    None => ui.set_status_message("Clipboard empty or unavailable.".into()),
+                }
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        ui.on_paste_tire_clipboard(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                match read_clipboard() {
+                    Some(text) => {
+                        ui.set_tire_rcp_paste(text.into());
+                        ui.set_status_message(
+                            "Clipboard pasted — tap Parse receipt text.".into(),
+                        );
+                    }
+                    None => ui.set_status_message("Clipboard empty or unavailable.".into()),
+                }
+            }
+        });
+    }
+
+    {
+        ui.on_open_ocr_helper(move || {
+            open_ocr_helper();
         });
     }
 
@@ -1167,6 +1207,17 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
 
     ui.set_due_reminders_banner(state.due_reminders_summary().into());
     ui.set_has_due_reminders(state.has_due_reminders());
+    let upcoming: Vec<HistoryRow> = state
+        .upcoming_reminders_lines()
+        .into_iter()
+        .enumerate()
+        .map(|(i, (title, detail))| HistoryRow {
+            id: i as i32,
+            title: title.into(),
+            detail: detail.into(),
+        })
+        .collect();
+    ui.set_upcoming_reminders(slint::ModelRc::new(slint::VecModel::from(upcoming)));
     ui.set_tread_summary(state.tread_summary().into());
     ui.set_tread_warning(state.tread_warning().into());
     ui.set_has_low_tread(state.has_low_tread());
@@ -1194,6 +1245,51 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     ui.set_tread_fr(t.fr.map(|v| format!("{v}")).unwrap_or_default().into());
     ui.set_tread_rl(t.rl.map(|v| format!("{v}")).unwrap_or_default().into());
     ui.set_tread_rr(t.rr.map(|v| format!("{v}")).unwrap_or_default().into());
+}
+
+/// Push due notifications (throttled) for all vehicles + selected component alerts.
+fn fire_due_notifications(s: &mut AppState) {
+    if !s.should_notify_now() {
+        return;
+    }
+    let items = s.all_due_notification_items();
+    let mut any = false;
+    for (id, title, body) in items.iter().take(8) {
+        notify_with_id(*id, title, body);
+        any = true;
+    }
+    // Component alerts for selected vehicle (battery / brakes / wipers / tread)
+    if s.has_brakes_due() {
+        notify_with_id(42010, "FixItGarage · Brakes", &s.brake_due_warning());
+        any = true;
+    }
+    if s.has_old_battery() {
+        notify_with_id(42011, "FixItGarage · Battery", &s.battery_age_warning());
+        any = true;
+    }
+    if s.has_old_wipers() {
+        notify_with_id(42012, "FixItGarage · Wipers", &s.wiper_due_warning());
+        any = true;
+    }
+    if s.has_low_tread() {
+        notify_with_id(42013, "FixItGarage · Tread", &s.tread_warning());
+        any = true;
+    }
+    if any {
+        s.mark_notified();
+    } else if s.has_due_reminders() {
+        // Fallback summary
+        notify("FixItGarage", &s.due_reminders_summary());
+        s.mark_notified();
+    }
+}
+
+/// Register AlarmManager wakes for open date-based reminders (Android).
+fn reschedule_reminder_alarms(s: &AppState) {
+    // Cap concurrent alarms to avoid binder spam
+    for (code, due, label) in s.future_date_alarms().into_iter().take(24) {
+        schedule_app_wake(code, due, &label);
+    }
 }
 
 /// Android entry point (NativeActivity / android-activity).

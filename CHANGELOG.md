@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.6
+- Smart reminders: multi-item notifications (all vehicles), 12h throttle
+- AlarmManager date wake schedules so due checks re-open the app
+- Home “Upcoming” list (90 days / 5k mi)
+- Receipt OCR flow: clipboard paste + OCR helper + auto service title
+- Tire receipt: clipboard + OCR helper buttons
+
 ## 0.2.5
 - Tire rotation: live before/after top-down diagrams; tread + mileage follow corners
 - Tire purchase receipt text parse (brand/model/size/cost/mileage)
