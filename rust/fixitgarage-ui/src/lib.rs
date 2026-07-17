@@ -265,11 +265,24 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let ui_weak = ui.as_weak();
         let state = state.clone();
         ui.on_complete_reminder(move |id| {
-            let mut s = state.borrow_mut();
-            s.complete_reminder(id as u64);
             if let Some(ui) = ui_weak.upgrade() {
-                ui.set_status_message("Reminder completed.".into());
+                let mut s = state.borrow_mut();
+                let oil = ui.get_oil_level_choice().to_string();
+                s.complete_reminder(id as u64, Some(&oil));
+                ui.set_status_message(format!("Logged oil level: {oil}").into());
                 refresh_ui(&ui, &s);
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_set_oil_level_choice(move |choice| {
+            if let Some(ui) = ui_weak.upgrade() {
+                ui.set_oil_level_choice(choice);
+                // no full refresh needed
+                let _ = state;
             }
         });
     }
@@ -446,13 +459,22 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     let reminders: Vec<ReminderRow> = state
         .open_reminders_for_selected()
         .into_iter()
-        .map(|r| ReminderRow {
-            id: r.id as i32,
-            title: r.title.clone().into(),
-            detail: reminder_status_line(r, mileage).into(),
+        .map(|r| {
+            let is_oil = AppState::is_oil_level_reminder(&r.title);
+            ReminderRow {
+                id: r.id as i32,
+                title: r.title.clone().into(),
+                detail: reminder_status_line(r, mileage).into(),
+                is_oil_level: is_oil,
+            }
         })
         .collect();
     ui.set_reminders(slint::ModelRc::new(slint::VecModel::from(reminders)));
+    ui.set_last_oil_level_summary(state.last_oil_level_summary().into());
+    // Keep a sensible default if empty
+    if ui.get_oil_level_choice().is_empty() {
+        ui.set_oil_level_choice("Full".into());
+    }
 }
 
 /// Android entry point (NativeActivity / android-activity).

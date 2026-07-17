@@ -38,8 +38,51 @@ pub struct AppState {
     pub notes: Vec<NoteEntry>,
     #[serde(default)]
     pub reminders: Vec<ReminderEntry>,
+    /// History of oil dipstick readings (from oil-level checks).
+    #[serde(default)]
+    pub oil_level_logs: Vec<OilLevelLog>,
     pub tire_layout: TireLayoutStored,
     pub tire_pattern: String,
+}
+
+/// User-friendly dipstick reading when logging an oil level check.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OilLevelLog {
+    pub vehicle_id: u64,
+    pub epoch_ms: i64,
+    /// e.g. "Full", "1 quart low"
+    pub level: String,
+    pub mileage: Option<u32>,
+}
+
+/// Standard oil-level choices (easy to understand on a dipstick check).
+pub const OIL_LEVEL_OPTIONS: &[&str] = &[
+    "Full",
+    "½ quart low",
+    "1 quart low",
+    "2 quarts low",
+    "3 quarts low",
+    "Overfilled",
+];
+
+pub fn normalize_oil_level(s: &str) -> String {
+    let t = s.trim();
+    for opt in OIL_LEVEL_OPTIONS {
+        if t.eq_ignore_ascii_case(opt) {
+            return (*opt).to_string();
+        }
+    }
+    // Accept common aliases
+    match t.to_ascii_lowercase().as_str() {
+        "ok" | "good" | "full / ok" => "Full".into(),
+        "0.5" | "half" | "1/2" | "half quart low" => "½ quart low".into(),
+        "1" | "1 qt" | "1 quart" => "1 quart low".into(),
+        "2" | "2 qt" | "2 quarts" => "2 quarts low".into(),
+        "3" | "3 qt" | "3 quarts" => "3 quarts low".into(),
+        "over" | "high" | "too full" => "Overfilled".into(),
+        _ if !t.is_empty() => t.to_string(),
+        _ => "Full".into(),
+    }
 }
 
 fn default_dark_mode() -> String {
@@ -139,6 +182,7 @@ impl Default for AppState {
             components: Vec::new(),
             notes: Vec::new(),
             reminders: Vec::new(),
+            oil_level_logs: Vec::new(),
             tire_layout: TireLayoutStored {
                 fl: "A".into(),
                 fr: "B".into(),
@@ -527,17 +571,65 @@ impl AppState {
         self.save();
     }
 
-    pub fn complete_reminder(&mut self, id: u64) {
-        if let Some(r) = self.reminders.iter_mut().find(|r| r.id == id) {
-            r.completed = true;
-            // If oil level, schedule next in 3 months
-            if r.title.to_lowercase().contains("oil level") {
-                let vid = r.vehicle_id;
-                let next = oil_level_due_after(Utc::now().timestamp_millis());
-                self.add_reminder_raw(vid, "Oil level check".into(), Some(next), None);
+    /// Complete a reminder. For oil-level checks, pass the dipstick reading
+    /// (e.g. "Full", "1 quart low") so it is logged and shown later.
+    pub fn complete_reminder(&mut self, id: u64, oil_level: Option<&str>) {
+        let Some(r) = self.reminders.iter_mut().find(|r| r.id == id) else {
+            return;
+        };
+        let is_oil = r.title.to_lowercase().contains("oil level");
+        let vid = r.vehicle_id;
+        r.completed = true;
+
+        if is_oil {
+            let level = normalize_oil_level(oil_level.unwrap_or("Full"));
+            let mileage = self
+                .vehicles
+                .iter()
+                .find(|v| v.id == vid)
+                .map(|v| v.current_mileage);
+            self.oil_level_logs.push(OilLevelLog {
+                vehicle_id: vid,
+                epoch_ms: Utc::now().timestamp_millis(),
+                level: level.clone(),
+                mileage,
+            });
+            // Keep last ~50 readings per app
+            if self.oil_level_logs.len() > 50 {
+                let drop_n = self.oil_level_logs.len() - 50;
+                self.oil_level_logs.drain(0..drop_n);
             }
-            self.save();
+            let next = oil_level_due_after(Utc::now().timestamp_millis());
+            self.add_reminder_raw(vid, "Oil level check".into(), Some(next), None);
         }
+        self.save();
+    }
+
+    /// Latest oil-level reading for the selected vehicle, for UI display.
+    pub fn last_oil_level_summary(&self) -> String {
+        let Some(vid) = self.selected_vehicle_id else {
+            return "No vehicle selected.".into();
+        };
+        self.oil_level_logs
+            .iter()
+            .rev()
+            .find(|l| l.vehicle_id == vid)
+            .map(|l| {
+                let date = match Utc.timestamp_millis_opt(l.epoch_ms) {
+                    chrono::LocalResult::Single(dt) => dt.format("%Y-%m-%d").to_string(),
+                    _ => "—".into(),
+                };
+                let mi = l
+                    .mileage
+                    .map(|m| format!(" · {m} mi"))
+                    .unwrap_or_default();
+                format!("Last check: {}{} — {}", date, mi, l.level)
+            })
+            .unwrap_or_else(|| "No oil level logged yet.".into())
+    }
+
+    pub fn is_oil_level_reminder(title: &str) -> bool {
+        title.to_lowercase().contains("oil level")
     }
 
     pub fn component_summary(&self, component_type: &str) -> String {
@@ -691,5 +783,26 @@ mod tests {
         s.user_mode = "SHOP".into();
         assert!(!s.feature_flags().show_tires);
         assert!(!s.feature_flags().show_parts);
+    }
+
+    #[test]
+    fn oil_level_logged_on_complete() {
+        let mut s = AppState::default();
+        s.add_vehicle("Daily".into(), "".into(), "".into(), None, 50000);
+        let oil_id = s
+            .reminders
+            .iter()
+            .find(|r| r.title.contains("Oil level"))
+            .map(|r| r.id)
+            .expect("oil reminder");
+        s.complete_reminder(oil_id, Some("1 quart low"));
+        assert_eq!(s.oil_level_logs.len(), 1);
+        assert_eq!(s.oil_level_logs[0].level, "1 quart low");
+        assert!(s.last_oil_level_summary().contains("1 quart low"));
+        // Next oil-level reminder scheduled
+        assert!(s
+            .reminders
+            .iter()
+            .any(|r| !r.completed && r.title.contains("Oil level")));
     }
 }

@@ -32,6 +32,8 @@ export struct ReminderRow {
     id: int,
     title: string,
     detail: string,
+    /// True when this is an oil dipstick check (show level picker).
+    is-oil-level: bool,
 }
 
 export global Theme {
@@ -207,6 +209,10 @@ export component MainWindow inherits Window {
     in-out property <string> rem-date: "";
     in-out property <string> rem-mileage: "";
 
+    // Oil dipstick reading when completing an oil-level check
+    in-out property <string> oil-level-choice: "Full";
+    in-out property <string> last-oil-level-summary: "No oil level logged yet.";
+
     in-out property <string> status-message: "";
     in-out property <string> csv-preview: "";
     in-out property <string> dark-mode: "LIGHT";
@@ -226,6 +232,7 @@ export component MainWindow inherits Window {
     callback add-note();
     callback add-reminder();
     callback complete-reminder(int);
+    callback set-oil-level-choice(string);
     callback export-csv();
     callback open-feedback();
     callback open-donate();
@@ -576,9 +583,54 @@ export component MainWindow inherits Window {
                     PageTitle { label: "Reminders"; }
                     VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text {
-                        text: "Oil level checks every 3 months are auto-created for new vehicles. Mark complete to reschedule.";
+                        text: "Oil level checks every 3 months are auto-created for new vehicles. Pick how full the oil is, then mark done.";
                         font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
                     }
+
+                    Card {
+                        title: "Oil level (dipstick)";
+                        body: last-oil-level-summary;
+                        Text {
+                            text: "When you check the oil, choose the level that matches the stick:";
+                            font-size: 13px; color: Theme.text; wrap: word-wrap;
+                        }
+                        // Easy choices — like a dropdown, as big tap targets
+                        ChoiceBtn {
+                            label: "Full";
+                            active: root.oil-level-choice == "Full";
+                            clicked => { root.set-oil-level-choice("Full"); }
+                        }
+                        ChoiceBtn {
+                            label: "½ quart low";
+                            active: root.oil-level-choice == "½ quart low";
+                            clicked => { root.set-oil-level-choice("½ quart low"); }
+                        }
+                        ChoiceBtn {
+                            label: "1 quart low";
+                            active: root.oil-level-choice == "1 quart low";
+                            clicked => { root.set-oil-level-choice("1 quart low"); }
+                        }
+                        ChoiceBtn {
+                            label: "2 quarts low";
+                            active: root.oil-level-choice == "2 quarts low";
+                            clicked => { root.set-oil-level-choice("2 quarts low"); }
+                        }
+                        ChoiceBtn {
+                            label: "3 quarts low";
+                            active: root.oil-level-choice == "3 quarts low";
+                            clicked => { root.set-oil-level-choice("3 quarts low"); }
+                        }
+                        ChoiceBtn {
+                            label: "Overfilled";
+                            active: root.oil-level-choice == "Overfilled";
+                            clicked => { root.set-oil-level-choice("Overfilled"); }
+                        }
+                        Text {
+                            text: "Selected: " + root.oil-level-choice;
+                            font-size: 13px; font-weight: 700; color: Theme.accent-on; wrap: word-wrap;
+                        }
+                    }
+
                     Card {
                         title: "Add reminder"; body: "Date YYYY-MM-DD and/or mileage";
                         LineEdit { placeholder-text: "Title"; text <=> root.rem-title; }
@@ -588,7 +640,15 @@ export component MainWindow inherits Window {
                     }
                     for r in reminders: Card {
                         title: r.title; body: r.detail;
-                        Button { text: "Mark done"; clicked => { root.complete-reminder(r.id); } }
+                        if r.is-oil-level: Text {
+                            text: "Will log oil as: " + root.oil-level-choice;
+                            font-size: 12px; color: Theme.text-muted; wrap: word-wrap;
+                        }
+                        Button {
+                            text: r.is-oil-level ? "Log level & mark done" : "Mark done";
+                            primary: r.is-oil-level;
+                            clicked => { root.complete-reminder(r.id); }
+                        }
                     }
                     Button { text: "Back"; clicked => { root.navigate(5); } }
                 }
