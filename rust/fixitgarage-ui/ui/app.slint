@@ -1,7 +1,7 @@
 // FixItGarage — touch-friendly mobile UI (Slint)
-// GPL-3.0 application. Designed for phone-sized layouts + desktop.
+// GPL-3.0. Light + dark themes (toggle in Settings / More).
 
-import { Button, LineEdit, ScrollView, VerticalBox, HorizontalBox, ListView } from "std-widgets.slint";
+import { Button, LineEdit, ScrollView, VerticalBox, HorizontalBox } from "std-widgets.slint";
 
 export struct VehicleRow {
     id: int,
@@ -22,17 +22,40 @@ export struct CostLine {
     value: string,
 }
 
+// Shared palette — flipped by MainWindow when dark-mode changes
+export global Theme {
+    in-out property <bool> dark: false;
+
+    out property <color> bg: dark ? #0D1117 : #FAFAFA;
+    out property <color> surface: dark ? #161B22 : #F5F5F5;
+    out property <color> surface-border: dark ? #30363D : #E0E0E0;
+    out property <color> nav-bg: dark ? #161B22 : #FFFFFF;
+    out property <color> text: dark ? #E6EDF3 : #212121;
+    out property <color> text-muted: dark ? #8B949E : #546E7A;
+    out property <color> text-soft: dark ? #8B949E : #616161;
+    out property <color> title: dark ? #81C784 : #1B5E20;
+    out property <color> accent: #2E7D32;
+    out property <color> accent-soft: dark ? #1B3D1F : #C8E6C9;
+    out property <color> accent-on: dark ? #A5D6A7 : #1B5E20;
+    out property <color> tire-bg: dark ? #1B3D1F : #E8F5E9;
+    out property <color> tire-border: #2E7D32;
+    out property <color> car-body: dark ? #21262D : #ECEFF1;
+    out property <color> car-outline: dark ? #484F58 : #90A4AE;
+    out property <color> mono: dark ? #C9D1D9 : #455A64;
+    out property <color> ok: dark ? #81C784 : #2E7D32;
+}
+
 component TireCorner inherits Rectangle {
     in property <string> label;
     width: 56px;
     height: 48px;
     border-radius: 8px;
     border-width: 2px;
-    border-color: #2E7D32;
-    background: #E8F5E9;
+    border-color: Theme.tire-border;
+    background: Theme.tire-bg;
     Text {
         text: root.label;
-        color: #1B5E20;
+        color: Theme.accent-on;
         font-size: 16px;
         font-weight: 700;
         horizontal-alignment: center;
@@ -48,11 +71,11 @@ component NavBtn inherits TouchArea {
     height: 52px;
     min-width: 56px;
     Rectangle {
-        background: root.active ? #C8E6C9 : transparent;
+        background: root.active ? Theme.accent-soft : transparent;
         border-radius: 8px;
         Text {
             text: root.label;
-            color: root.active ? #1B5E20 : #546E7A;
+            color: root.active ? Theme.accent-on : Theme.text-muted;
             font-size: 12px;
             font-weight: root.active ? 700 : 500;
             horizontal-alignment: center;
@@ -66,10 +89,10 @@ component NavBtn inherits TouchArea {
 component Card inherits Rectangle {
     in-out property <string> title;
     in-out property <string> body;
-    background: #F5F5F5;
+    background: Theme.surface;
     border-radius: 12px;
     border-width: 1px;
-    border-color: #E0E0E0;
+    border-color: Theme.surface-border;
     VerticalBox {
         padding: 14px;
         spacing: 6px;
@@ -77,13 +100,13 @@ component Card inherits Rectangle {
             text: root.title;
             font-size: 16px;
             font-weight: 700;
-            color: #212121;
+            color: Theme.text;
             wrap: word-wrap;
         }
         if root.body != "": Text {
             text: root.body;
             font-size: 13px;
-            color: #616161;
+            color: Theme.text-soft;
             wrap: word-wrap;
         }
         @children
@@ -96,7 +119,7 @@ export component MainWindow inherits Window {
     preferred-height: 780px;
     min-width: 320px;
     min-height: 560px;
-    background: #FAFAFA;
+    background: Theme.bg;
 
     // --- App state (bound from Rust) ---
     in-out property <bool> wizard-done: false;
@@ -116,14 +139,12 @@ export component MainWindow inherits Window {
         { label: "All time", value: "$0.00" },
     ];
 
-    // Vehicle form
     in-out property <string> form-name: "";
     in-out property <string> form-make: "";
     in-out property <string> form-model: "";
     in-out property <string> form-year: "";
     in-out property <string> form-mileage: "";
 
-    // Service form
     in-out property <string> svc-title: "";
     in-out property <string> svc-mileage: "";
     in-out property <string> svc-cost: "";
@@ -131,7 +152,6 @@ export component MainWindow inherits Window {
     in-out property <string> svc-source: "DIY";
     in-out property <string> mpg-label: "MPG: —";
 
-    // Tires
     in-out property <string> tire-fl: "A";
     in-out property <string> tire-fr: "B";
     in-out property <string> tire-rl: "C";
@@ -139,12 +159,11 @@ export component MainWindow inherits Window {
     in-out property <string> tire-pattern: "forward_cross";
     in-out property <string> tire-preview: "Preview: C D / B A";
 
-    // Settings / export
     in-out property <string> status-message: "";
     in-out property <string> csv-preview: "";
-    in-out property <string> dark-mode: "SYSTEM";
+    // LIGHT or DARK (persisted)
+    in-out property <string> dark-mode: "LIGHT";
 
-    // Callbacks → Rust
     callback finish-wizard(string);
     callback navigate(int);
     callback add-vehicle();
@@ -153,15 +172,21 @@ export component MainWindow inherits Window {
     callback set-pattern(string);
     callback set-source(string);
     callback set-user-mode(string);
+    callback set-dark-mode(string);
     callback export-csv();
     callback open-feedback();
     callback open-donate();
+
+    // Keep Theme.dark in sync with property
+    changed dark-mode => {
+        Theme.dark = (root.dark-mode == "DARK");
+    }
 
     // ===== Wizard =====
     if !wizard-done: Rectangle {
         width: 100%;
         height: 100%;
-        background: #FAFAFA;
+        background: Theme.bg;
         VerticalBox {
             padding: 24px;
             spacing: 16px;
@@ -171,13 +196,13 @@ export component MainWindow inherits Window {
                 text: "Welcome to FixItGarage";
                 font-size: 26px;
                 font-weight: 800;
-                color: #1B5E20;
+                color: Theme.title;
                 wrap: word-wrap;
             }
             Text {
                 text: "How do you mostly maintain your vehicles? We'll highlight the right tools. Change this anytime in Settings.";
                 font-size: 15px;
-                color: #546E7A;
+                color: Theme.text-muted;
                 wrap: word-wrap;
             }
 
@@ -189,7 +214,7 @@ export component MainWindow inherits Window {
             Text {
                 text: "Oil changes, filters, tread checks first.";
                 font-size: 12px;
-                color: #78909C;
+                color: Theme.text-muted;
                 wrap: word-wrap;
             }
 
@@ -201,7 +226,7 @@ export component MainWindow inherits Window {
             Text {
                 text: "Receipts, shop history, labor/parts costs.";
                 font-size: 12px;
-                color: #78909C;
+                color: Theme.text-muted;
                 wrap: word-wrap;
             }
 
@@ -212,8 +237,23 @@ export component MainWindow inherits Window {
             Text {
                 text: "Full feature set — unlimited vehicles.";
                 font-size: 12px;
-                color: #78909C;
+                color: Theme.text-muted;
                 wrap: word-wrap;
+            }
+
+            // Theme on first run too
+            HorizontalBox {
+                spacing: 8px;
+                Button {
+                    text: "Light";
+                    primary: root.dark-mode == "LIGHT";
+                    clicked => { root.set-dark-mode("LIGHT"); }
+                }
+                Button {
+                    text: "Dark";
+                    primary: root.dark-mode == "DARK";
+                    clicked => { root.set-dark-mode("DARK"); }
+                }
             }
         }
     }
@@ -221,10 +261,9 @@ export component MainWindow inherits Window {
     // ===== Main shell =====
     if wizard-done: VerticalLayout {
         spacing: 0;
-        // Content
         Rectangle {
             vertical-stretch: 1;
-            background: #FAFAFA;
+            background: Theme.bg;
 
             // HOME
             if page == 0: ScrollView {
@@ -238,12 +277,12 @@ export component MainWindow inherits Window {
                         text: "FixItGarage";
                         font-size: 28px;
                         font-weight: 800;
-                        color: #1B5E20;
+                        color: Theme.title;
                     }
                     Text {
                         text: mode-label;
                         font-size: 14px;
-                        color: #546E7A;
+                        color: Theme.text-muted;
                     }
 
                     Card {
@@ -253,13 +292,13 @@ export component MainWindow inherits Window {
                             text: last-service-title;
                             font-size: 15px;
                             font-weight: 600;
-                            color: #212121;
+                            color: Theme.text;
                             wrap: word-wrap;
                         }
                         Text {
                             text: last-service-detail;
                             font-size: 13px;
-                            color: #616161;
+                            color: Theme.text-soft;
                             wrap: word-wrap;
                         }
                     }
@@ -289,7 +328,7 @@ export component MainWindow inherits Window {
 
                     if status-message != "": Text {
                         text: status-message;
-                        color: #2E7D32;
+                        color: Theme.ok;
                         font-size: 12px;
                         wrap: word-wrap;
                     }
@@ -307,12 +346,12 @@ export component MainWindow inherits Window {
                         text: "Vehicles";
                         font-size: 24px;
                         font-weight: 800;
-                        color: #1B5E20;
+                        color: Theme.title;
                     }
                     Text {
                         text: "Unlimited vehicles. Data stays on this device.";
                         font-size: 13px;
-                        color: #546E7A;
+                        color: Theme.text-muted;
                         wrap: word-wrap;
                     }
 
@@ -368,12 +407,12 @@ export component MainWindow inherits Window {
                         text: "Maintenance";
                         font-size: 24px;
                         font-weight: 800;
-                        color: #1B5E20;
+                        color: Theme.title;
                     }
                     Text {
                         text: "Shop work and DIY oil changes. " + mpg-label;
                         font-size: 13px;
-                        color: #546E7A;
+                        color: Theme.text-muted;
                         wrap: word-wrap;
                     }
 
@@ -434,32 +473,30 @@ export component MainWindow inherits Window {
                         text: "Tire tracker";
                         font-size: 24px;
                         font-weight: 800;
-                        color: #1B5E20;
+                        color: Theme.title;
                     }
                     Text {
                         text: "Top-down diagram, rotation patterns, before/after preview.";
                         font-size: 13px;
-                        color: #546E7A;
+                        color: Theme.text-muted;
                         wrap: word-wrap;
                     }
 
                     Card {
                         title: "Current positions";
                         body: "FRONT";
-                        // Car body diagram
                         Rectangle {
                             height: 220px;
                             background: transparent;
-                            // body
                             Rectangle {
                                 x: (parent.width - 140px) / 2;
                                 y: 20px;
                                 width: 140px;
                                 height: 180px;
                                 border-radius: 28px;
-                                background: #ECEFF1;
+                                background: Theme.car-body;
                                 border-width: 2px;
-                                border-color: #90A4AE;
+                                border-color: Theme.car-outline;
                             }
                             TireCorner {
                                 x: 12px;
@@ -485,7 +522,7 @@ export component MainWindow inherits Window {
                         Text {
                             text: tire-preview;
                             font-size: 13px;
-                            color: #37474F;
+                            color: Theme.text;
                             wrap: word-wrap;
                         }
                     }
@@ -539,12 +576,12 @@ export component MainWindow inherits Window {
                         text: "Operational costs";
                         font-size: 24px;
                         font-weight: 800;
-                        color: #1B5E20;
+                        color: Theme.title;
                     }
                     Text {
                         text: "Monthly and yearly totals from maintenance and fuel.";
                         font-size: 13px;
-                        color: #546E7A;
+                        color: Theme.text-muted;
                         wrap: word-wrap;
                     }
                     for c in cost-lines: Card {
@@ -554,7 +591,7 @@ export component MainWindow inherits Window {
                 }
             }
 
-            // SETTINGS
+            // SETTINGS (More)
             if page == 5: ScrollView {
                 width: 100%;
                 height: 100%;
@@ -565,7 +602,30 @@ export component MainWindow inherits Window {
                         text: "Settings";
                         font-size: 24px;
                         font-weight: 800;
-                        color: #1B5E20;
+                        color: Theme.title;
+                    }
+
+                    Card {
+                        title: "Appearance";
+                        body: "Dark mode changes the whole app. Choice is saved on this device.";
+                        HorizontalBox {
+                            spacing: 8px;
+                            Button {
+                                text: "Light";
+                                primary: root.dark-mode == "LIGHT";
+                                clicked => { root.set-dark-mode("LIGHT"); }
+                            }
+                            Button {
+                                text: "Dark";
+                                primary: root.dark-mode == "DARK";
+                                clicked => { root.set-dark-mode("DARK"); }
+                            }
+                        }
+                        Text {
+                            text: root.dark-mode == "DARK" ? "Currently: Dark" : "Currently: Light";
+                            font-size: 12px;
+                            color: Theme.text-muted;
+                        }
                     }
 
                     Card {
@@ -601,7 +661,7 @@ export component MainWindow inherits Window {
                         if csv-preview != "": Text {
                             text: csv-preview;
                             font-size: 11px;
-                            color: #455A64;
+                            color: Theme.mono;
                             wrap: word-wrap;
                             font-family: "monospace";
                         }
@@ -622,12 +682,12 @@ export component MainWindow inherits Window {
 
                     Card {
                         title: "About";
-                        body: "FixItGarage 0.1.0 — pure Rust UI (Slint) + fixitgarage-core. Optional Kotlin Android shell remains in /app for comparison.";
+                        body: "FixItGarage 0.1.0 — pure Rust UI (Slint) + fixitgarage-core.";
                     }
 
                     if status-message != "": Text {
                         text: status-message;
-                        color: #2E7D32;
+                        color: Theme.ok;
                         wrap: word-wrap;
                     }
                 }
@@ -637,9 +697,9 @@ export component MainWindow inherits Window {
         // Bottom navigation
         Rectangle {
             height: 60px;
-            background: #FFFFFF;
+            background: Theme.nav-bg;
             border-width: 1px;
-            border-color: #E0E0E0;
+            border-color: Theme.surface-border;
 
             HorizontalBox {
                 padding-left: 4px;

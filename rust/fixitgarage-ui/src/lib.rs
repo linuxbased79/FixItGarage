@@ -172,6 +172,24 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
     {
         let ui_weak = ui.as_weak();
         let state = state.clone();
+        ui.on_set_dark_mode(move |mode| {
+            let mut s = state.borrow_mut();
+            let mode = mode.to_string();
+            s.dark_mode = if mode.eq_ignore_ascii_case("DARK") {
+                "DARK".into()
+            } else {
+                "LIGHT".into()
+            };
+            s.save();
+            if let Some(ui) = ui_weak.upgrade() {
+                refresh_ui(&ui, &s);
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
         ui.on_export_csv(move || {
             let s = state.borrow();
             let csv = s.export_csv();
@@ -200,6 +218,10 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
 fn refresh_ui(ui: &MainWindow, state: &AppState) {
     ui.set_wizard_done(state.wizard_done);
     ui.set_user_mode(state.user_mode.clone().into());
+    let dark = state.dark_mode.eq_ignore_ascii_case("DARK");
+    ui.set_dark_mode(if dark { "DARK" } else { "LIGHT" }.into());
+    // Keep global Theme in sync (also driven by Slint changed handler)
+    Theme::get(ui).set_dark(dark);
     ui.set_mode_label(state.mode_label().into());
     ui.set_vehicle_count_label(format!("{} vehicles", state.vehicles.len()).into());
     ui.set_mpg_label(state.mpg_label().into());

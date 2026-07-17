@@ -13,12 +13,19 @@ use std::str::FromStr;
 pub struct AppState {
     pub wizard_done: bool,
     pub user_mode: String,
+    /// "LIGHT" or "DARK" — applied across the Slint Theme palette.
+    #[serde(default = "default_dark_mode")]
+    pub dark_mode: String,
     pub next_vehicle_id: u64,
     pub next_service_id: u64,
     pub vehicles: Vec<Vehicle>,
     pub services: Vec<ServiceRecord>,
     pub tire_layout: TireLayoutStored,
     pub tire_pattern: String,
+}
+
+fn default_dark_mode() -> String {
+    "LIGHT".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,6 +63,7 @@ impl Default for AppState {
         Self {
             wizard_done: false,
             user_mode: "BOTH".into(),
+            dark_mode: default_dark_mode(),
             next_vehicle_id: 1,
             next_service_id: 1,
             vehicles: Vec::new(),
