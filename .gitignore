@@ -53,3 +53,7 @@ rust/signing/
 **/*.rs.bk
 *.apk
 *.aab
+
+# OCR model weights (download via fixitgarage-ui/models/download-models.sh)
+*.rten
+rust/fixitgarage-ui/models/*.rten

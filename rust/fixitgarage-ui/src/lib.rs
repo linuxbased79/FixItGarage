@@ -1,9 +1,11 @@
 //! FixItGarage Slint UI — shared library for desktop binary and Android cdylib.
 
 mod i18n;
+mod ondevice_ocr;
 mod platform;
 mod receipt_parse;
 mod state;
+mod tread_cv;
 mod units;
 mod webdav;
 
@@ -1075,6 +1077,90 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                         "Opened OCR app with photo. Share text back to FixItGarage or Copy, then Apply shared OCR / Paste & fill.".into(),
                     ),
                     Err(e) => ui.set_status_message(format!("Send to OCR: {e}").into()),
+                }
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_ocr_receipt_on_device(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                set_ocr_target("receipt");
+                ui.set_status_message("Running on-device OCR… (first run may load models)".into());
+                let path = {
+                    let p = ui.get_rcp_photo_path().to_string();
+                    if !p.is_empty() && std::path::Path::new(&p).is_file() {
+                        p
+                    } else if let Some(img) = pending_ocr_image_path() {
+                        ui.set_rcp_photo_path(img.clone().into());
+                        img
+                    } else {
+                        ui.set_status_message(
+                            "Capture or share a receipt photo first, then run On-device OCR.".into(),
+                        );
+                        return;
+                    }
+                };
+                match ondevice_ocr::ocr_image_path(&path) {
+                    Ok(text) => {
+                        let s = state.borrow();
+                        apply_receipt_ocr_text(&ui, &s, &text);
+                    }
+                    Err(e) => ui.set_status_message(format!("On-device OCR: {e}").into()),
+                }
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_measure_tread_cv(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                ui.set_status_message("Analyzing tread photo (coin gauge CV)…".into());
+                let path = {
+                    let p = ui.get_tread_photo_path().to_string();
+                    if !p.is_empty() && std::path::Path::new(&p).is_file() {
+                        p
+                    } else if let Some(img) = pending_ocr_image_path() {
+                        // Shared image can be used for tread too
+                        ui.set_tread_photo_path(img.clone().into());
+                        img
+                    } else {
+                        let p2 = capture_issue_photo_path();
+                        ui.set_tread_photo_path(p2.into());
+                        ui.set_status_message(
+                            "Camera opened — place a US penny in the tread groove, take the photo, then tap Measure tread (CV) again.".into(),
+                        );
+                        return;
+                    }
+                };
+                match tread_cv::estimate_tread_from_image(&path) {
+                    Ok(est) => {
+                        let u = state.borrow().unit_system();
+                        let shown = mm_to_display(est.depth_mm, u);
+                        let s = format!("{shown:.1}");
+                        ui.set_tread_fl(s.clone().into());
+                        ui.set_tread_fr(s.clone().into());
+                        ui.set_tread_rl(s.clone().into());
+                        ui.set_tread_rr(s.clone().into());
+                        ui.set_status_message(
+                            format!(
+                                "Tread CV ≈ {shown:.1} {} (conf {:.0}%). {} Review each corner, then Save.",
+                                if matches!(u, units::UnitSystem::Imperial) {
+                                    "/32\""
+                                } else {
+                                    "mm"
+                                },
+                                est.confidence * 100.0,
+                                est.note
+                            )
+                            .into(),
+                        );
+                    }
+                    Err(e) => ui.set_status_message(format!("Tread CV: {e}").into()),
                 }
             }
         });

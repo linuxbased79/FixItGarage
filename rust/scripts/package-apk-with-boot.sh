@@ -8,8 +8,8 @@ set -euo pipefail
 
 IN_APK="${1:?input apk}"
 OUT_APK="${2:?output apk}"
-VERSION_NAME="${3:-0.2.18}"
-VERSION_CODE="${4:-2018}"
+VERSION_NAME="${3:-0.2.19}"
+VERSION_CODE="${4:-2019}"
 
 export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}"
 if [[ ! -d "$ANDROID_HOME/platform-tools" && -d /root/Android/Sdk/platform-tools ]]; then
@@ -103,6 +103,16 @@ if [[ -d "$WORK/in/lib" ]]; then
 fi
 # Optional: resources from base (resources.arsc)
 cp -f "$WORK/classes.dex" "$WORK/out/classes.dex"
+
+# On-device OCR models (ocrs) — pack into assets/ for Graphene-friendly offline use
+MODELS_DIR="$ROOT/fixitgarage-ui/models"
+if [[ -f "$MODELS_DIR/text-detection.rten" && -f "$MODELS_DIR/text-recognition.rten" ]]; then
+  mkdir -p "$WORK/out/assets/models"
+  cp -f "$MODELS_DIR/text-detection.rten" "$MODELS_DIR/text-recognition.rten" "$WORK/out/assets/models/"
+  echo "Bundled OCR models into APK assets (~$(du -sh "$MODELS_DIR" | awk '{print $1}'))"
+else
+  echo "WARNING: OCR models missing under $MODELS_DIR — on-device OCR will download on first use" >&2
+fi
 
 # Zip (store compressed for most files; libs compressed ok)
 (cd "$WORK/out" && zip -q -r -9 "$WORK/unsigned.apk" .)

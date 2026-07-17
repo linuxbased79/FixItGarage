@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.19
+- **On-device OCR** (pure Rust [ocrs](https://github.com/robertknight/ocrs), no GMS): Capture → On-device OCR fills receipt fields
+- OCR models (~12 MB) bundled in APK assets; first-run extract / optional download fallback
+- **Tread CV**: coin-gauge computer vision estimates depth (mm / 32nds) from a penny-in-groove photo
+- External OCR app / share-back path kept as fallback
+
 ## 0.2.18
 - **Deep OCR pipeline**: Capture for OCR (MediaStore) → Send photo to Text Fairy / Lens → Share text back into FixItGarage
 - Share target activity receives text/image from any OCR app (`ShareReceiveActivity`)

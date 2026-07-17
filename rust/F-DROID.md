@@ -60,3 +60,8 @@ Issues: https://github.com/linuxbased79/FixItGarage/issues
 - `ShareReceiveActivity` is a share target for `text/plain` and `image/*` (OCR apps → FixItGarage).
 - Capture uses MediaStore; “Send photo to OCR” uses `ACTION_SEND` image/* to Text Fairy / Lens / chooser.
 - No bundled Tesseract/ML Kit (keeps APK size + GrapheneOS-friendly; free OCR via F-Droid Text Fairy).
+
+## On-device OCR models (0.2.19+)
+- Bundled under APK `assets/models/*.rten` (ocrs text-detection + text-recognition, ~12 MB).
+- Extracted to app files on first use; pure Rust inference (rten) — **no ML Kit / GMS**.
+- Build: run `fixitgarage-ui/models/download-models.sh` before `release-apks.sh`.

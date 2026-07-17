@@ -1,0 +1,1 @@
+On-device OCR (no Google) from receipt photos; coin-gauge tread depth CV; models bundled offline.

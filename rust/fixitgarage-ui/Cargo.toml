@@ -34,6 +34,11 @@ dirs = "6"
 regex = "1"
 # Blocking HTTP for WebDAV/Nextcloud backup (TLS via rustls, no OpenSSL)
 ureq = { version = "2", default-features = false, features = ["tls"] }
+# On-device OCR (pure Rust, no GMS) + image/tread CV
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+imageproc = "0.25"
+ocrs = "0.12"
+rten = "0.24"
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"

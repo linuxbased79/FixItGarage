@@ -727,6 +727,118 @@ fn ocr_files_dir() -> Option<std::path::PathBuf> {
     }
 }
 
+/// Public wrapper for app files dir (OCR models, share drops).
+pub fn android_files_dir_public() -> Result<std::path::PathBuf, String> {
+    #[cfg(target_os = "android")]
+    {
+        return android_files_dir();
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        Ok(dirs::data_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join("fixitgarage"))
+    }
+}
+
+/// Extract an APK asset (e.g. `models/text-detection.rten`) into `dest`.
+pub fn extract_asset_to_file(asset_path: &str, dest: &std::path::Path) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        return extract_asset_to_file_android(asset_path, dest);
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (asset_path, dest);
+        Err("assets only on Android".into())
+    }
+}
+
+#[cfg(target_os = "android")]
+fn extract_asset_to_file_android(asset_path: &str, dest: &std::path::Path) -> Result<(), String> {
+    use jni::objects::{JObject, JValue};
+    use jni::JavaVM;
+
+    if dest.is_file() {
+        if let Ok(m) = std::fs::metadata(dest) {
+            if m.len() > 1000 {
+                return Ok(());
+            }
+        }
+    }
+    let ctx = ndk_context::android_context();
+    let vm =
+        unsafe { JavaVM::from_raw(ctx.vm().cast()) }.map_err(|e| format!("JavaVM: {e}"))?;
+    let mut env = vm
+        .attach_current_thread()
+        .map_err(|e| format!("attach: {e}"))?;
+    let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+
+    let assets = env
+        .call_method(
+            &context,
+            "getAssets",
+            "()Landroid/content/res/AssetManager;",
+            &[],
+        )
+        .map_err(|e| format!("getAssets: {e}"))?
+        .l()
+        .map_err(|e| format!("assets: {e}"))?;
+
+    let path_j = env
+        .new_string(asset_path)
+        .map_err(|e| format!("path: {e}"))?;
+    let input = env
+        .call_method(
+            &assets,
+            "open",
+            "(Ljava/lang/String;)Ljava/io/InputStream;",
+            &[JValue::Object(&path_j)],
+        )
+        .map_err(|e| format!("assets.open {asset_path}: {e}"))?
+        .l()
+        .map_err(|e| format!("stream: {e}"))?;
+    if input.is_null() {
+        return Err(format!("asset missing: {asset_path}"));
+    }
+
+    let mut data: Vec<u8> = Vec::new();
+    let buf = env
+        .new_byte_array(8192)
+        .map_err(|e| format!("byte array: {e}"))?;
+    loop {
+        let n = env
+            .call_method(
+                &input,
+                "read",
+                "([B)I",
+                &[JValue::Object(buf.as_ref())],
+            )
+            .map_err(|e| format!("read: {e}"))?
+            .i()
+            .map_err(|e| format!("read i: {e}"))?;
+        if n <= 0 {
+            break;
+        }
+        let chunk = env
+            .convert_byte_array(&buf)
+            .map_err(|e| format!("convert: {e}"))?;
+        data.extend_from_slice(&chunk[..n as usize]);
+        if data.len() > 40 * 1024 * 1024 {
+            break;
+        }
+    }
+    let _ = env.call_method(&input, "close", "()V", &[]);
+    if data.is_empty() {
+        return Err(format!("empty asset: {asset_path}"));
+    }
+    if let Some(parent) = dest.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    std::fs::write(dest, data).map_err(|e| format!("write asset: {e}"))?;
+    Ok(())
+}
+
 #[cfg(target_os = "android")]
 fn android_files_dir() -> Result<std::path::PathBuf, String> {
     use jni::objects::JObject;

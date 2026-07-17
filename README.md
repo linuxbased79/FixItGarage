@@ -10,7 +10,7 @@ Planned distribution: **F-Droid** and **Google Play**. Designed for **GrapheneOS
 
 ## Status
 
-**0.2.18** — primary product is the **Rust + Slint** APK (`org.fixitgarage.app`).
+**0.2.19** — primary product is the **Rust + Slint** APK (`org.fixitgarage.app`).
 
 | Area | Status |
 |------|--------|
@@ -29,8 +29,8 @@ Planned distribution: **F-Droid** and **Google Play**. Designed for **GrapheneOS
 | Units (imperial / metric) | Done |
 | Languages (system + EN/ES/FR/DE/JA/KO/ZH) | Done |
 | OpenDyslexic accessibility font | Done |
-| Receipt OCR (in-app from photo) | Partial (capture→OCR app→share-back; no bundled on-device engine yet) |
-| Camera tread auto-measure | Partial (camera assist + manual entry) |
+| Receipt OCR (in-app from photo) | Done (on-device ocrs + external app fallback) |
+| Camera tread auto-measure | Done (coin-gauge CV + manual confirm) |
 | F-Droid / Play public listing | Packaging ready — **not yet submitted** |
 
 ## Features (product goals)
@@ -56,7 +56,8 @@ Planned distribution: **F-Droid** and **Google Play**. Designed for **GrapheneOS
 
 - **Local-first**: data on device; cloud is optional and user-initiated.  
 - Core app does **not** depend on Google Play Services.  
-- Receipt OCR currently uses paste / external helper; free on-device OCR is still a goal.  
+- Receipt OCR: **on-device** (ocrs, no GMS) with external OCR app fallback.  
+- Tread: **coin-gauge CV** estimate; always confirm before save.  
 - No proprietary trackers.  
 - See [`rust/F-Droid.md`](rust/F-DROID.md) and [`PLAY.md`](PLAY.md).
 
