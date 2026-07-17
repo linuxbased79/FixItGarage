@@ -100,3 +100,41 @@ The older **Kotlin Compose** app under `/app` remains as a reference shell. The 
 - Receipt OCR, camera tread depth, and cloud backup are still roadmap items.  
 - On Android, “open URL” for feedback/donate can be extended via JNI if needed.  
 - First Slint build is slow (native deps); later builds are incremental.
+
+## Debian 13 PC emulator (test without a phone)
+
+One-time setup (if not already done):
+
+```bash
+source ~/Documents/FixItGarage/android-env.sh
+# SDK + AVD already installed as FixItGarage_API34 (API 34, x86_64, Pixel 6 profile)
+```
+
+### Daily use
+
+**Terminal 1 — start emulator (GUI window):**
+```bash
+source ~/Documents/FixItGarage/android-env.sh
+fig-emulator
+# or: ~/Documents/FixItGarage/FixItGarage/rust/scripts/start-emulator.sh
+```
+
+**Terminal 2 — install + launch app:**
+```bash
+source ~/Documents/FixItGarage/android-env.sh
+fig-install
+```
+
+Use the **x86_64** APK on the emulator (`dist/FixItGarage-0.1.0-x86_64.apk`).  
+Use the **arm64** APK on a real phone.
+
+If the emulator window fails under Wayland:
+```bash
+QT_QPA_PLATFORM=xcb fig-emulator
+```
+
+KVM acceleration: ensure your user is in the `kvm` group:
+```bash
+sudo usermod -aG kvm $USER
+# log out and back in
+```
