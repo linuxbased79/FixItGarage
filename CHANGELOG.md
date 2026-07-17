@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.8
+- Split navigation: **More** = tools/trackers hub; **Settings** (⚙) = preferences only
+- Settings gear on Home header and bottom nav
+- Appearance, units, feature focus, backup, cloud, support moved out of More
+
 ## 0.2.7
 - Units preference: Imperial (mi, gal, MPG, tread 1/32\") or Metric (km, L, L/100km, tread mm)
 - Settings toggle; saved on device; values convert for display

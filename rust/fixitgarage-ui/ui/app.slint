@@ -81,15 +81,27 @@ component TireCorner inherits Rectangle {
 
 component NavBtn inherits TouchArea {
     in property <string> label;
+    /// Optional icon glyph (e.g. ⚙ for Settings). Empty = text-only tab.
+    in property <string> icon: "";
     in property <bool> active;
-    height: 52px; min-width: 48px;
+    height: 56px; min-width: 44px;
     Rectangle {
         background: root.active ? Theme.accent-soft : transparent; border-radius: 8px;
-        Text {
-            text: root.label;
-            color: root.active ? Theme.accent-on : Theme.text-muted;
-            font-size: 11px; font-weight: root.active ? 700 : 500;
-            horizontal-alignment: center; vertical-alignment: center; width: 100%; height: 100%;
+        VerticalBox {
+            padding-top: 4px; padding-bottom: 2px; spacing: 0px; alignment: center;
+            if root.icon != "": Text {
+                text: root.icon;
+                color: root.active ? Theme.accent-on : Theme.text-muted;
+                font-size: 18px; font-weight: 600;
+                horizontal-alignment: center; width: 100%;
+            }
+            Text {
+                text: root.label;
+                color: root.active ? Theme.accent-on : Theme.text-muted;
+                font-size: root.icon != "" ? 9px : 11px;
+                font-weight: root.active ? 700 : 500;
+                horizontal-alignment: center; width: 100%;
+            }
         }
     }
 }
@@ -147,8 +159,9 @@ export component MainWindow inherits Window {
 
     in-out property <bool> wizard-done: false;
     in-out property <string> user-mode: "BOTH";
-    // 0 home 1 vehicles 2 service 3 tires 4 costs 5 settings
-    // 6 parts 7 battery 8 wipers 9 brakes 10 notes 11 reminders 12 photos 13 receipt 14 fuel
+    // 0 home 1 vehicles 2 service 3 tires 4 costs
+    // 5 more (tools hub) 6 parts 7 battery 8 wipers 9 brakes 10 notes
+    // 11 reminders 12 photos 13 receipt 14 fuel 15 settings
     in-out property <int> page: 0;
 
     in-out property <bool> show-tires: true;
@@ -405,7 +418,14 @@ export component MainWindow inherits Window {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 12px;
-                    Text { text: "FixItGarage"; font-size: 28px; font-weight: 800; color: Theme.title; }
+                    HorizontalBox {
+                        spacing: 8px;
+                        Text {
+                            text: "FixItGarage"; font-size: 28px; font-weight: 800; color: Theme.title;
+                            horizontal-stretch: 1; vertical-alignment: center;
+                        }
+                        Button { text: "⚙"; clicked => { root.navigate(15); } }
+                    }
                     Text { text: mode-label; font-size: 14px; color: Theme.text-muted; }
                     VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Card {
@@ -703,12 +723,56 @@ export component MainWindow inherits Window {
                 }
             }
 
-            // SETTINGS
+            // MORE — tools & trackers hub (not settings)
             if page == 5: ScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 12px;
-                    PageTitle { label: "Settings"; }
+                    HorizontalBox {
+                        spacing: 8px;
+                        PageTitle { label: "More"; horizontal-stretch: 1; }
+                        Button { text: "⚙ Settings"; clicked => { root.navigate(15); } }
+                    }
+                    Text {
+                        text: "Trackers and tools for the selected vehicle. App preferences are under Settings (gear).";
+                        font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
+                    }
+                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    Card {
+                        title: "Maintenance trackers"; body: "";
+                        if show-parts: Button { text: "Parts log"; clicked => { root.navigate(6); } }
+                        Button { text: "Battery age"; clicked => { root.navigate(7); } }
+                        Button { text: "Wiper blades"; clicked => { root.navigate(8); } }
+                        Button { text: "Brakes"; clicked => { root.navigate(9); } }
+                    }
+                    Card {
+                        title: "Logs & reminders"; body: "";
+                        Button { text: "Notes"; clicked => { root.navigate(10); } }
+                        Button { text: "Reminders & oil level"; clicked => { root.navigate(11); } }
+                        Button { text: "Issue photos"; clicked => { root.navigate(12); } }
+                        Button { text: "Receipt log"; clicked => { root.navigate(13); } }
+                        Button { text: "Fuel / economy history"; clicked => { root.navigate(14); } }
+                    }
+                    Card {
+                        title: "Quick links"; body: "";
+                        Button { text: "Log service"; clicked => { root.navigate(2); } }
+                        if show-tires: Button { text: "Tire tracker"; clicked => { root.navigate(3); } }
+                        Button { text: "Costs"; clicked => { root.navigate(4); } }
+                        Button { text: "⚙ Open Settings"; primary: true; clicked => { root.navigate(15); } }
+                    }
+                }
+            }
+
+            // SETTINGS — preferences only (gear tab)
+            if page == 15: ScrollView {
+                width: 100%; height: 100%;
+                VerticalBox {
+                    padding: 16px; spacing: 12px;
+                    PageTitle { label: "⚙ Settings"; }
+                    Text {
+                        text: "App preferences. Trackers and tools live under More.";
+                        font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
+                    }
                     Card {
                         title: "Appearance"; body: "Dark is the default. Your choice is remembered on this device.";
                         HorizontalBox {
@@ -737,24 +801,13 @@ export component MainWindow inherits Window {
                         }
                     }
                     Card {
-                        title: "Feature focus"; body: "Hides DIY-only or shop-only tools.";
+                        title: "Feature focus"; body: "Hides DIY-only or shop-only tools on the main tabs and More.";
                         HorizontalBox {
                             spacing: 6px;
                             ChoiceBtn { label: "DIY"; active: root.user-mode == "DIY"; clicked => { root.set-user-mode("DIY"); } }
                             ChoiceBtn { label: "SHOP"; active: root.user-mode == "SHOP"; clicked => { root.set-user-mode("SHOP"); } }
                             ChoiceBtn { label: "BOTH"; active: root.user-mode == "BOTH"; clicked => { root.set-user-mode("BOTH"); } }
                         }
-                    }
-                    Card {
-                        title: "Trackers"; body: "Per selected vehicle.";
-                        if show-parts: Button { text: "Parts log"; clicked => { root.navigate(6); } }
-                        Button { text: "Battery"; clicked => { root.navigate(7); } }
-                        Button { text: "Wipers"; clicked => { root.navigate(8); } }
-                        Button { text: "Brakes"; clicked => { root.navigate(9); } }
-                        Button { text: "Notes"; clicked => { root.navigate(10); } }
-                        Button { text: "Reminders"; clicked => { root.navigate(11); } }
-                        Button { text: "Issue photos"; clicked => { root.navigate(12); } }
-                        Button { text: "Receipt log"; clicked => { root.navigate(13); } }
                     }
                     Card {
                         title: "Data & backup"; body: "Local-first. Create a JSON backup, then send it to your cloud app.";
@@ -805,7 +858,7 @@ export component MainWindow inherits Window {
                         Button { text: "Donate"; clicked => { root.open-donate(); } }
                         Button { text: "Send feedback (GitHub Issues)"; clicked => { root.open-feedback(); } }
                     }
-                    Card { title: "About"; body: "FixItGarage 0.2.7 — imperial or metric units (mi/km, gal/L, MPG or L/100km, tread 32nds or mm)."; }
+                    Card { title: "About"; body: "FixItGarage 0.2.8 — More hub + Settings gear; imperial/metric units."; }
                     if status-message != "": Text { text: status-message; color: Theme.ok; wrap: word-wrap; }
                 }
             }
@@ -843,7 +896,7 @@ export component MainWindow inherits Window {
                         LineEdit { placeholder-text: "Notes"; text <=> root.part-notes; }
                         Button { text: "Save part"; primary: true; clicked => { root.save-part(); } }
                     }
-                    Button { text: "Back to settings"; clicked => { root.navigate(5); } }
+                    Button { text: "Back to More"; clicked => { root.navigate(5); } }
                 }
             }
 
@@ -866,7 +919,7 @@ export component MainWindow inherits Window {
                             clicked => { root.comp-type = "BATTERY"; root.save-component(); }
                         }
                     }
-                    Button { text: "Back"; clicked => { root.navigate(5); } }
+                    Button { text: "Back to More"; clicked => { root.navigate(5); } }
                 }
             }
 
@@ -916,7 +969,7 @@ export component MainWindow inherits Window {
                         LineEdit { placeholder-text: root.label-distance + " at install"; text <=> root.comp-mileage; }
                         Button { text: "Save this blade"; primary: true; clicked => { root.save-component(); } }
                     }
-                    Button { text: "Back"; clicked => { root.navigate(5); } }
+                    Button { text: "Back to More"; clicked => { root.navigate(5); } }
                 }
             }
 
@@ -946,7 +999,7 @@ export component MainWindow inherits Window {
                         LineEdit { placeholder-text: "Notes"; text <=> root.comp-notes; }
                         Button { text: "Save brakes"; primary: true; clicked => { root.save-component(); } }
                     }
-                    Button { text: "Back"; clicked => { root.navigate(5); } }
+                    Button { text: "Back to More"; clicked => { root.navigate(5); } }
                 }
             }
 
@@ -967,7 +1020,7 @@ export component MainWindow inherits Window {
                         title: n.title; body: n.body;
                         Button { text: "Delete"; clicked => { root.delete-note(n.id); } }
                     }
-                    Button { text: "Back"; clicked => { root.navigate(5); } }
+                    Button { text: "Back to More"; clicked => { root.navigate(5); } }
                 }
             }
 
@@ -1046,7 +1099,7 @@ export component MainWindow inherits Window {
                             clicked => { root.complete-reminder(r.id); }
                         }
                     }
-                    Button { text: "Back"; clicked => { root.navigate(5); } }
+                    Button { text: "Back to More"; clicked => { root.navigate(5); } }
                 }
             }
         }
@@ -1075,7 +1128,7 @@ export component MainWindow inherits Window {
                         Button { text: "Save issue log"; primary: true; clicked => { root.add-photo(); } }
                     }
                     for ph in photos: Card { title: ph.title; body: ph.detail; }
-                    Button { text: "Back"; clicked => { root.navigate(5); } }
+                    Button { text: "Back to More"; clicked => { root.navigate(5); } }
                 }
             }
 
@@ -1137,7 +1190,7 @@ export component MainWindow inherits Window {
                 }
             }
 
-        // Bottom nav
+        // Bottom nav — Settings is the gear tab (page 15); More is tools hub (5–14)
         Rectangle {
             height: 60px; background: Theme.nav-bg; border-width: 1px; border-color: Theme.surface-border;
             HorizontalBox {
@@ -1147,7 +1200,19 @@ export component MainWindow inherits Window {
                 NavBtn { label: "Service"; active: root.page == 2; horizontal-stretch: 1; clicked => { root.navigate(2); } }
                 if show-tires: NavBtn { label: "Tires"; active: root.page == 3; horizontal-stretch: 1; clicked => { root.navigate(3); } }
                 NavBtn { label: "Costs"; active: root.page == 4; horizontal-stretch: 1; clicked => { root.navigate(4); } }
-                NavBtn { label: "More"; active: root.page >= 5; horizontal-stretch: 1; clicked => { root.navigate(5); } }
+                NavBtn {
+                    label: "More";
+                    active: root.page >= 5 && root.page <= 14;
+                    horizontal-stretch: 1;
+                    clicked => { root.navigate(5); }
+                }
+                NavBtn {
+                    icon: "⚙";
+                    label: "Settings";
+                    active: root.page == 15;
+                    horizontal-stretch: 1;
+                    clicked => { root.navigate(15); }
+                }
             }
         }
     }
