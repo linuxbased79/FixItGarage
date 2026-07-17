@@ -67,19 +67,24 @@ Requirements: Android Studio Ladybug+ or JDK 17, Android SDK 35.
 
 Install the debug APK from `app/build/outputs/apk/debug/`.
 
-### Rust (core logic + CLI)
+### Rust (primary UI + core)
 
-Domain logic also lives in pure Rust under [`rust/`](rust/) — builds with only `rustup` (no Android SDK).
+Pure Rust stack under [`rust/`](rust/):
+
+| Crate | What |
+|-------|------|
+| **`fixitgarage-ui`** | **Mobile/desktop GUI (Slint)** — main product UI |
+| `fixitgarage-core` | Domain logic |
+| `fixitgarage-cli` | CLI helpers |
 
 ```bash
 cd rust
 cargo test
-cargo build --release
-./target/release/fixitgarage mpg 10000:10 10300:10 10580:10
-./target/release/fixitgarage rotate forward_cross
+cargo run -p fixitgarage-ui --release   # desktop GUI
+cargo run -p fixitgarage-cli -- mpg 10000:10 10300:10 10580:10
 ```
 
-See [rust/README.md](rust/README.md).
+**Android APK** (needs NDK + [xbuild](https://github.com/rust-mobile/xbuild)): see [rust/fixitgarage-ui/README.md](rust/fixitgarage-ui/README.md).
 
 ## License
 

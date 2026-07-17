@@ -12,6 +12,7 @@ exposed to Android via UniFFI/JNI if desired.
 |-------|------|
 | `fixitgarage-core` | MPG, tire rotation, CSV export, cost rollups, reminders |
 | `fixitgarage-cli` | `fixitgarage` binary for local tools |
+| **`fixitgarage-ui`** | **Full mobile/desktop UI (Slint)** — primary Rust app |
 
 ## Build & test
 

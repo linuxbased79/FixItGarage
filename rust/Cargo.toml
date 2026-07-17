@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "fixitgarage-core",
     "fixitgarage-cli",
+    "fixitgarage-ui",
 ]
 
 [workspace.package]

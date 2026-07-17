@@ -1,0 +1,36 @@
+[package]
+name = "fixitgarage-ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "FixItGarage mobile/desktop UI in Rust (Slint) — GrapheneOS & F-Droid oriented"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+name = "fixitgarage_ui"
+
+[[bin]]
+name = "fixitgarage-ui"
+path = "src/main.rs"
+
+[features]
+default = ["desktop"]
+# Desktop backends (winit). Disable when targeting only Android if desired.
+desktop = []
+# Android via android-activity 0.6 (Slint official mobile path).
+android = ["slint/backend-android-activity-06"]
+
+[dependencies]
+fixitgarage-core = { workspace = true }
+slint = { version = "1.17", default-features = true, features = ["backend-android-activity-06"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+dirs = "6"
+
+[build-dependencies]
+slint-build = "1.17"

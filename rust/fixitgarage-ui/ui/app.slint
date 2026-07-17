@@ -1,0 +1,689 @@
+// FixItGarage — touch-friendly mobile UI (Slint)
+// GPL-3.0 application. Designed for phone-sized layouts + desktop.
+
+import { Button, LineEdit, ScrollView, VerticalBox, HorizontalBox, ListView } from "std-widgets.slint";
+
+export struct VehicleRow {
+    id: int,
+    name: string,
+    subtitle: string,
+    mileage: string,
+}
+
+export struct ServiceRow {
+    id: int,
+    title: string,
+    subtitle: string,
+    cost: string,
+}
+
+export struct CostLine {
+    label: string,
+    value: string,
+}
+
+component TireCorner inherits Rectangle {
+    in property <string> label;
+    width: 56px;
+    height: 48px;
+    border-radius: 8px;
+    border-width: 2px;
+    border-color: #2E7D32;
+    background: #E8F5E9;
+    Text {
+        text: root.label;
+        color: #1B5E20;
+        font-size: 16px;
+        font-weight: 700;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        width: 100%;
+        height: 100%;
+    }
+}
+
+component NavBtn inherits TouchArea {
+    in property <string> label;
+    in property <bool> active;
+    height: 52px;
+    min-width: 56px;
+    Rectangle {
+        background: root.active ? #C8E6C9 : transparent;
+        border-radius: 8px;
+        Text {
+            text: root.label;
+            color: root.active ? #1B5E20 : #546E7A;
+            font-size: 12px;
+            font-weight: root.active ? 700 : 500;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            width: 100%;
+            height: 100%;
+        }
+    }
+}
+
+component Card inherits Rectangle {
+    in-out property <string> title;
+    in-out property <string> body;
+    background: #F5F5F5;
+    border-radius: 12px;
+    border-width: 1px;
+    border-color: #E0E0E0;
+    VerticalBox {
+        padding: 14px;
+        spacing: 6px;
+        Text {
+            text: root.title;
+            font-size: 16px;
+            font-weight: 700;
+            color: #212121;
+            wrap: word-wrap;
+        }
+        if root.body != "": Text {
+            text: root.body;
+            font-size: 13px;
+            color: #616161;
+            wrap: word-wrap;
+        }
+        @children
+    }
+}
+
+export component MainWindow inherits Window {
+    title: "FixItGarage";
+    preferred-width: 390px;
+    preferred-height: 780px;
+    min-width: 320px;
+    min-height: 560px;
+    background: #FAFAFA;
+
+    // --- App state (bound from Rust) ---
+    in-out property <bool> wizard-done: false;
+    in-out property <string> user-mode: "BOTH";
+    in-out property <int> page: 0; // 0 home 1 vehicles 2 service 3 tires 4 costs 5 settings
+
+    in-out property <string> last-service-title: "No services logged yet";
+    in-out property <string> last-service-detail: "Scan a receipt or add a service.";
+    in-out property <string> mode-label: "Full garage toolkit";
+    in-out property <string> vehicle-count-label: "0 vehicles";
+
+    in-out property <[VehicleRow]> vehicles: [];
+    in-out property <[ServiceRow]> services: [];
+    in-out property <[CostLine]> cost-lines: [
+        { label: "This month", value: "$0.00" },
+        { label: "This year", value: "$0.00" },
+        { label: "All time", value: "$0.00" },
+    ];
+
+    // Vehicle form
+    in-out property <string> form-name: "";
+    in-out property <string> form-make: "";
+    in-out property <string> form-model: "";
+    in-out property <string> form-year: "";
+    in-out property <string> form-mileage: "";
+
+    // Service form
+    in-out property <string> svc-title: "";
+    in-out property <string> svc-mileage: "";
+    in-out property <string> svc-cost: "";
+    in-out property <string> svc-gallons: "";
+    in-out property <string> svc-source: "DIY";
+    in-out property <string> mpg-label: "MPG: —";
+
+    // Tires
+    in-out property <string> tire-fl: "A";
+    in-out property <string> tire-fr: "B";
+    in-out property <string> tire-rl: "C";
+    in-out property <string> tire-rr: "D";
+    in-out property <string> tire-pattern: "forward_cross";
+    in-out property <string> tire-preview: "Preview: C D / B A";
+
+    // Settings / export
+    in-out property <string> status-message: "";
+    in-out property <string> csv-preview: "";
+    in-out property <string> dark-mode: "SYSTEM";
+
+    // Callbacks → Rust
+    callback finish-wizard(string);
+    callback navigate(int);
+    callback add-vehicle();
+    callback add-service();
+    callback apply-rotation();
+    callback set-pattern(string);
+    callback set-source(string);
+    callback set-user-mode(string);
+    callback export-csv();
+    callback open-feedback();
+    callback open-donate();
+
+    // ===== Wizard =====
+    if !wizard-done: Rectangle {
+        width: 100%;
+        height: 100%;
+        background: #FAFAFA;
+        VerticalBox {
+            padding: 24px;
+            spacing: 16px;
+            alignment: start;
+
+            Text {
+                text: "Welcome to FixItGarage";
+                font-size: 26px;
+                font-weight: 800;
+                color: #1B5E20;
+                wrap: word-wrap;
+            }
+            Text {
+                text: "How do you mostly maintain your vehicles? We'll highlight the right tools. Change this anytime in Settings.";
+                font-size: 15px;
+                color: #546E7A;
+                wrap: word-wrap;
+            }
+
+            Button {
+                text: "Mostly DIY";
+                primary: true;
+                clicked => { root.finish-wizard("DIY"); }
+            }
+            Text {
+                text: "Oil changes, filters, tread checks first.";
+                font-size: 12px;
+                color: #78909C;
+                wrap: word-wrap;
+            }
+
+            Button {
+                text: "Mostly shop";
+                primary: true;
+                clicked => { root.finish-wizard("SHOP"); }
+            }
+            Text {
+                text: "Receipts, shop history, labor/parts costs.";
+                font-size: 12px;
+                color: #78909C;
+                wrap: word-wrap;
+            }
+
+            Button {
+                text: "Both DIY and shop";
+                clicked => { root.finish-wizard("BOTH"); }
+            }
+            Text {
+                text: "Full feature set — unlimited vehicles.";
+                font-size: 12px;
+                color: #78909C;
+                wrap: word-wrap;
+            }
+        }
+    }
+
+    // ===== Main shell =====
+    if wizard-done: VerticalLayout {
+        spacing: 0;
+        // Content
+        Rectangle {
+            vertical-stretch: 1;
+            background: #FAFAFA;
+
+            // HOME
+            if page == 0: ScrollView {
+                width: 100%;
+                height: 100%;
+                VerticalBox {
+                    padding: 16px;
+                    spacing: 12px;
+
+                    Text {
+                        text: "FixItGarage";
+                        font-size: 28px;
+                        font-weight: 800;
+                        color: #1B5E20;
+                    }
+                    Text {
+                        text: mode-label;
+                        font-size: 14px;
+                        color: #546E7A;
+                    }
+
+                    Card {
+                        title: "Last service";
+                        body: "";
+                        Text {
+                            text: last-service-title;
+                            font-size: 15px;
+                            font-weight: 600;
+                            color: #212121;
+                            wrap: word-wrap;
+                        }
+                        Text {
+                            text: last-service-detail;
+                            font-size: 13px;
+                            color: #616161;
+                            wrap: word-wrap;
+                        }
+                    }
+
+                    Card {
+                        title: "Vehicles";
+                        body: vehicle-count-label;
+                        Button {
+                            text: "Manage vehicles";
+                            clicked => { root.navigate(1); }
+                        }
+                    }
+
+                    Card {
+                        title: "Quick actions";
+                        body: "";
+                        Button {
+                            text: "Log service";
+                            primary: true;
+                            clicked => { root.navigate(2); }
+                        }
+                        Button {
+                            text: "Tire rotation diagram";
+                            clicked => { root.navigate(3); }
+                        }
+                    }
+
+                    if status-message != "": Text {
+                        text: status-message;
+                        color: #2E7D32;
+                        font-size: 12px;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+
+            // VEHICLES
+            if page == 1: ScrollView {
+                width: 100%;
+                height: 100%;
+                VerticalBox {
+                    padding: 16px;
+                    spacing: 10px;
+                    Text {
+                        text: "Vehicles";
+                        font-size: 24px;
+                        font-weight: 800;
+                        color: #1B5E20;
+                    }
+                    Text {
+                        text: "Unlimited vehicles. Data stays on this device.";
+                        font-size: 13px;
+                        color: #546E7A;
+                        wrap: word-wrap;
+                    }
+
+                    Card {
+                        title: "Add vehicle";
+                        body: "";
+                        LineEdit {
+                            placeholder-text: "Name / nickname";
+                            text <=> root.form-name;
+                        }
+                        LineEdit {
+                            placeholder-text: "Make";
+                            text <=> root.form-make;
+                        }
+                        LineEdit {
+                            placeholder-text: "Model";
+                            text <=> root.form-model;
+                        }
+                        HorizontalBox {
+                            LineEdit {
+                                placeholder-text: "Year";
+                                text <=> root.form-year;
+                                horizontal-stretch: 1;
+                            }
+                            LineEdit {
+                                placeholder-text: "Mileage";
+                                text <=> root.form-mileage;
+                                horizontal-stretch: 1;
+                            }
+                        }
+                        Button {
+                            text: "Save vehicle";
+                            primary: true;
+                            clicked => { root.add-vehicle(); }
+                        }
+                    }
+
+                    for v in vehicles: Card {
+                        title: v.name;
+                        body: v.subtitle + " · " + v.mileage;
+                    }
+                }
+            }
+
+            // SERVICE
+            if page == 2: ScrollView {
+                width: 100%;
+                height: 100%;
+                VerticalBox {
+                    padding: 16px;
+                    spacing: 10px;
+                    Text {
+                        text: "Maintenance";
+                        font-size: 24px;
+                        font-weight: 800;
+                        color: #1B5E20;
+                    }
+                    Text {
+                        text: "Shop work and DIY oil changes. " + mpg-label;
+                        font-size: 13px;
+                        color: #546E7A;
+                        wrap: word-wrap;
+                    }
+
+                    Card {
+                        title: "Log service";
+                        body: "";
+                        LineEdit {
+                            placeholder-text: "Title (e.g. Oil change)";
+                            text <=> root.svc-title;
+                        }
+                        LineEdit {
+                            placeholder-text: "Mileage";
+                            text <=> root.svc-mileage;
+                        }
+                        HorizontalBox {
+                            spacing: 8px;
+                            Button {
+                                text: "DIY";
+                                primary: root.svc-source == "DIY";
+                                clicked => { root.set-source("DIY"); }
+                            }
+                            Button {
+                                text: "Shop";
+                                primary: root.svc-source == "SHOP";
+                                clicked => { root.set-source("SHOP"); }
+                            }
+                        }
+                        LineEdit {
+                            placeholder-text: "Parts + labor cost";
+                            text <=> root.svc-cost;
+                        }
+                        LineEdit {
+                            placeholder-text: "Gallons (fuel, optional)";
+                            text <=> root.svc-gallons;
+                        }
+                        Button {
+                            text: "Save service";
+                            primary: true;
+                            clicked => { root.add-service(); }
+                        }
+                    }
+
+                    for s in services: Card {
+                        title: s.title;
+                        body: s.subtitle + (s.cost != "" ? " · " + s.cost : "");
+                    }
+                }
+            }
+
+            // TIRES
+            if page == 3: ScrollView {
+                width: 100%;
+                height: 100%;
+                VerticalBox {
+                    padding: 16px;
+                    spacing: 12px;
+                    Text {
+                        text: "Tire tracker";
+                        font-size: 24px;
+                        font-weight: 800;
+                        color: #1B5E20;
+                    }
+                    Text {
+                        text: "Top-down diagram, rotation patterns, before/after preview.";
+                        font-size: 13px;
+                        color: #546E7A;
+                        wrap: word-wrap;
+                    }
+
+                    Card {
+                        title: "Current positions";
+                        body: "FRONT";
+                        // Car body diagram
+                        Rectangle {
+                            height: 220px;
+                            background: transparent;
+                            // body
+                            Rectangle {
+                                x: (parent.width - 140px) / 2;
+                                y: 20px;
+                                width: 140px;
+                                height: 180px;
+                                border-radius: 28px;
+                                background: #ECEFF1;
+                                border-width: 2px;
+                                border-color: #90A4AE;
+                            }
+                            TireCorner {
+                                x: 12px;
+                                y: 12px;
+                                label: root.tire-fl;
+                            }
+                            TireCorner {
+                                x: parent.width - 68px;
+                                y: 12px;
+                                label: root.tire-fr;
+                            }
+                            TireCorner {
+                                x: 12px;
+                                y: parent.height - 60px;
+                                label: root.tire-rl;
+                            }
+                            TireCorner {
+                                x: parent.width - 68px;
+                                y: parent.height - 60px;
+                                label: root.tire-rr;
+                            }
+                        }
+                        Text {
+                            text: tire-preview;
+                            font-size: 13px;
+                            color: #37474F;
+                            wrap: word-wrap;
+                        }
+                    }
+
+                    Card {
+                        title: "Rotation pattern";
+                        body: "";
+                        HorizontalBox {
+                            spacing: 6px;
+                            Button {
+                                text: "Fwd cross";
+                                primary: root.tire-pattern == "forward_cross";
+                                clicked => { root.set-pattern("forward_cross"); }
+                            }
+                            Button {
+                                text: "X";
+                                primary: root.tire-pattern == "x_pattern";
+                                clicked => { root.set-pattern("x_pattern"); }
+                            }
+                        }
+                        HorizontalBox {
+                            spacing: 6px;
+                            Button {
+                                text: "Rear cross";
+                                primary: root.tire-pattern == "rearward_cross";
+                                clicked => { root.set-pattern("rearward_cross"); }
+                            }
+                            Button {
+                                text: "Side";
+                                primary: root.tire-pattern == "side_to_side";
+                                clicked => { root.set-pattern("side_to_side"); }
+                            }
+                        }
+                        Button {
+                            text: "Apply rotation to log";
+                            primary: true;
+                            clicked => { root.apply-rotation(); }
+                        }
+                    }
+                }
+            }
+
+            // COSTS
+            if page == 4: ScrollView {
+                width: 100%;
+                height: 100%;
+                VerticalBox {
+                    padding: 16px;
+                    spacing: 12px;
+                    Text {
+                        text: "Operational costs";
+                        font-size: 24px;
+                        font-weight: 800;
+                        color: #1B5E20;
+                    }
+                    Text {
+                        text: "Monthly and yearly totals from maintenance and fuel.";
+                        font-size: 13px;
+                        color: #546E7A;
+                        wrap: word-wrap;
+                    }
+                    for c in cost-lines: Card {
+                        title: c.label;
+                        body: c.value;
+                    }
+                }
+            }
+
+            // SETTINGS
+            if page == 5: ScrollView {
+                width: 100%;
+                height: 100%;
+                VerticalBox {
+                    padding: 16px;
+                    spacing: 12px;
+                    Text {
+                        text: "Settings";
+                        font-size: 24px;
+                        font-weight: 800;
+                        color: #1B5E20;
+                    }
+
+                    Card {
+                        title: "Feature focus";
+                        body: "Current: " + user-mode;
+                        HorizontalBox {
+                            Button {
+                                text: "DIY";
+                                primary: root.user-mode == "DIY";
+                                clicked => { root.set-user-mode("DIY"); }
+                            }
+                            Button {
+                                text: "SHOP";
+                                primary: root.user-mode == "SHOP";
+                                clicked => { root.set-user-mode("SHOP"); }
+                            }
+                            Button {
+                                text: "BOTH";
+                                primary: root.user-mode == "BOTH";
+                                clicked => { root.set-user-mode("BOTH"); }
+                            }
+                        }
+                    }
+
+                    Card {
+                        title: "Data";
+                        body: "Local-first. Cloud backup (Proton, Drive, Dropbox, OneDrive, ownCloud, Nextcloud) planned.";
+                        Button {
+                            text: "Export CSV";
+                            primary: true;
+                            clicked => { root.export-csv(); }
+                        }
+                        if csv-preview != "": Text {
+                            text: csv-preview;
+                            font-size: 11px;
+                            color: #455A64;
+                            wrap: word-wrap;
+                            font-family: "monospace";
+                        }
+                    }
+
+                    Card {
+                        title: "Support";
+                        body: "GPL-3.0 · GrapheneOS friendly · F-Droid & Play planned";
+                        Button {
+                            text: "Donate";
+                            clicked => { root.open-donate(); }
+                        }
+                        Button {
+                            text: "Send feedback (GitHub Issues)";
+                            clicked => { root.open-feedback(); }
+                        }
+                    }
+
+                    Card {
+                        title: "About";
+                        body: "FixItGarage 0.1.0 — pure Rust UI (Slint) + fixitgarage-core. Optional Kotlin Android shell remains in /app for comparison.";
+                    }
+
+                    if status-message != "": Text {
+                        text: status-message;
+                        color: #2E7D32;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+        }
+
+        // Bottom navigation
+        Rectangle {
+            height: 60px;
+            background: #FFFFFF;
+            border-width: 1px;
+            border-color: #E0E0E0;
+
+            HorizontalBox {
+                padding-left: 4px;
+                padding-right: 4px;
+                padding-top: 4px;
+                padding-bottom: 4px;
+                spacing: 2px;
+                NavBtn {
+                    label: "Home";
+                    active: root.page == 0;
+                    horizontal-stretch: 1;
+                    clicked => { root.navigate(0); }
+                }
+                NavBtn {
+                    label: "Cars";
+                    active: root.page == 1;
+                    horizontal-stretch: 1;
+                    clicked => { root.navigate(1); }
+                }
+                NavBtn {
+                    label: "Service";
+                    active: root.page == 2;
+                    horizontal-stretch: 1;
+                    clicked => { root.navigate(2); }
+                }
+                NavBtn {
+                    label: "Tires";
+                    active: root.page == 3;
+                    horizontal-stretch: 1;
+                    clicked => { root.navigate(3); }
+                }
+                NavBtn {
+                    label: "Costs";
+                    active: root.page == 4;
+                    horizontal-stretch: 1;
+                    clicked => { root.navigate(4); }
+                }
+                NavBtn {
+                    label: "More";
+                    active: root.page == 5;
+                    horizontal-stretch: 1;
+                    clicked => { root.navigate(5); }
+                }
+            }
+        }
+    }
+}
