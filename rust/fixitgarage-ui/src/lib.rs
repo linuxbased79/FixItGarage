@@ -1,5 +1,6 @@
 //! FixItGarage Slint UI — shared library for desktop binary and Android cdylib.
 
+mod i18n;
 mod platform;
 mod receipt_parse;
 mod state;
@@ -7,10 +8,11 @@ mod units;
 mod webdav;
 
 use chrono::{TimeZone, Utc};
+use i18n::{resolve_lang, t, LanguagePref};
 use platform::{
     cancel_app_wake, capture_issue_photo_path, notify, notify_with_id, open_ocr_helper, open_url,
-    read_clipboard, schedule_app_wake, share_text, share_text_to_cloud, PKG_DROPBOX,
-    PKG_GOOGLE_DRIVE, PKG_ONEDRIVE, PKG_PROTON_DRIVE,
+    read_clipboard, schedule_app_wake, share_text, share_text_to_cloud, system_locale,
+    PKG_DROPBOX, PKG_GOOGLE_DRIVE, PKG_ONEDRIVE, PKG_PROTON_DRIVE,
 };
 use receipt_parse::{parse_receipt_text, parse_tire_receipt_text};
 use state::{reminder_status_line_units, AppState};
@@ -554,6 +556,30 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     "Units: {} (saved). Values convert for display; data stored as miles/gallons/mm.",
                     s.unit_system().as_str()
                 ).into());
+                refresh_ui(&ui, &s);
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_set_language(move |lang| {
+            let mut s = state.borrow_mut();
+            s.set_language(&lang);
+            if let Some(ui) = ui_weak.upgrade() {
+                let pref = s.language_pref();
+                let resolved = resolve_lang(pref, &system_locale());
+                let msg = if pref == LanguagePref::System {
+                    t(resolved, "status.language_system")
+                } else {
+                    format!(
+                        "{} ({})",
+                        t(resolved, "status.language_set"),
+                        pref.label()
+                    )
+                };
+                ui.set_status_message(msg.into());
                 refresh_ui(&ui, &s);
             }
         });
@@ -1181,6 +1207,58 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     ui.set_label_tread(u.tread_unit().into());
     ui.set_unit_distance(u.distance_unit().into());
     ui.set_unit_fuel(u.fuel_unit().into());
+
+    // Language packs (SYSTEM = follow OS locale)
+    let lang_pref = state.language_pref();
+    let lang = resolve_lang(lang_pref, &system_locale());
+    ui.set_language(lang_pref.as_str().into());
+    ui.set_language_active_label(format!(
+        "{} → {}",
+        lang_pref.label(),
+        lang.code()
+    ).into());
+    ui.set_nav_home(t(lang, "nav.home").into());
+    ui.set_nav_cars(t(lang, "nav.cars").into());
+    ui.set_nav_service(t(lang, "nav.service").into());
+    ui.set_nav_tires(t(lang, "nav.tires").into());
+    ui.set_nav_costs(t(lang, "nav.costs").into());
+    ui.set_nav_more(t(lang, "nav.more").into());
+    ui.set_nav_settings(t(lang, "nav.settings").into());
+    ui.set_tr_settings_title(t(lang, "settings.title").into());
+    ui.set_tr_settings_intro(t(lang, "settings.intro").into());
+    ui.set_tr_settings_appearance(t(lang, "settings.appearance").into());
+    ui.set_tr_settings_appearance_body(t(lang, "settings.appearance_body").into());
+    ui.set_tr_settings_dark(t(lang, "settings.dark").into());
+    ui.set_tr_settings_light(t(lang, "settings.light").into());
+    ui.set_tr_settings_units(t(lang, "settings.units").into());
+    ui.set_tr_settings_units_body(t(lang, "settings.units_body").into());
+    ui.set_tr_settings_imperial(t(lang, "settings.imperial").into());
+    ui.set_tr_settings_metric(t(lang, "settings.metric").into());
+    ui.set_tr_settings_language(t(lang, "settings.language").into());
+    ui.set_tr_settings_language_body(t(lang, "settings.language_body").into());
+    ui.set_tr_settings_lang_system(t(lang, "settings.lang_system").into());
+    ui.set_tr_settings_feature(t(lang, "settings.feature_focus").into());
+    ui.set_tr_settings_feature_body(t(lang, "settings.feature_body").into());
+    ui.set_tr_settings_data(t(lang, "settings.data").into());
+    ui.set_tr_settings_data_body(t(lang, "settings.data_body").into());
+    ui.set_tr_settings_cloud(t(lang, "settings.cloud").into());
+    ui.set_tr_settings_webdav(t(lang, "settings.webdav").into());
+    ui.set_tr_settings_support(t(lang, "settings.support").into());
+    ui.set_tr_settings_about(t(lang, "settings.about").into());
+    ui.set_tr_settings_donate(t(lang, "settings.donate").into());
+    ui.set_tr_settings_feedback(t(lang, "settings.feedback").into());
+    ui.set_tr_more_title(t(lang, "more.title").into());
+    ui.set_tr_more_intro(t(lang, "more.intro").into());
+    ui.set_tr_more_trackers(t(lang, "more.trackers").into());
+    ui.set_tr_more_logs(t(lang, "more.logs").into());
+    ui.set_tr_more_quick(t(lang, "more.quick").into());
+    ui.set_tr_more_open_settings(t(lang, "more.open_settings").into());
+    ui.set_tr_home_last_service(t(lang, "home.last_service").into());
+    ui.set_tr_home_vehicles(t(lang, "home.vehicles").into());
+    ui.set_tr_home_quick(t(lang, "home.quick_actions").into());
+    ui.set_tr_home_glance(t(lang, "home.at_a_glance").into());
+    ui.set_tr_home_upcoming(t(lang, "home.upcoming").into());
+    ui.set_tr_app_title(t(lang, "app.title").into());
     // Oil level choices for current unit system
     let oil_opts = oil_level_options(u);
     ui.set_oil_opt_0(oil_opts[0].into());

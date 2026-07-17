@@ -915,3 +915,117 @@ fn cancel_app_wake_android(request_code: i32) -> Result<(), String> {
     .map_err(|e| format!("cancel: {e}"))?;
     Ok(())
 }
+
+/// Best-effort system locale tag (e.g. "en_US", "es_MX", "de").
+pub fn system_locale() -> String {
+    #[cfg(target_os = "android")]
+    {
+        match system_locale_android() {
+            Ok(s) if !s.trim().is_empty() => return s,
+            Ok(_) => {}
+            Err(e) => eprintln!("system_locale android: {e}"),
+        }
+    }
+    // Desktop / fallback: LANG or LC_ALL
+    for key in ["LC_ALL", "LC_MESSAGES", "LANG"] {
+        if let Ok(v) = std::env::var(key) {
+            let v = v.trim();
+            if !v.is_empty() && v != "C" && v != "POSIX" {
+                // Strip encoding: en_US.UTF-8 → en_US
+                let tag = v.split('.').next().unwrap_or(v);
+                return tag.to_string();
+            }
+        }
+    }
+    "en".into()
+}
+
+#[cfg(target_os = "android")]
+fn system_locale_android() -> Result<String, String> {
+    use jni::objects::{JObject, JString, JValue};
+    use jni::JavaVM;
+
+    let ctx = ndk_context::android_context();
+    let vm =
+        unsafe { JavaVM::from_raw(ctx.vm().cast()) }.map_err(|e| format!("JavaVM: {e}"))?;
+    let mut env = vm
+        .attach_current_thread()
+        .map_err(|e| format!("attach: {e}"))?;
+    let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+
+    let resources = env
+        .call_method(
+            &context,
+            "getResources",
+            "()Landroid/content/res/Resources;",
+            &[],
+        )
+        .map_err(|e| format!("getResources: {e}"))?
+        .l()
+        .map_err(|e| format!("resources: {e}"))?;
+    let config = env
+        .call_method(
+            &resources,
+            "getConfiguration",
+            "()Landroid/content/res/Configuration;",
+            &[],
+        )
+        .map_err(|e| format!("getConfiguration: {e}"))?
+        .l()
+        .map_err(|e| format!("config: {e}"))?;
+
+    // Prefer LocaleList (API 24+): configuration.getLocales().get(0)
+    let from_list = (|| -> Result<String, String> {
+        let list = env
+            .call_method(&config, "getLocales", "()Landroid/os/LocaleList;", &[])
+            .map_err(|e| format!("getLocales: {e}"))?
+            .l()
+            .map_err(|e| format!("locales: {e}"))?;
+        if list.is_null() {
+            return Err("null LocaleList".into());
+        }
+        let locale = env
+            .call_method(&list, "get", "(I)Ljava/util/Locale;", &[JValue::Int(0)])
+            .map_err(|e| format!("get(0): {e}"))?
+            .l()
+            .map_err(|e| format!("locale0: {e}"))?;
+        if locale.is_null() {
+            return Err("null locale".into());
+        }
+        let tag = env
+            .call_method(&locale, "toLanguageTag", "()Ljava/lang/String;", &[])
+            .map_err(|e| format!("toLanguageTag: {e}"))?
+            .l()
+            .map_err(|e| format!("tag obj: {e}"))?;
+        let jstr: JString = tag.into();
+        let s = env
+            .get_string(&jstr)
+            .map_err(|e| format!("get_string: {e}"))?;
+        Ok(s.into())
+    })();
+    if let Ok(tag) = from_list {
+        if !tag.trim().is_empty() {
+            return Ok(tag);
+        }
+    }
+
+    // Fallback: config.locale (deprecated but widely present)
+    let locale_field = env
+        .get_field(&config, "locale", "Ljava/util/Locale;")
+        .map_err(|e| format!("locale field: {e}"))?
+        .l()
+        .map_err(|e| format!("locale: {e}"))?;
+    if locale_field.is_null() {
+        return Ok("en".into());
+    }
+    let tag = env
+        .call_method(&locale_field, "toString", "()Ljava/lang/String;", &[])
+        .map_err(|e| format!("toString: {e}"))?
+        .l()
+        .map_err(|e| format!("tag: {e}"))?;
+    let jstr: JString = tag.into();
+    let s = env
+        .get_string(&jstr)
+        .map_err(|e| format!("get_string: {e}"))?;
+    Ok(s.into())
+}

@@ -24,6 +24,9 @@ pub struct AppState {
     /// IMPERIAL (mi, gal, 32nds) or METRIC (km, L, mm). Storage stays miles/gallons/mm.
     #[serde(default = "default_units")]
     pub units: String,
+    /// SYSTEM (follow OS) or EN / ES / FR / DE language pack override.
+    #[serde(default = "default_language")]
+    pub language: String,
     #[serde(default)]
     pub selected_vehicle_id: Option<u64>,
     pub next_vehicle_id: u64,
@@ -221,6 +224,10 @@ fn default_units() -> String {
     "IMPERIAL".into()
 }
 
+fn default_language() -> String {
+    "SYSTEM".into()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TireLayoutStored {
     pub fl: String,
@@ -340,6 +347,7 @@ impl Default for AppState {
             user_mode: "BOTH".into(),
             dark_mode: default_dark_mode(),
             units: default_units(),
+            language: default_language(),
             selected_vehicle_id: None,
             next_vehicle_id: 1,
             next_service_id: 1,
@@ -540,6 +548,16 @@ impl AppState {
     pub fn set_units(&mut self, units: &str) {
         self.units = UnitSystem::from_str_loose(units).as_str().into();
         self.save();
+    }
+
+    pub fn set_language(&mut self, language: &str) {
+        use crate::i18n::LanguagePref;
+        self.language = LanguagePref::from_str_loose(language).as_str().into();
+        self.save();
+    }
+
+    pub fn language_pref(&self) -> crate::i18n::LanguagePref {
+        crate::i18n::LanguagePref::from_str_loose(&self.language)
     }
 
     pub fn services_for_selected(&self) -> Vec<&ServiceRecord> {

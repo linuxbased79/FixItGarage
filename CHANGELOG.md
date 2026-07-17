@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.12
+- Language packs: **System default** (follows phone OS) or override EN / ES / FR / DE
+- Settings → Language; bottom nav, Settings, More, and key Home titles are translated
+- Expand packs by adding keys in `i18n.rs`
+
 ## 0.2.11
 - Tire positions / pattern / spare option are **per vehicle** (multi-car fix)
 - Optional notes on service records (CSV export includes notes)

@@ -330,6 +330,52 @@ export component MainWindow inherits Window {
     in-out property <string> label-tread: "mm";
     in-out property <string> unit-distance: "mi";
     in-out property <string> unit-fuel: "gal";
+    // Language: SYSTEM | EN | ES | FR | DE
+    in-out property <string> language: "SYSTEM";
+    in-out property <string> language-active-label: "System default → en";
+    // Translated chrome (nav + settings + more + home section titles)
+    in-out property <string> nav-home: "Home";
+    in-out property <string> nav-cars: "Cars";
+    in-out property <string> nav-service: "Service";
+    in-out property <string> nav-tires: "Tires";
+    in-out property <string> nav-costs: "Costs";
+    in-out property <string> nav-more: "More";
+    in-out property <string> nav-settings: "Settings";
+    in-out property <string> tr-app-title: "FixItGarage";
+    in-out property <string> tr-settings-title: "⚙ Settings";
+    in-out property <string> tr-settings-intro: "App preferences.";
+    in-out property <string> tr-settings-appearance: "Appearance";
+    in-out property <string> tr-settings-appearance-body: "Dark is the default.";
+    in-out property <string> tr-settings-dark: "Dark";
+    in-out property <string> tr-settings-light: "Light";
+    in-out property <string> tr-settings-units: "Units of measure";
+    in-out property <string> tr-settings-units-body: "Imperial or metric.";
+    in-out property <string> tr-settings-imperial: "Imperial";
+    in-out property <string> tr-settings-metric: "Metric";
+    in-out property <string> tr-settings-language: "Language";
+    in-out property <string> tr-settings-language-body: "System default follows phone language.";
+    in-out property <string> tr-settings-lang-system: "System default";
+    in-out property <string> tr-settings-feature: "Feature focus";
+    in-out property <string> tr-settings-feature-body: "DIY / shop focus.";
+    in-out property <string> tr-settings-data: "Data & backup";
+    in-out property <string> tr-settings-data-body: "Local-first backup.";
+    in-out property <string> tr-settings-cloud: "Cloud apps (recommended)";
+    in-out property <string> tr-settings-webdav: "Nextcloud / ownCloud / WebDAV";
+    in-out property <string> tr-settings-support: "Support";
+    in-out property <string> tr-settings-about: "About";
+    in-out property <string> tr-settings-donate: "Donate";
+    in-out property <string> tr-settings-feedback: "Send feedback (GitHub Issues)";
+    in-out property <string> tr-more-title: "More";
+    in-out property <string> tr-more-intro: "Trackers and tools.";
+    in-out property <string> tr-more-trackers: "Maintenance trackers";
+    in-out property <string> tr-more-logs: "Logs & reminders";
+    in-out property <string> tr-more-quick: "Quick links";
+    in-out property <string> tr-more-open-settings: "⚙ Open Settings";
+    in-out property <string> tr-home-last-service: "Last service";
+    in-out property <string> tr-home-vehicles: "Vehicles";
+    in-out property <string> tr-home-quick: "Quick actions";
+    in-out property <string> tr-home-glance: "At a glance";
+    in-out property <string> tr-home-upcoming: "Upcoming";
     // Oil level choice labels (swap with unit system)
     in-out property <string> oil-opt-0: "Full";
     in-out property <string> oil-opt-1: "½ quart low";
@@ -353,6 +399,7 @@ export component MainWindow inherits Window {
     callback set-user-mode(string);
     callback set-dark-mode(string);
     callback set-units(string);
+    callback set-language(string);
     callback save-part();
     callback save-component();
     callback add-note();
@@ -435,7 +482,7 @@ export component MainWindow inherits Window {
                     HorizontalBox {
                         spacing: 8px;
                         Text {
-                            text: "FixItGarage"; font-size: 28px; font-weight: 800; color: Theme.title;
+                            text: root.tr-app-title; font-size: 28px; font-weight: 800; color: Theme.title;
                             horizontal-stretch: 1; vertical-alignment: center;
                         }
                         Button { text: "⚙"; clicked => { root.navigate(15); } }
@@ -443,14 +490,14 @@ export component MainWindow inherits Window {
                     Text { text: mode-label; font-size: 14px; color: Theme.text-muted; }
                     VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Card {
-                        title: "At a glance";
+                        title: root.tr-home-glance;
                         body: "";
                         Text { text: dash-mpg; font-size: 16px; font-weight: 700; color: Theme.text; }
                         Text { text: dash-month; font-size: 14px; color: Theme.text; }
                         Text { text: dash-year; font-size: 14px; color: Theme.text; }
                         Text { text: dash-dues; font-size: 13px; color: Theme.text-muted; wrap: word-wrap; }
                         Button { text: "Fuel / MPG history"; clicked => { root.navigate(14); } }
-                        Button { text: "Costs"; clicked => { root.navigate(4); } }
+                        Button { text: root.nav-costs; clicked => { root.navigate(4); } }
                     }
                     if has-due-reminders: Card {
                         title: "Due reminders";
@@ -458,7 +505,7 @@ export component MainWindow inherits Window {
                         Button { text: "Open reminders"; primary: true; clicked => { root.navigate(11); } }
                     }
                     Card {
-                        title: "Upcoming (90 days / 5k mi)";
+                        title: root.tr-home-upcoming;
                         body: "";
                         if upcoming-reminders.length == 0: Text {
                             text: "No upcoming items for this vehicle.";
@@ -491,16 +538,16 @@ export component MainWindow inherits Window {
                         Button { text: "Open wiper tracker"; primary: true; clicked => { root.navigate(8); } }
                     }
                     Card {
-                        title: "Last service"; body: "";
+                        title: root.tr-home-last-service; body: "";
                         Text { text: last-service-title; font-size: 15px; font-weight: 600; color: Theme.text; wrap: word-wrap; }
                         Text { text: last-service-detail; font-size: 13px; color: Theme.text-soft; wrap: word-wrap; }
                     }
                     Card {
-                        title: "Vehicles"; body: vehicle-count-label;
+                        title: root.tr-home-vehicles; body: vehicle-count-label;
                         Button { text: "Manage vehicles"; clicked => { root.navigate(1); } }
                     }
                     Card {
-                        title: "Quick actions";
+                        title: root.tr-home-quick;
                         body: last-oil-level-summary;
                         Button { text: "Oil level check"; primary: true; clicked => { root.navigate(11); } }
                         Button { text: "Scan / log receipt"; clicked => { root.navigate(13); } }
@@ -809,23 +856,23 @@ export component MainWindow inherits Window {
                     padding: 16px; spacing: 12px;
                     HorizontalBox {
                         spacing: 8px;
-                        PageTitle { label: "More"; horizontal-stretch: 1; }
-                        Button { text: "⚙ Settings"; clicked => { root.navigate(15); } }
+                        PageTitle { label: root.tr-more-title; horizontal-stretch: 1; }
+                        Button { text: "⚙ " + root.nav-settings; clicked => { root.navigate(15); } }
                     }
                     Text {
-                        text: "Trackers and tools for the selected vehicle. App preferences are under Settings (gear).";
+                        text: root.tr-more-intro;
                         font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
                     }
                     VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Card {
-                        title: "Maintenance trackers"; body: "";
+                        title: root.tr-more-trackers; body: "";
                         if show-parts: Button { text: "Parts log"; clicked => { root.navigate(6); } }
                         Button { text: "Battery age"; clicked => { root.navigate(7); } }
                         Button { text: "Wiper blades"; clicked => { root.navigate(8); } }
                         Button { text: "Brakes"; clicked => { root.navigate(9); } }
                     }
                     Card {
-                        title: "Logs & reminders"; body: "";
+                        title: root.tr-more-logs; body: "";
                         Button { text: "Notes"; clicked => { root.navigate(10); } }
                         Button { text: "Reminders & oil level"; clicked => { root.navigate(11); } }
                         Button { text: "Issue photos"; clicked => { root.navigate(12); } }
@@ -833,11 +880,11 @@ export component MainWindow inherits Window {
                         Button { text: "Fuel / economy history"; clicked => { root.navigate(14); } }
                     }
                     Card {
-                        title: "Quick links"; body: "";
+                        title: root.tr-more-quick; body: "";
                         Button { text: "Log service"; clicked => { root.navigate(2); } }
                         if show-tires: Button { text: "Tire tracker"; clicked => { root.navigate(3); } }
-                        Button { text: "Costs"; clicked => { root.navigate(4); } }
-                        Button { text: "⚙ Open Settings"; primary: true; clicked => { root.navigate(15); } }
+                        Button { text: root.nav-costs; clicked => { root.navigate(4); } }
+                        Button { text: root.tr-more-open-settings; primary: true; clicked => { root.navigate(15); } }
                     }
                 }
             }
@@ -847,17 +894,17 @@ export component MainWindow inherits Window {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 12px;
-                    PageTitle { label: "⚙ Settings"; }
+                    PageTitle { label: root.tr-settings-title; }
                     Text {
-                        text: "App preferences. Trackers and tools live under More.";
+                        text: root.tr-settings-intro;
                         font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
                     }
                     Card {
-                        title: "Appearance"; body: "Dark is the default. Your choice is remembered on this device.";
+                        title: root.tr-settings-appearance; body: root.tr-settings-appearance-body;
                         HorizontalBox {
                             spacing: 8px;
-                            ChoiceBtn { label: "Dark"; active: root.dark-mode == "DARK"; clicked => { root.set-dark-mode("DARK"); } }
-                            ChoiceBtn { label: "Light"; active: root.dark-mode == "LIGHT"; clicked => { root.set-dark-mode("LIGHT"); } }
+                            ChoiceBtn { label: root.tr-settings-dark; active: root.dark-mode == "DARK"; clicked => { root.set-dark-mode("DARK"); } }
+                            ChoiceBtn { label: root.tr-settings-light; active: root.dark-mode == "LIGHT"; clicked => { root.set-dark-mode("LIGHT"); } }
                         }
                         Text {
                             text: root.dark-mode == "DARK" ? "Using dark mode (saved)" : "Using light mode (saved)";
@@ -865,12 +912,12 @@ export component MainWindow inherits Window {
                         }
                     }
                     Card {
-                        title: "Units of measure";
-                        body: "Choose imperial or metric. Existing data is converted for display (stored as miles, US gallons, and mm).";
+                        title: root.tr-settings-units;
+                        body: root.tr-settings-units-body;
                         HorizontalBox {
                             spacing: 8px;
-                            ChoiceBtn { label: "Imperial"; active: root.units == "IMPERIAL"; clicked => { root.set-units("IMPERIAL"); } }
-                            ChoiceBtn { label: "Metric"; active: root.units == "METRIC"; clicked => { root.set-units("METRIC"); } }
+                            ChoiceBtn { label: root.tr-settings-imperial; active: root.units == "IMPERIAL"; clicked => { root.set-units("IMPERIAL"); } }
+                            ChoiceBtn { label: root.tr-settings-metric; active: root.units == "METRIC"; clicked => { root.set-units("METRIC"); } }
                         }
                         Text {
                             text: root.units == "METRIC"
@@ -880,7 +927,30 @@ export component MainWindow inherits Window {
                         }
                     }
                     Card {
-                        title: "Feature focus"; body: "Hides DIY-only or shop-only tools on the main tabs and More.";
+                        title: root.tr-settings-language;
+                        body: root.tr-settings-language-body;
+                        ChoiceBtn {
+                            label: root.tr-settings-lang-system;
+                            active: root.language == "SYSTEM";
+                            clicked => { root.set-language("SYSTEM"); }
+                        }
+                        HorizontalBox {
+                            spacing: 6px;
+                            ChoiceBtn { label: "English"; active: root.language == "EN"; clicked => { root.set-language("EN"); } }
+                            ChoiceBtn { label: "Español"; active: root.language == "ES"; clicked => { root.set-language("ES"); } }
+                        }
+                        HorizontalBox {
+                            spacing: 6px;
+                            ChoiceBtn { label: "Français"; active: root.language == "FR"; clicked => { root.set-language("FR"); } }
+                            ChoiceBtn { label: "Deutsch"; active: root.language == "DE"; clicked => { root.set-language("DE"); } }
+                        }
+                        Text {
+                            text: root.language-active-label;
+                            font-size: 12px; color: Theme.text-muted; wrap: word-wrap;
+                        }
+                    }
+                    Card {
+                        title: root.tr-settings-feature; body: root.tr-settings-feature-body;
                         HorizontalBox {
                             spacing: 6px;
                             ChoiceBtn { label: "DIY"; active: root.user-mode == "DIY"; clicked => { root.set-user-mode("DIY"); } }
@@ -889,7 +959,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     Card {
-                        title: "Data & backup"; body: "Local-first. Create a JSON backup, then send it to your cloud app.";
+                        title: root.tr-settings-data; body: root.tr-settings-data-body;
                         Button { text: "Export CSV"; primary: true; clicked => { root.export-csv(); } }
                         Button { text: "Share CSV"; clicked => { root.share-csv(); } }
                         Button { text: "Create JSON backup"; clicked => { root.backup-json(); } }
@@ -899,7 +969,7 @@ export component MainWindow inherits Window {
                         if csv-preview != "": Text { text: csv-preview; font-size: 11px; color: Theme.mono; wrap: word-wrap; font-family: "monospace"; }
                     }
                     Card {
-                        title: "Cloud apps (recommended)";
+                        title: root.tr-settings-cloud;
                         body: "Install the app once. We open it with your backup — no Google Play Services required for Proton. Privacy-friendly pick is Proton Drive.";
                         Button {
                             text: "★ Proton Drive (recommended)";
@@ -924,7 +994,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     Card {
-                        title: "Nextcloud / ownCloud / WebDAV (direct upload)";
+                        title: root.tr-settings-webdav;
                         body: "Direct upload (no share sheet). Example: https://cloud.example/remote.php/dav/files/USER/FixItGarage/ — password stored only on this device.";
                         LineEdit { placeholder-text: "WebDAV folder URL"; text <=> root.cloud-url; }
                         LineEdit { placeholder-text: "Username"; text <=> root.cloud-user; }
@@ -933,11 +1003,11 @@ export component MainWindow inherits Window {
                         Button { text: "Upload backup via WebDAV"; primary: true; clicked => { root.upload-cloud-backup(); } }
                     }
                     Card {
-                        title: "Support"; body: "GPL-3.0 · GrapheneOS friendly";
-                        Button { text: "Donate"; clicked => { root.open-donate(); } }
-                        Button { text: "Send feedback (GitHub Issues)"; clicked => { root.open-feedback(); } }
+                        title: root.tr-settings-support; body: "GPL-3.0 · GrapheneOS friendly";
+                        Button { text: root.tr-settings-donate; clicked => { root.open-donate(); } }
+                        Button { text: root.tr-settings-feedback; clicked => { root.open-feedback(); } }
                     }
-                    Card { title: "About"; body: "FixItGarage 0.2.11 — per-vehicle tire layouts, service notes, delete tire purchases."; }
+                    Card { title: root.tr-settings-about; body: "FixItGarage 0.2.12 — language packs (System / EN / ES / FR / DE)."; }
                     if status-message != "": Text { text: status-message; color: Theme.ok; wrap: word-wrap; }
                 }
             }
@@ -1274,20 +1344,20 @@ export component MainWindow inherits Window {
             height: 60px; background: Theme.nav-bg; border-width: 1px; border-color: Theme.surface-border;
             HorizontalBox {
                 padding: 4px; spacing: 2px;
-                NavBtn { label: "Home"; active: root.page == 0; horizontal-stretch: 1; clicked => { root.navigate(0); } }
-                NavBtn { label: "Cars"; active: root.page == 1; horizontal-stretch: 1; clicked => { root.navigate(1); } }
-                NavBtn { label: "Service"; active: root.page == 2; horizontal-stretch: 1; clicked => { root.navigate(2); } }
-                if show-tires: NavBtn { label: "Tires"; active: root.page == 3; horizontal-stretch: 1; clicked => { root.navigate(3); } }
-                NavBtn { label: "Costs"; active: root.page == 4; horizontal-stretch: 1; clicked => { root.navigate(4); } }
+                NavBtn { label: root.nav-home; active: root.page == 0; horizontal-stretch: 1; clicked => { root.navigate(0); } }
+                NavBtn { label: root.nav-cars; active: root.page == 1; horizontal-stretch: 1; clicked => { root.navigate(1); } }
+                NavBtn { label: root.nav-service; active: root.page == 2; horizontal-stretch: 1; clicked => { root.navigate(2); } }
+                if show-tires: NavBtn { label: root.nav-tires; active: root.page == 3; horizontal-stretch: 1; clicked => { root.navigate(3); } }
+                NavBtn { label: root.nav-costs; active: root.page == 4; horizontal-stretch: 1; clicked => { root.navigate(4); } }
                 NavBtn {
-                    label: "More";
+                    label: root.nav-more;
                     active: root.page >= 5 && root.page <= 14;
                     horizontal-stretch: 1;
                     clicked => { root.navigate(5); }
                 }
                 NavBtn {
                     icon: "⚙";
-                    label: "Settings";
+                    label: root.nav-settings;
                     active: root.page == 15;
                     horizontal-stretch: 1;
                     clicked => { root.navigate(15); }
