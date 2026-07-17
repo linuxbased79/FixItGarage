@@ -89,6 +89,93 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
     {
         let ui_weak = ui.as_weak();
         let state = state.clone();
+        ui.on_update_selected_mileage(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let mut s = state.borrow_mut();
+                let Some(id) = s.selected_vehicle_id else {
+                    ui.set_status_message("Select a vehicle first.".into());
+                    return;
+                };
+                let mileage = ui.get_form_mileage().parse().unwrap_or(0);
+                s.update_vehicle_mileage(id, mileage);
+                ui.set_status_message(format!("Mileage updated to {mileage}.").into());
+                refresh_ui(&ui, &s);
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_delete_selected_vehicle(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let mut s = state.borrow_mut();
+                let Some(id) = s.selected_vehicle_id else {
+                    ui.set_status_message("Select a vehicle first.".into());
+                    return;
+                };
+                s.delete_vehicle(id);
+                ui.set_status_message("Vehicle and related data deleted.".into());
+                refresh_ui(&ui, &s);
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_delete_service(move |id| {
+            let mut s = state.borrow_mut();
+            s.delete_service(id as u64);
+            if let Some(ui) = ui_weak.upgrade() {
+                ui.set_status_message("Service deleted.".into());
+                refresh_ui(&ui, &s);
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_delete_note(move |id| {
+            let mut s = state.borrow_mut();
+            s.delete_note(id as u64);
+            if let Some(ui) = ui_weak.upgrade() {
+                ui.set_status_message("Note deleted.".into());
+                refresh_ui(&ui, &s);
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_save_tread(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let mut s = state.borrow_mut();
+                let parse = |v: slint::SharedString| {
+                    let t = v.to_string();
+                    if t.trim().is_empty() {
+                        None
+                    } else {
+                        t.parse().ok()
+                    }
+                };
+                s.set_tread_depths(
+                    parse(ui.get_tread_fl()),
+                    parse(ui.get_tread_fr()),
+                    parse(ui.get_tread_rl()),
+                    parse(ui.get_tread_rr()),
+                );
+                ui.set_status_message("Tread depths saved.".into());
+                refresh_ui(&ui, &s);
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
         ui.on_add_service(move || {
             if let Some(ui) = ui_weak.upgrade() {
                 let mut s = state.borrow_mut();
@@ -678,6 +765,15 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
         })
         .collect();
     ui.set_tire_rotations(slint::ModelRc::new(slint::VecModel::from(rotations)));
+
+    ui.set_due_reminders_banner(state.due_reminders_summary().into());
+    ui.set_has_due_reminders(state.has_due_reminders());
+    ui.set_tread_summary(state.tread_summary().into());
+    let t = state.tread_for_selected();
+    ui.set_tread_fl(t.fl.map(|v| format!("{v}")).unwrap_or_default().into());
+    ui.set_tread_fr(t.fr.map(|v| format!("{v}")).unwrap_or_default().into());
+    ui.set_tread_rl(t.rl.map(|v| format!("{v}")).unwrap_or_default().into());
+    ui.set_tread_rr(t.rr.map(|v| format!("{v}")).unwrap_or_default().into());
 }
 
 /// Android entry point (NativeActivity / android-activity).

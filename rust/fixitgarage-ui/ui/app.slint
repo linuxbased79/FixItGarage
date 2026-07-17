@@ -253,6 +253,13 @@ export component MainWindow inherits Window {
     // Oil dipstick reading when completing an oil-level check
     in-out property <string> oil-level-choice: "Full";
     in-out property <string> last-oil-level-summary: "No oil level logged yet.";
+    in-out property <string> due-reminders-banner: "No due reminders.";
+    in-out property <bool> has-due-reminders: false;
+    in-out property <string> tread-summary: "No tread depths logged.";
+    in-out property <string> tread-fl: "";
+    in-out property <string> tread-fr: "";
+    in-out property <string> tread-rl: "";
+    in-out property <string> tread-rr: "";
 
     in-out property <string> status-message: "";
     in-out property <string> csv-preview: "";
@@ -278,6 +285,11 @@ export component MainWindow inherits Window {
     callback capture-photo();
     callback save-receipt();
     callback save-tire-purchase();
+    callback update-selected-mileage();
+    callback delete-selected-vehicle();
+    callback delete-service(int);
+    callback delete-note(int);
+    callback save-tread();
     callback export-csv();
     callback open-feedback();
     callback open-donate();
@@ -320,6 +332,11 @@ export component MainWindow inherits Window {
                     Text { text: "FixItGarage"; font-size: 28px; font-weight: 800; color: Theme.title; }
                     Text { text: mode-label; font-size: 14px; color: Theme.text-muted; }
                     VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    if has-due-reminders: Card {
+                        title: "Due reminders";
+                        body: due-reminders-banner;
+                        Button { text: "Open reminders"; primary: true; clicked => { root.navigate(11); } }
+                    }
                     Card {
                         title: "Last service"; body: "";
                         Text { text: last-service-title; font-size: 15px; font-weight: 600; color: Theme.text; wrap: word-wrap; }
@@ -363,6 +380,13 @@ export component MainWindow inherits Window {
                         }
                         Button { text: "Save vehicle"; primary: true; clicked => { root.add-vehicle(); } }
                     }
+                    Card {
+                        title: "Selected vehicle tools";
+                        body: "Update mileage for " + selected-vehicle-label;
+                        LineEdit { placeholder-text: "Current mileage"; text <=> root.form-mileage; }
+                        Button { text: "Update mileage"; primary: true; clicked => { root.update-selected-mileage(); } }
+                        Button { text: "Delete selected vehicle"; clicked => { root.delete-selected-vehicle(); } }
+                    }
                     for v in vehicles: TouchArea {
                         clicked => { root.select-vehicle(v.id); }
                         Card {
@@ -395,7 +419,10 @@ export component MainWindow inherits Window {
                         LineEdit { placeholder-text: "Gallons (fuel, optional)"; text <=> root.svc-gallons; }
                         Button { text: "Save service"; primary: true; clicked => { root.add-service(); } }
                     }
-                    for s in services: Card { title: s.title; body: s.subtitle + (s.cost != "" ? " · " + s.cost : ""); }
+                    for s in services: Card {
+                        title: s.title; body: s.subtitle + (s.cost != "" ? " · " + s.cost : "");
+                        Button { text: "Delete"; clicked => { root.delete-service(s.id); } }
+                    }
                 }
             }
 
@@ -435,6 +462,23 @@ export component MainWindow inherits Window {
                             ChoiceBtn { label: "Side"; active: root.tire-pattern == "side_to_side"; clicked => { root.set-pattern("side_to_side"); } }
                         }
                         Button { text: "Apply rotation"; primary: true; clicked => { root.apply-rotation(); } }
+                    }
+                    if show-tires: Card {
+                        title: "Tread depth (mm)";
+                        body: tread-summary;
+                        Text {
+                            text: "Measure each tire (or estimate). Camera assist is planned.";
+                            font-size: 12px; color: Theme.text-muted; wrap: word-wrap;
+                        }
+                        HorizontalBox {
+                            LineEdit { placeholder-text: "FL mm"; text <=> root.tread-fl; horizontal-stretch: 1; }
+                            LineEdit { placeholder-text: "FR mm"; text <=> root.tread-fr; horizontal-stretch: 1; }
+                        }
+                        HorizontalBox {
+                            LineEdit { placeholder-text: "RL mm"; text <=> root.tread-rl; horizontal-stretch: 1; }
+                            LineEdit { placeholder-text: "RR mm"; text <=> root.tread-rr; horizontal-stretch: 1; }
+                        }
+                        Button { text: "Save tread depths"; primary: true; clicked => { root.save-tread(); } }
                     }
                     if show-tires: Card {
                         title: "Tire purchase"; body: "Log a new set (receipt scan later).";
@@ -523,7 +567,7 @@ export component MainWindow inherits Window {
                         Button { text: "Donate"; clicked => { root.open-donate(); } }
                         Button { text: "Send feedback (GitHub Issues)"; clicked => { root.open-feedback(); } }
                     }
-                    Card { title: "About"; body: "FixItGarage 0.1.1 — Rust + Slint. Multi-vehicle trackers."; }
+                    Card { title: "About"; body: "FixItGarage 0.1.2 — Rust + Slint. Receipts, photos, tread, export."; }
                     if status-message != "": Text { text: status-message; color: Theme.ok; wrap: word-wrap; }
                 }
             }
@@ -676,7 +720,10 @@ export component MainWindow inherits Window {
                         LineEdit { placeholder-text: "Body"; text <=> root.note-body; }
                         Button { text: "Save note"; primary: true; clicked => { root.add-note(); } }
                     }
-                    for n in notes: Card { title: n.title; body: n.body; }
+                    for n in notes: Card {
+                        title: n.title; body: n.body;
+                        Button { text: "Delete"; clicked => { root.delete-note(n.id); } }
+                    }
                     Button { text: "Back"; clicked => { root.navigate(5); } }
                 }
             }

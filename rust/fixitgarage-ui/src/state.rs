@@ -55,6 +55,24 @@ pub struct AppState {
     pub tire_rotations: Vec<TireRotationLog>,
     pub tire_layout: TireLayoutStored,
     pub tire_pattern: String,
+    /// Tread depth in mm per corner, per vehicle (manual or future camera).
+    #[serde(default)]
+    pub tread_by_vehicle: Vec<VehicleTread>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+pub struct TreadDepths {
+    pub fl: Option<f64>,
+    pub fr: Option<f64>,
+    pub rl: Option<f64>,
+    pub rr: Option<f64>,
+    pub measured_epoch_ms: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct VehicleTread {
+    pub vehicle_id: u64,
+    pub depths: TreadDepths,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -252,6 +270,7 @@ impl Default for AppState {
                 rr: "D".into(),
             },
             tire_pattern: "forward_cross".into(),
+            tread_by_vehicle: Vec::new(),
         }
     }
 }
@@ -445,7 +464,218 @@ impl AppState {
     }
 
     pub fn export_csv(&self) -> String {
-        services_to_csv(&self.services)
+        self.export_all_csv()
+    }
+
+    /// Multi-section CSV for backup/share (services + vehicles + trackers).
+    pub fn export_all_csv(&self) -> String {
+        let mut out = String::new();
+        out.push_str("### vehicles\n");
+        out.push_str("id,name,make,model,year,mileage\n");
+        for v in &self.vehicles {
+            out.push_str(&format!(
+                "{},{},{},{},{},{}\n",
+                v.id,
+                csv_esc(&v.name),
+                csv_esc(&v.make),
+                csv_esc(&v.model),
+                v.year.map(|y| y.to_string()).unwrap_or_default(),
+                v.current_mileage
+            ));
+        }
+        out.push('\n');
+        out.push_str("### services\n");
+        out.push_str(&services_to_csv(&self.services));
+        out.push('\n');
+        out.push_str("### parts\n");
+        out.push_str("id,vehicleId,type,brand,partNumber,oilViscosity,notes,mileage\n");
+        for p in &self.parts {
+            out.push_str(&format!(
+                "{},{},{},{},{},{},{},{}\n",
+                p.id,
+                p.vehicle_id,
+                csv_esc(&p.part_type),
+                csv_esc(&p.brand),
+                csv_esc(&p.part_number),
+                csv_esc(&p.oil_viscosity),
+                csv_esc(&p.notes),
+                p.installed_mileage.map(|m| m.to_string()).unwrap_or_default()
+            ));
+        }
+        out.push('\n');
+        out.push_str("### oil_level_logs\n");
+        out.push_str("vehicleId,date,level,mileage\n");
+        for o in &self.oil_level_logs {
+            out.push_str(&format!(
+                "{},{},{},{}\n",
+                o.vehicle_id,
+                format_epoch(o.epoch_ms),
+                csv_esc(&o.level),
+                o.mileage.map(|m| m.to_string()).unwrap_or_default()
+            ));
+        }
+        out.push('\n');
+        out.push_str("### components\n");
+        out.push_str("id,vehicleId,type,date,mileage,notes\n");
+        for c in &self.components {
+            out.push_str(&format!(
+                "{},{},{},{},{},{}\n",
+                c.id,
+                c.vehicle_id,
+                csv_esc(&c.component_type),
+                c.installed_epoch_ms
+                    .map(format_epoch)
+                    .unwrap_or_default(),
+                c.installed_mileage.map(|m| m.to_string()).unwrap_or_default(),
+                csv_esc(&c.notes)
+            ));
+        }
+        out.push('\n');
+        out.push_str("### tire_purchases\n");
+        out.push_str("id,vehicleId,brand,model,size,cost,mileage,date,notes\n");
+        for t in &self.tire_purchases {
+            out.push_str(&format!(
+                "{},{},{},{},{},{},{},{},{}\n",
+                t.id,
+                t.vehicle_id,
+                csv_esc(&t.brand),
+                csv_esc(&t.model),
+                csv_esc(&t.size),
+                t.cost,
+                t.mileage.map(|m| m.to_string()).unwrap_or_default(),
+                format_epoch(t.date_epoch_ms),
+                csv_esc(&t.notes)
+            ));
+        }
+        out.push('\n');
+        out.push_str("### notes\n");
+        out.push_str("id,vehicleId,title,body,updated\n");
+        for n in &self.notes {
+            out.push_str(&format!(
+                "{},{},{},{},{}\n",
+                n.id,
+                n.vehicle_id,
+                csv_esc(&n.title),
+                csv_esc(&n.body),
+                format_epoch(n.updated_epoch_ms)
+            ));
+        }
+        out
+    }
+
+    pub fn update_vehicle_mileage(&mut self, id: u64, mileage: u32) {
+        if let Some(v) = self.vehicles.iter_mut().find(|v| v.id == id) {
+            v.current_mileage = mileage;
+            self.save();
+        }
+    }
+
+    pub fn delete_vehicle(&mut self, id: u64) {
+        self.vehicles.retain(|v| v.id != id);
+        self.services.retain(|s| s.vehicle_id != id);
+        self.parts.retain(|p| p.vehicle_id != id);
+        self.components.retain(|c| c.vehicle_id != id);
+        self.notes.retain(|n| n.vehicle_id != id);
+        self.reminders.retain(|r| r.vehicle_id != id);
+        self.oil_level_logs.retain(|o| o.vehicle_id != id);
+        self.issue_photos.retain(|p| p.vehicle_id != id);
+        self.tire_purchases.retain(|t| t.vehicle_id != id);
+        self.tire_rotations.retain(|t| t.vehicle_id != id);
+        self.tread_by_vehicle.retain(|t| t.vehicle_id != id);
+        if self.selected_vehicle_id == Some(id) {
+            self.selected_vehicle_id = self.vehicles.first().map(|v| v.id);
+        }
+        self.save();
+    }
+
+    pub fn delete_service(&mut self, id: u64) {
+        self.services.retain(|s| s.id != id);
+        self.save();
+    }
+
+    pub fn delete_note(&mut self, id: u64) {
+        self.notes.retain(|n| n.id != id);
+        self.save();
+    }
+
+    pub fn set_tread_depths(&mut self, fl: Option<f64>, fr: Option<f64>, rl: Option<f64>, rr: Option<f64>) {
+        let Some(vid) = self.selected_vehicle_id else {
+            return;
+        };
+        let depths = TreadDepths {
+            fl,
+            fr,
+            rl,
+            rr,
+            measured_epoch_ms: Some(Utc::now().timestamp_millis()),
+        };
+        if let Some(slot) = self.tread_by_vehicle.iter_mut().find(|t| t.vehicle_id == vid) {
+            slot.depths = depths;
+        } else {
+            self.tread_by_vehicle.push(VehicleTread {
+                vehicle_id: vid,
+                depths,
+            });
+        }
+        self.save();
+    }
+
+    pub fn tread_for_selected(&self) -> TreadDepths {
+        let Some(vid) = self.selected_vehicle_id else {
+            return TreadDepths::default();
+        };
+        self.tread_by_vehicle
+            .iter()
+            .find(|t| t.vehicle_id == vid)
+            .map(|t| t.depths.clone())
+            .unwrap_or_default()
+    }
+
+    pub fn tread_summary(&self) -> String {
+        let t = self.tread_for_selected();
+        let fmt = |v: Option<f64>| {
+            v.map(|x| format!("{x:.1} mm"))
+                .unwrap_or_else(|| "—".into())
+        };
+        let when = t
+            .measured_epoch_ms
+            .map(format_epoch)
+            .unwrap_or_else(|| "never".into());
+        format!(
+            "FL {} · FR {} · RL {} · RR {} (measured {})",
+            fmt(t.fl),
+            fmt(t.fr),
+            fmt(t.rl),
+            fmt(t.rr),
+            when
+        )
+    }
+
+    /// Due / overdue open reminders for selected vehicle (for home banner).
+    pub fn due_reminders_summary(&self) -> String {
+        let mileage = self.selected_vehicle().map(|v| v.current_mileage).unwrap_or(0);
+        let now = Utc::now().timestamp_millis();
+        let due: Vec<_> = self
+            .open_reminders_for_selected()
+            .into_iter()
+            .filter(|r| {
+                is_due_by_date(r.due_epoch_ms, now) || is_due_by_mileage(r.due_mileage, mileage)
+            })
+            .collect();
+        if due.is_empty() {
+            "No due reminders.".into()
+        } else {
+            let titles: Vec<_> = due.iter().map(|r| r.title.as_str()).collect();
+            format!("{} due: {}", due.len(), titles.join(", "))
+        }
+    }
+
+    pub fn has_due_reminders(&self) -> bool {
+        let mileage = self.selected_vehicle().map(|v| v.current_mileage).unwrap_or(0);
+        let now = Utc::now().timestamp_millis();
+        self.open_reminders_for_selected().into_iter().any(|r| {
+            is_due_by_date(r.due_epoch_ms, now) || is_due_by_mileage(r.due_mileage, mileage)
+        })
     }
 
     pub fn add_vehicle(
@@ -939,6 +1169,14 @@ fn format_epoch(ms: i64) -> String {
     match Utc.timestamp_millis_opt(ms) {
         chrono::LocalResult::Single(dt) => dt.format("%Y-%m-%d").to_string(),
         _ => String::new(),
+    }
+}
+
+fn csv_esc(value: &str) -> String {
+    if value.contains(',') || value.contains('"') || value.contains('\n') {
+        format!("\"{}\"", value.replace('"', "\"\""))
+    } else {
+        value.to_string()
     }
 }
 
