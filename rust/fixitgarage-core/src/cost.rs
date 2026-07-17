@@ -79,6 +79,7 @@ mod tests {
             gallons: None,
             fuel_cost: None,
             shop_name: String::new(),
+            notes: String::new(),
         };
         let june = Utc
             .with_ymd_and_hms(2024, 6, 1, 0, 0, 0)

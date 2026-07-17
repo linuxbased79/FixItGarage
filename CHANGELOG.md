@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.11
+- Tire positions / pattern / spare option are **per vehicle** (multi-car fix)
+- Optional notes on service records (CSV export includes notes)
+- Delete tire purchase from history
+
 ## 0.2.10
 - Tire rotation: optional **Include spare** (off by default — most leave temporary spares out)
 - 5-tire patterns when spare is on; spare shown on diagram; tread/mileage track spare

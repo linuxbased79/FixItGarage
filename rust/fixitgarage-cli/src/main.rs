@@ -122,6 +122,7 @@ fn main() {
                     gallons: None,
                     fuel_cost: None,
                     shop_name: String::new(),
+                    notes: String::new(),
                 },
                 ServiceRecord {
                     id: 2,
@@ -135,6 +136,7 @@ fn main() {
                     gallons: Some(12.5),
                     fuel_cost: Some(45.0),
                     shop_name: String::new(),
+                    notes: String::new(),
                 },
             ];
             let costs = summarize_costs(&sample, now);

@@ -425,6 +425,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     }
                 };
                 let shop = ui.get_svc_shop().to_string();
+                let notes = ui.get_svc_notes().to_string();
                 let source = ui.get_svc_source().to_string();
                 s.add_service_full(
                     title,
@@ -436,6 +437,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     fuel_cost,
                     chrono::Utc::now().timestamp_millis(),
                     shop,
+                    notes,
                 );
                 ui.set_svc_title("".into());
                 ui.set_svc_mileage("".into());
@@ -444,6 +446,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                 ui.set_svc_gallons("".into());
                 ui.set_svc_fuel("".into());
                 ui.set_svc_shop("".into());
+                ui.set_svc_notes("".into());
                 ui.set_status_message("Service saved.".into());
                 refresh_ui(&ui, &s);
             }
@@ -466,8 +469,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_set_pattern(move |pattern| {
             let mut s = state.borrow_mut();
-            s.tire_pattern = pattern.to_string();
-            s.save();
+            s.set_tire_pattern(pattern.to_string());
             if let Some(ui) = ui_weak.upgrade() {
                 refresh_ui(&ui, &s);
             }
@@ -511,7 +513,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_apply_rotation(move || {
             let mut s = state.borrow_mut();
-            let with_spare = s.include_spare_in_rotation;
+            let with_spare = s.selected_tire_config().include_spare;
             s.apply_tire_rotation();
             s.save();
             if let Some(ui) = ui_weak.upgrade() {
@@ -773,6 +775,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     fuel,
                     ui.get_rcp_shop().to_string(),
                     "SHOP",
+                    String::new(),
                 );
                 ui.set_rcp_title("".into());
                 ui.set_rcp_date("".into());
@@ -783,6 +786,19 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                 ui.set_rcp_fuel("".into());
                 ui.set_rcp_shop("".into());
                 ui.set_status_message("Receipt saved to maintenance history.".into());
+                refresh_ui(&ui, &s);
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_delete_tire_purchase(move |id| {
+            let mut s = state.borrow_mut();
+            s.delete_tire_purchase(id as u64);
+            if let Some(ui) = ui_weak.upgrade() {
+                ui.set_status_message("Tire purchase deleted.".into());
                 refresh_ui(&ui, &s);
             }
         });
@@ -1175,19 +1191,20 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     ui.set_oil_opt_5(oil_opts[5].into());
 
     ui.set_mpg_label(state.mpg_label().into());
-    ui.set_tire_fl(state.tire_layout.fl.clone().into());
-    ui.set_tire_fr(state.tire_layout.fr.clone().into());
-    ui.set_tire_rl(state.tire_layout.rl.clone().into());
-    ui.set_tire_rr(state.tire_layout.rr.clone().into());
-    ui.set_tire_spare(state.tire_layout.spare.clone().into());
-    ui.set_include_spare(state.include_spare_in_rotation);
+    let tire_cfg = state.selected_tire_config();
+    ui.set_tire_fl(tire_cfg.layout.fl.clone().into());
+    ui.set_tire_fr(tire_cfg.layout.fr.clone().into());
+    ui.set_tire_rl(tire_cfg.layout.rl.clone().into());
+    ui.set_tire_rr(tire_cfg.layout.rr.clone().into());
+    ui.set_tire_spare(tire_cfg.layout.spare.clone().into());
+    ui.set_include_spare(tire_cfg.include_spare);
     let after = state.preview_after_layout();
     ui.set_tire_after_fl(after.fl.into());
     ui.set_tire_after_fr(after.fr.into());
     ui.set_tire_after_rl(after.rl.into());
     ui.set_tire_after_rr(after.rr.into());
     ui.set_tire_after_spare(after.spare.into());
-    ui.set_tire_pattern(state.tire_pattern.clone().into());
+    ui.set_tire_pattern(tire_cfg.pattern.clone().into());
     ui.set_tire_preview(state.tire_preview().into());
 
     // Tracker summaries
@@ -1256,13 +1273,18 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
             ServiceRow {
                 id: s.id as i32,
                 title: s.title.clone().into(),
-                subtitle: format!(
-                    "{} · {} · {}",
-                    format_service_date(s.date_epoch_ms),
-                    units::format_distance(s.mileage, u),
-                    s.source.as_str()
-                )
-                .into(),
+                subtitle: {
+                    let mut d = format!(
+                        "{} · {} · {}",
+                        format_service_date(s.date_epoch_ms),
+                        units::format_distance(s.mileage, u),
+                        s.source.as_str()
+                    );
+                    if !s.notes.trim().is_empty() {
+                        d.push_str(&format!(" · {}", s.notes.trim()));
+                    }
+                    d.into()
+                },
                 cost: if total > 0.0 {
                     format!("${total:.2}").into()
                 } else {

@@ -61,11 +61,15 @@ pub struct AppState {
     pub tire_purchases: Vec<TirePurchase>,
     #[serde(default)]
     pub tire_rotations: Vec<TireRotationLog>,
+    /// Legacy global layout (migrated into tire_config_by_vehicle on load).
     pub tire_layout: TireLayoutStored,
     pub tire_pattern: String,
     /// When true, rotation includes the full-size spare (most people leave this off).
     #[serde(default)]
     pub include_spare_in_rotation: bool,
+    /// Per-vehicle tire positions, pattern, and spare option.
+    #[serde(default)]
+    pub tire_config_by_vehicle: Vec<VehicleTireConfig>,
     /// Tread depth in mm per corner, per vehicle (manual or future camera).
     #[serde(default)]
     pub tread_by_vehicle: Vec<VehicleTread>,
@@ -232,6 +236,33 @@ fn default_spare_label() -> String {
     "E".into()
 }
 
+/// Tire tracker settings for one vehicle (positions are not shared across cars).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct VehicleTireConfig {
+    pub vehicle_id: u64,
+    pub layout: TireLayoutStored,
+    pub pattern: String,
+    #[serde(default)]
+    pub include_spare: bool,
+}
+
+impl VehicleTireConfig {
+    pub fn default_for(vehicle_id: u64) -> Self {
+        Self {
+            vehicle_id,
+            layout: TireLayoutStored {
+                fl: "A".into(),
+                fr: "B".into(),
+                rl: "C".into(),
+                rr: "D".into(),
+                spare: "E".into(),
+            },
+            pattern: "forward_cross".into(),
+            include_spare: false,
+        }
+    }
+}
+
 /// ENGINE_AIR_FILTER | CABIN_FILTER | OIL_FILTER | OIL_TYPE | OTHER
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PartEntry {
@@ -338,6 +369,7 @@ impl Default for AppState {
             },
             tire_pattern: "forward_cross".into(),
             include_spare_in_rotation: false,
+            tire_config_by_vehicle: Vec::new(),
             tread_by_vehicle: Vec::new(),
             tire_mileage_by_vehicle: Vec::new(),
             cloud_webdav_url: String::new(),
@@ -370,6 +402,7 @@ impl AppState {
         if let Ok(bytes) = std::fs::read(&path) {
             if let Ok(mut state) = serde_json::from_slice::<AppState>(&bytes) {
                 state.ensure_selection();
+                state.migrate_tire_configs();
                 state.ensure_oil_reminders();
                 return state;
             }
@@ -401,6 +434,61 @@ impl AppState {
         }
     }
 
+    /// Move legacy global tire layout into per-vehicle configs (once).
+    pub fn migrate_tire_configs(&mut self) {
+        let ids: Vec<u64> = self.vehicles.iter().map(|v| v.id).collect();
+        let mut changed = false;
+        for id in ids {
+            if self.tire_config_by_vehicle.iter().any(|c| c.vehicle_id == id) {
+                continue;
+            }
+            // Seed first vehicle from legacy globals; others get defaults
+            let seed_from_global = self.tire_config_by_vehicle.is_empty();
+            let mut cfg = VehicleTireConfig::default_for(id);
+            if seed_from_global {
+                cfg.layout = self.tire_layout.clone();
+                cfg.pattern = self.tire_pattern.clone();
+                cfg.include_spare = self.include_spare_in_rotation;
+            }
+            self.tire_config_by_vehicle.push(cfg);
+            changed = true;
+        }
+        if changed {
+            self.save();
+        }
+    }
+
+    fn ensure_tire_config(&mut self, vehicle_id: u64) {
+        if !self
+            .tire_config_by_vehicle
+            .iter()
+            .any(|c| c.vehicle_id == vehicle_id)
+        {
+            self.tire_config_by_vehicle
+                .push(VehicleTireConfig::default_for(vehicle_id));
+        }
+    }
+
+    /// Tire config for selected vehicle (read-only snapshot).
+    pub fn selected_tire_config(&self) -> VehicleTireConfig {
+        let Some(vid) = self.selected_vehicle_id else {
+            return VehicleTireConfig::default_for(0);
+        };
+        self.tire_config_by_vehicle
+            .iter()
+            .find(|c| c.vehicle_id == vid)
+            .cloned()
+            .unwrap_or_else(|| VehicleTireConfig::default_for(vid))
+    }
+
+    fn tire_config_mut(&mut self) -> Option<&mut VehicleTireConfig> {
+        let vid = self.selected_vehicle_id?;
+        self.ensure_tire_config(vid);
+        self.tire_config_by_vehicle
+            .iter_mut()
+            .find(|c| c.vehicle_id == vid)
+    }
+
     pub fn selected_vehicle(&self) -> Option<&Vehicle> {
         let id = self.selected_vehicle_id?;
         self.vehicles.iter().find(|v| v.id == id)
@@ -409,6 +497,7 @@ impl AppState {
     pub fn select_vehicle(&mut self, id: u64) {
         if self.vehicles.iter().any(|v| v.id == id) {
             self.selected_vehicle_id = Some(id);
+            self.ensure_tire_config(id);
             self.save();
         }
     }
@@ -563,6 +652,7 @@ impl AppState {
             list.retain(|s| {
                 s.title.to_ascii_lowercase().contains(&q)
                     || s.shop_name.to_ascii_lowercase().contains(&q)
+                    || s.notes.to_ascii_lowercase().contains(&q)
                     || s.source.as_str().to_ascii_lowercase().contains(&q)
                     || s.mileage.to_string().contains(&q)
             });
@@ -631,9 +721,10 @@ impl AppState {
     }
 
     pub fn tire_preview(&self) -> String {
+        let cfg = self.selected_tire_config();
         let after = self.preview_after_layout();
         let pattern =
-            RotationPattern::from_str(&self.tire_pattern).unwrap_or(RotationPattern::ForwardCross);
+            RotationPattern::from_str(&cfg.pattern).unwrap_or(RotationPattern::ForwardCross);
         let mut s = format!(
             "After {}: {} {} / {} {}",
             pattern.label(),
@@ -642,7 +733,7 @@ impl AppState {
             after.rl,
             after.rr
         );
-        if self.include_spare_in_rotation {
+        if cfg.include_spare {
             s.push_str(&format!(" · SP {}", after.spare));
             s.push_str(" (incl. spare)");
         }
@@ -651,33 +742,50 @@ impl AppState {
 
     /// Positions after applying the currently selected pattern (preview only).
     pub fn preview_after_layout(&self) -> TireLayout {
-        let layout = TireLayout::from(&self.tire_layout);
+        let cfg = self.selected_tire_config();
+        let layout = TireLayout::from(&cfg.layout);
         let pattern =
-            RotationPattern::from_str(&self.tire_pattern).unwrap_or(RotationPattern::ForwardCross);
-        apply_rotation(&layout, pattern, self.include_spare_in_rotation)
+            RotationPattern::from_str(&cfg.pattern).unwrap_or(RotationPattern::ForwardCross);
+        apply_rotation(&layout, pattern, cfg.include_spare)
+    }
+
+    pub fn set_tire_pattern(&mut self, pattern: String) {
+        if let Some(cfg) = self.tire_config_mut() {
+            cfg.pattern = pattern.clone();
+        }
+        self.tire_pattern = pattern; // legacy mirror
+        self.save();
     }
 
     pub fn set_include_spare(&mut self, include: bool) {
+        if let Some(cfg) = self.tire_config_mut() {
+            cfg.include_spare = include;
+        }
+        // Keep legacy field in sync for older code paths
         self.include_spare_in_rotation = include;
         self.save();
     }
 
     pub fn set_spare_label(&mut self, label: String) {
         let t = label.trim();
-        self.tire_layout.spare = if t.is_empty() {
+        let spare = if t.is_empty() {
             "E".into()
         } else {
             t.to_string()
         };
+        if let Some(cfg) = self.tire_config_mut() {
+            cfg.layout.spare = spare;
+        }
         self.save();
     }
 
     pub fn apply_tire_rotation(&mut self) {
-        let before = self.tire_layout.clone();
-        let layout = TireLayout::from(&self.tire_layout);
+        let cfg = self.selected_tire_config();
+        let before = cfg.layout.clone();
+        let layout = TireLayout::from(&cfg.layout);
         let pattern =
-            RotationPattern::from_str(&self.tire_pattern).unwrap_or(RotationPattern::ForwardCross);
-        let include = self.include_spare_in_rotation;
+            RotationPattern::from_str(&cfg.pattern).unwrap_or(RotationPattern::ForwardCross);
+        let include = cfg.include_spare;
         let after = apply_rotation(&layout, pattern, include);
         let after_stored = TireLayoutStored::from(&after);
         if let Some(vid) = self.selected_vehicle_id {
@@ -708,8 +816,10 @@ impl AppState {
             });
             // Spec: mileage per tire + tread follow the rubber through rotation
             self.remap_corner_data_for_vehicle(vid, pattern, include);
+            if let Some(c) = self.tire_config_mut() {
+                c.layout = after_stored;
+            }
         }
-        self.tire_layout = after_stored;
     }
 
     fn remap_corner_data_for_vehicle(
@@ -945,6 +1055,7 @@ impl AppState {
         self.tire_rotations.retain(|t| t.vehicle_id != id);
         self.tread_by_vehicle.retain(|t| t.vehicle_id != id);
         self.tire_mileage_by_vehicle.retain(|t| t.vehicle_id != id);
+        self.tire_config_by_vehicle.retain(|t| t.vehicle_id != id);
         if self.selected_vehicle_id == Some(id) {
             self.selected_vehicle_id = self.vehicles.first().map(|v| v.id);
         }
@@ -1020,7 +1131,7 @@ impl AppState {
             fmt(t.rl),
             fmt(t.rr),
         );
-        if self.include_spare_in_rotation || t.spare.is_some() {
+        if self.selected_tire_config().include_spare || t.spare.is_some() {
             s.push_str(&format!(" · SP {}", fmt(t.spare)));
         }
         s.push_str(&format!(" (measured {when})"));
@@ -1289,6 +1400,7 @@ impl AppState {
             current_mileage: mileage,
         });
         self.selected_vehicle_id = Some(id);
+        self.ensure_tire_config(id);
         // Default oil-level reminder every 3 months
         let due = oil_level_due_after(Utc::now().timestamp_millis());
         self.add_reminder_raw(
@@ -1318,6 +1430,7 @@ impl AppState {
             None,
             Utc::now().timestamp_millis(),
             String::new(),
+            String::new(),
         );
     }
 
@@ -1333,6 +1446,7 @@ impl AppState {
         fuel_cost: Option<f64>,
         date_epoch_ms: i64,
         shop_name: String,
+        notes: String,
     ) {
         if title.trim().is_empty() {
             return;
@@ -1362,6 +1476,7 @@ impl AppState {
             gallons,
             fuel_cost,
             shop_name,
+            notes: notes.trim().into(),
         });
         if let Some(v) = self.vehicles.iter_mut().find(|v| v.id == vehicle_id) {
             if mileage > v.current_mileage {
@@ -1384,6 +1499,7 @@ impl AppState {
         fuel_cost: Option<f64>,
         shop_name: String,
         source: &str,
+        notes: String,
     ) {
         let date_epoch = parse_date_to_epoch(date_str).unwrap_or_else(|| Utc::now().timestamp_millis());
         let title = if title.trim().is_empty() {
@@ -1401,6 +1517,7 @@ impl AppState {
             fuel_cost,
             date_epoch,
             shop_name,
+            notes,
         );
     }
 
@@ -1803,10 +1920,15 @@ impl AppState {
             f(m.rl),
             f(m.rr)
         );
-        if self.include_spare_in_rotation || m.spare.is_some() {
+        if self.selected_tire_config().include_spare || m.spare.is_some() {
             s.push_str(&format!(" · SP {}", f(m.spare)));
         }
         s
+    }
+
+    pub fn delete_tire_purchase(&mut self, id: u64) {
+        self.tire_purchases.retain(|p| p.id != id);
+        self.save();
     }
 
     pub fn add_note(&mut self, title: String, body: String) {
@@ -2099,10 +2221,12 @@ mod tests {
     #[test]
     fn rotation_changes_layout() {
         let mut s = AppState::default();
-        s.tire_pattern = "side_to_side".into();
+        s.add_vehicle("Daily".into(), "".into(), "".into(), None, 1000);
+        s.set_tire_pattern("side_to_side".into());
         s.apply_tire_rotation();
-        assert_eq!(s.tire_layout.fl, "B");
-        assert_eq!(s.tire_layout.fr, "A");
+        let lay = s.selected_tire_config().layout;
+        assert_eq!(lay.fl, "B");
+        assert_eq!(lay.fr, "A");
     }
 
     #[test]
@@ -2110,7 +2234,7 @@ mod tests {
         let mut s = AppState::default();
         s.add_vehicle("Daily".into(), "".into(), "".into(), None, 10000);
         s.set_tire_corner_miles(Some(1), Some(2), Some(3), Some(4), Some(5));
-        s.tire_pattern = "side_to_side".into();
+        s.set_tire_pattern("side_to_side".into());
         s.apply_tire_rotation();
         let m = s.tire_miles_for_selected();
         assert_eq!(m.fl, Some(2));
@@ -2126,7 +2250,7 @@ mod tests {
         s.add_vehicle("Daily".into(), "".into(), "".into(), None, 10000);
         s.set_include_spare(true);
         s.set_tire_corner_miles(Some(1), Some(2), Some(3), Some(4), Some(5));
-        s.tire_pattern = "forward_cross".into();
+        s.set_tire_pattern("forward_cross".into());
         s.apply_tire_rotation();
         // FL←RL(3), FR←RR(4), RL←FR(2), RR←SP(5), SP←FL(1)
         let m = s.tire_miles_for_selected();
@@ -2135,7 +2259,24 @@ mod tests {
         assert_eq!(m.rl, Some(2));
         assert_eq!(m.rr, Some(5));
         assert_eq!(m.spare, Some(1));
-        assert_eq!(s.tire_layout.spare, "A");
+        assert_eq!(s.selected_tire_config().layout.spare, "A");
+    }
+
+    #[test]
+    fn tire_layout_is_per_vehicle() {
+        let mut s = AppState::default();
+        s.add_vehicle("Car A".into(), "".into(), "".into(), None, 1000);
+        let a = s.selected_vehicle_id.unwrap();
+        s.set_tire_pattern("side_to_side".into());
+        s.apply_tire_rotation();
+        s.add_vehicle("Car B".into(), "".into(), "".into(), None, 2000);
+        let b = s.selected_vehicle_id.unwrap();
+        // B should still have default A B C D
+        assert_eq!(s.selected_tire_config().layout.fl, "A");
+        s.select_vehicle(a);
+        assert_eq!(s.selected_tire_config().layout.fl, "B"); // rotated
+        s.select_vehicle(b);
+        assert_eq!(s.selected_tire_config().layout.fl, "A");
     }
 
     #[test]

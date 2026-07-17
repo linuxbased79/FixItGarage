@@ -60,6 +60,9 @@ pub struct ServiceRecord {
     pub gallons: Option<f64>,
     pub fuel_cost: Option<f64>,
     pub shop_name: String,
+    /// Free-form notes (parts used, DIY steps, shop invoice #, …).
+    #[serde(default)]
+    pub notes: String,
 }
 
 impl ServiceRecord {

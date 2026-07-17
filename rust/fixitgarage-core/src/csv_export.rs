@@ -21,7 +21,7 @@ fn format_date(epoch_ms: i64) -> String {
 /// Export service records to CSV text with header row.
 pub fn services_to_csv(records: &[ServiceRecord]) -> String {
     let mut out = String::from(
-        "id,vehicleId,date,mileage,title,source,laborCost,partsCost,gallons,fuelCost,shopName\n",
+        "id,vehicleId,date,mileage,title,source,laborCost,partsCost,gallons,fuelCost,shopName,notes\n",
     );
     for r in records {
         let gallons = r
@@ -33,7 +33,7 @@ pub fn services_to_csv(records: &[ServiceRecord]) -> String {
             .map(|c| c.to_string())
             .unwrap_or_default();
         out.push_str(&format!(
-            "{},{},{},{},{},{},{},{},{},{},{}\n",
+            "{},{},{},{},{},{},{},{},{},{},{},{}\n",
             r.id,
             r.vehicle_id,
             format_date(r.date_epoch_ms),
@@ -45,6 +45,7 @@ pub fn services_to_csv(records: &[ServiceRecord]) -> String {
             gallons,
             fuel,
             escape_csv(&r.shop_name),
+            escape_csv(&r.notes),
         ));
     }
     out
@@ -69,9 +70,11 @@ mod tests {
             gallons: None,
             fuel_cost: None,
             shop_name: String::new(),
+            notes: "OEM filter".into(),
         }]);
         assert!(csv.starts_with("id,vehicleId,"));
         assert!(csv.contains("Oil change"));
         assert!(csv.contains("DIY"));
+        assert!(csv.contains("OEM filter"));
     }
 }
