@@ -72,37 +72,37 @@ pub fn parse_receipt_text(text: &str) -> ParsedReceipt {
         }
     }
 
-    // Money amounts
-    let mut amounts: Vec<(usize, f64, String)> = Vec::new();
-    if let Ok(re) = Regex::new(r"(?i)(?:\$|usd\s*)(\d{1,5}(?:\.\d{2})?)") {
-        for c in re.captures_iter(text) {
+    // Money amounts — classify using the full line for context
+    let mut amounts: Vec<f64> = Vec::new();
+    for line in text.lines() {
+        let lower = line.to_ascii_lowercase();
+        let Ok(re) = Regex::new(r"(?i)(?:\$|usd\s*)(\d{1,5}(?:\.\d{2})?)") else {
+            continue;
+        };
+        for c in re.captures_iter(line) {
             if let Ok(v) = c[1].parse::<f64>() {
-                let start = c.get(0).map(|m| m.start()).unwrap_or(0);
-                let ctx = text
-                    .get(start.saturating_sub(24)..start.saturating_add(24))
-                    .unwrap_or("")
-                    .to_ascii_lowercase();
-                amounts.push((start, v, ctx));
+                amounts.push(v);
+                if lower.contains("labor") || lower.contains("labour") {
+                    out.labor_cost = Some(v);
+                } else if lower.contains("part") {
+                    out.parts_cost = Some(v);
+                } else if lower.contains("fuel")
+                    || lower.contains("gas")
+                    || lower.contains("petrol")
+                {
+                    out.fuel_cost = Some(v);
+                } else if lower.contains("total")
+                    || lower.contains("amount due")
+                    || lower.contains("balance")
+                {
+                    out.total_cost = Some(v);
+                }
             }
-        }
-    }
-
-    for (_pos, v, ctx) in &amounts {
-        if ctx.contains("labor") || ctx.contains("labour") {
-            out.labor_cost = Some(*v);
-        } else if ctx.contains("part") || ctx.contains("parts") {
-            out.parts_cost = Some(*v);
-        } else if ctx.contains("fuel") || ctx.contains("gas") || ctx.contains("petrol") {
-            out.fuel_cost = Some(*v);
-        } else if ctx.contains("total") || ctx.contains("amount due") || ctx.contains("balance") {
-            out.total_cost = Some(*v);
         }
     }
     // Fallback total = largest amount
     if out.total_cost.is_none() {
-        out.total_cost = amounts.iter().map(|(_, v, _)| *v).fold(None, |acc, v| {
-            Some(acc.map(|a: f64| a.max(v)).unwrap_or(v))
-        });
+        out.total_cost = amounts.iter().copied().reduce(f64::max);
     }
     // If only total and no parts/labor split, put total into parts for DIY convenience
     if out.parts_cost.is_none() && out.labor_cost.is_none() {
