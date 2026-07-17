@@ -1,10 +1,6 @@
 # FixItGarage — Rust workspace
 
-Pure **Rust** domain logic and CLI for FixItGarage (GPL-3.0).
-
-The Android UI remains Kotlin/Compose under `../app`. This crate holds
-shared algorithms so they can be tested without the Android SDK and later
-exposed to Android via UniFFI/JNI if desired.
+Pure **Rust** product path for FixItGarage (GPL-3.0): domain logic, CLI, and a **Slint mobile/desktop UI**.
 
 ## Crates
 
@@ -20,7 +16,17 @@ exposed to Android via UniFFI/JNI if desired.
 cd rust
 cargo build --release
 cargo test
+cargo build -p fixitgarage-ui --release
 ```
+
+## Run the GUI (desktop)
+
+```bash
+cargo run -p fixitgarage-ui --release
+```
+
+Phone-sized window with wizard, vehicles, services, tire diagram, costs, settings.  
+Android APK steps: [fixitgarage-ui/README.md](fixitgarage-ui/README.md).
 
 ## CLI examples
 
@@ -35,11 +41,11 @@ cargo run -p fixitgarage-cli -- rotate forward_cross --fl A --fr B --rl C --rr D
 cargo run -p fixitgarage-cli -- demo
 ```
 
-## Why Rust here?
+## Why Rust + Slint?
 
-- Fast, memory-safe core logic  
-- Unit tests without Android Studio  
-- Future option: bind the same core into the Android app  
-- Builds on GrapheneOS-friendly developer machines with only `rustup`
+- Single language for domain logic **and** UI  
+- Official Slint Android backend (GrapheneOS-friendly native binary)  
+- No Google Play Services  
+- GPL-3.0 aligned FOSS licensing  
 
-Android APK packaging still uses Gradle (`../gradlew`). This does **not** replace the mobile app binary yet.
+The Kotlin Compose project under `../app` remains as an optional/reference shell.
