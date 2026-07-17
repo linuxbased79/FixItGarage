@@ -1,0 +1,1 @@
+Security: HTTPS-only WebDAV, passwords out of shared backups, Auto Backup off, tighter share target.

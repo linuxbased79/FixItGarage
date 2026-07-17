@@ -15,17 +15,25 @@ pub fn upload_backup(
     if base.is_empty() {
         return Err("WebDAV URL is empty".into());
     }
+    // Hard-require HTTPS — never send Basic auth over cleartext HTTP.
+    if !base.to_ascii_lowercase().starts_with("https://") {
+        return Err("WebDAV URL must use https:// (HTTP cleartext is not allowed)".into());
+    }
     if username.trim().is_empty() {
         return Err("Username is empty".into());
     }
+    if password.is_empty() {
+        return Err("Password is empty — save WebDAV password in Settings first".into());
+    }
     let url = format!("{base}/{filename}");
-    // Basic auth header (ureq 2.x)
+    // Basic auth over TLS only (checked above)
     let token = base64_encode(&format!("{}:{}", username.trim(), password));
     let auth = format!("Basic {token}");
 
     let resp = ureq::put(&url)
         .set("Content-Type", "application/json")
         .set("Authorization", &auth)
+        .timeout(std::time::Duration::from_secs(60))
         .send_bytes(body)
         .map_err(|e| format!("upload: {e}"))?;
 
@@ -34,6 +42,24 @@ pub fn upload_backup(
         Ok(format!("Uploaded to {url} (HTTP {status})"))
     } else {
         Err(format!("Upload failed HTTP {status} for {url}"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_http() {
+        let err = upload_backup("http://example.com/dav", "u", "p", "f.json", b"{}").unwrap_err();
+        assert!(err.to_ascii_lowercase().contains("https"), "{err}");
+    }
+
+    #[test]
+    fn rejects_empty_password() {
+        let err =
+            upload_backup("https://example.com/dav", "u", "", "f.json", b"{}").unwrap_err();
+        assert!(err.to_ascii_lowercase().contains("password"), "{err}");
     }
 }
 

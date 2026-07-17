@@ -26,7 +26,8 @@
         android:label="FixItGarage"
         android:hasCode="true"
         android:debuggable="false"
-        android:allowBackup="true">
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules">
 
         <activity
             android:name="android.app.NativeActivity"
@@ -67,13 +68,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
             </intent-filter>
-            <!-- Optional: open shared images via VIEW -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:mimeType="image/*" />
-            </intent-filter>
+            <!-- VIEW/BROWSABLE removed: share via SEND only (narrower attack surface). -->
         </activity>
 
         <!-- Re-register AlarmManager date reminders after reboot / update -->

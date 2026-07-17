@@ -12,10 +12,10 @@ FixItGarage is **local-first** open-source software (GPL-3.0). Core features wor
 - Tire, brake, battery, wiper, parts, costs, notes, and reminders  
 - Optional photos (issues, receipts, tread assist)  
 - App preferences (theme, units, language, accessibility font, wizard mode)  
-- Optional WebDAV credentials you enter for backup (stored only on device)  
+- Optional WebDAV credentials you enter for backup (stored only on this device; **not** included in shared JSON backups)  
 - Local alarm schedule for date reminders (`fig_alarms.json`)
 
-Data is stored in the app’s private storage on your phone. We do **not** operate a FixItGarage cloud account or analytics backend.
+Data is stored in the app’s private storage on your phone. Android Auto Backup of app data is **disabled**. We do **not** operate a FixItGarage cloud account or analytics backend.
 
 ## Network activity
 
@@ -26,7 +26,7 @@ Network use is **optional and user-initiated**:
 | Send Feedback | Opens GitHub Issues in a browser |
 | Donate | Opens the project donate page (linuxbased79.github.io/FixItGarage/donate.html) |
 | Share backup / CSV | System share sheet — destination app you choose (Proton Drive, Drive, Dropbox, OneDrive, etc.) |
-| WebDAV / Nextcloud / ownCloud upload | Only when you configure a URL and tap upload |
+| WebDAV / Nextcloud / ownCloud upload | Only when you configure an **https://** URL and tap upload (HTTP cleartext blocked) |
 | On-device OCR model fallback download | Only if models are missing from the install and you run OCR (models are normally bundled offline) |
 | NHTSA recall check | VIN/make/model/year sent to public US NHTSA APIs (user-initiated) |
 | Open OCR helper / F-Droid / market links | Opens external apps or sites you choose |

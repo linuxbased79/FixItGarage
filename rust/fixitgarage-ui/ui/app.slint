@@ -1095,10 +1095,10 @@ export component MainWindow inherits Window {
                     }
                     Card {
                         title: root.tr-settings-webdav;
-                        body: "Direct upload (no share sheet). Example: https://cloud.example/remote.php/dav/files/USER/FixItGarage/ — password stored only on this device.";
-                        LineEdit { placeholder-text: "WebDAV folder URL"; text <=> root.cloud-url; }
+                        body: "HTTPS only. Example: https://cloud.example/remote.php/dav/files/USER/FixItGarage/ — password stays on this device, never in shared backups, never re-shown after save. Leave password blank to keep the existing one.";
+                        LineEdit { placeholder-text: "WebDAV folder URL (https://…)"; text <=> root.cloud-url; }
                         LineEdit { placeholder-text: "Username"; text <=> root.cloud-user; }
-                        LineEdit { placeholder-text: "App password / password"; text <=> root.cloud-pass; }
+                        LineEdit { placeholder-text: "App password (blank = keep existing)"; text <=> root.cloud-pass; }
                         Button { text: "Save WebDAV settings"; clicked => { root.save-cloud-settings(); } }
                         Button { text: "Upload backup via WebDAV"; primary: true; clicked => { root.upload-cloud-backup(); } }
                     }
@@ -1109,7 +1109,7 @@ export component MainWindow inherits Window {
                     }
                     Card {
                         title: root.tr-settings-about;
-                        body: "FixItGarage 0.2.23 — Selling my car: professional maintenance PDF packet.";
+                        body: "FixItGarage 0.2.24 — security hardening: backups, HTTPS WebDAV, no Auto Backup.";
                     }
                     Card {
                         title: "Reminders after reboot";

@@ -14,8 +14,8 @@ set -euo pipefail
 
 IN_APK="${1:?input apk}"
 OUT_APK="${2:?output apk}"
-VERSION_NAME="${3:-0.2.23}"
-VERSION_CODE="${4:-2023}"
+VERSION_NAME="${3:-0.2.24}"
+VERSION_CODE="${4:-2024}"
 
 export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}"
 if [[ ! -d "$ANDROID_HOME/platform-tools" && -d /root/Android/Sdk/platform-tools ]]; then
@@ -99,14 +99,30 @@ echo "Java classes: ${JAVA_FILES[*]}"
 sed -e "s/package=\"org.fixitgarage.app\"/package=\"org.fixitgarage.app\" android:versionCode=\"${VERSION_CODE}\" android:versionName=\"${VERSION_NAME}\"/" \
   "$MANIFEST_SRC" > "$WORK/AndroidManifest.xml"
 
-# --- Link bare APK with aapt2 (binary manifest + resources.arsc) ---
+# --- Compile Android resources (data extraction rules, etc.) ---
+RES_DIR="$ROOT/fixitgarage-ui/android/res"
+LINK_EXTRAS=()
+if [[ -d "$RES_DIR" ]]; then
+  mkdir -p "$WORK/compiled"
+  while IFS= read -r -d '' resf; do
+    "$AAPT2" compile -o "$WORK/compiled/" "$resf"
+  done < <(find "$RES_DIR" -type f -print0)
+  mapfile -t FLATS < <(find "$WORK/compiled" -name '*.flat' | sort)
+  if [[ ${#FLATS[@]} -gt 0 ]]; then
+    LINK_EXTRAS+=("${FLATS[@]}")
+    echo "Compiled ${#FLATS[@]} resource file(s)"
+  fi
+fi
+
+# --- Link APK with aapt2 (binary manifest + resources.arsc) ---
 "$AAPT2" link -o "$WORK/base.apk" \
   --manifest "$WORK/AndroidManifest.xml" \
   -I "$ANDROID_JAR" \
   --min-sdk-version 26 \
   --target-sdk-version 34 \
   --version-code "$VERSION_CODE" \
-  --version-name "$VERSION_NAME"
+  --version-name "$VERSION_NAME" \
+  "${LINK_EXTRAS[@]+"${LINK_EXTRAS[@]}"}"
 
 # --- Unpack and reassemble ---
 mkdir -p "$WORK/in" "$WORK/out"

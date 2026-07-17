@@ -1511,13 +1511,28 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         ui.on_save_cloud_settings(move || {
             if let Some(ui) = ui_weak.upgrade() {
                 let mut s = state.borrow_mut();
-                s.set_cloud_settings(
+                let pass = ui.get_cloud_pass().to_string();
+                match s.set_cloud_settings(
                     ui.get_cloud_url().to_string(),
                     ui.get_cloud_user().to_string(),
-                    ui.get_cloud_pass().to_string(),
-                );
-                ui.set_status_message("Cloud settings saved on device.".into());
-                refresh_ui(&ui, &s);
+                    pass,
+                ) {
+                    Ok(()) => {
+                        // Never leave password sitting in the text field after save.
+                        ui.set_cloud_pass("".into());
+                        let kept = if s.cloud_password.is_empty() {
+                            "No password stored yet."
+                        } else {
+                            "Password kept on device only (not shown again)."
+                        };
+                        ui.set_status_message(
+                            format!("Cloud settings saved. {kept} Leave password blank to keep existing.")
+                                .into(),
+                        );
+                        refresh_ui(&ui, &s);
+                    }
+                    Err(e) => ui.set_status_message(format!("Cloud settings: {e}").into()),
+                }
             }
         });
     }
@@ -2159,10 +2174,8 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     );
     ui.set_cloud_url(state.cloud_webdav_url.clone().into());
     ui.set_cloud_user(state.cloud_username.clone().into());
-    // Do not push password into UI on every refresh if user is typing — only seed when empty
-    if ui.get_cloud_pass().is_empty() && !state.cloud_password.is_empty() {
-        ui.set_cloud_pass(state.cloud_password.clone().into());
-    }
+    // Security: never re-seed WebDAV password into the UI (shoulder-surfing / screenshots).
+    // User re-enters only when changing it; blank on save keeps the stored password.
     let t = state.tread_for_selected();
     let fmt_t = |v: f64| {
         let d = mm_to_display(v, u);

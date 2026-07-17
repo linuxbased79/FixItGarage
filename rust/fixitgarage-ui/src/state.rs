@@ -87,6 +87,8 @@ pub struct AppState {
     pub cloud_webdav_url: String,
     #[serde(default)]
     pub cloud_username: String,
+    /// Stored only in on-device `state.json` (app private storage).
+    /// **Never** included in shared JSON backups (`write_backup_file` clears it).
     #[serde(default)]
     pub cloud_password: String,
     /// Throttle system notifications (ms since epoch). Re-notify after 12 hours.
@@ -1103,11 +1105,24 @@ impl AppState {
         }
     }
 
-    pub fn set_cloud_settings(&mut self, url: String, user: String, pass: String) {
-        self.cloud_webdav_url = url.trim().into();
+    pub fn set_cloud_settings(&mut self, url: String, user: String, pass: String) -> Result<(), String> {
+        let url = url.trim().to_string();
+        if !url.is_empty() {
+            let lower = url.to_ascii_lowercase();
+            if !lower.starts_with("https://") {
+                return Err(
+                    "WebDAV URL must start with https:// (cleartext HTTP is blocked).".into(),
+                );
+            }
+        }
+        self.cloud_webdav_url = url;
         self.cloud_username = user.trim().into();
-        self.cloud_password = pass; // stored only on device in state.json
+        // Empty password field = keep existing (so URL/user can be edited without re-typing).
+        if !pass.is_empty() {
+            self.cloud_password = pass;
+        }
         self.save();
+        Ok(())
     }
 
     pub fn delete_vehicle(&mut self, id: u64) {
@@ -1401,7 +1416,8 @@ impl AppState {
             .any(|mm| mm < Self::TREAD_MIN_MM)
     }
 
-    /// Write full app state JSON backup. Returns path written.
+    /// Write app state JSON backup for share/export.
+    /// **Security:** WebDAV password is always stripped from the file.
     pub fn write_backup_file(&self) -> Result<PathBuf, String> {
         let dir = Self::data_path()
             .parent()
@@ -1410,16 +1426,20 @@ impl AppState {
         let _ = std::fs::create_dir_all(&dir);
         let stamp = Utc::now().format("%Y%m%d-%H%M%S");
         let path = dir.join(format!("fixitgarage-backup-{stamp}.json"));
-        let json = serde_json::to_vec_pretty(self).map_err(|e| e.to_string())?;
+        let mut export = self.clone();
+        export.cloud_password.clear();
+        let json = serde_json::to_vec_pretty(&export).map_err(|e| e.to_string())?;
         std::fs::write(&path, json).map_err(|e| e.to_string())?;
         Ok(path)
     }
 
     /// Restore state from a backup JSON file path.
+    /// **Security:** any password present in the file is discarded (re-enter WebDAV password).
     pub fn restore_from_file(path: &str) -> Result<Self, String> {
         let bytes = std::fs::read(path.trim()).map_err(|e| format!("read: {e}"))?;
         let mut state: AppState =
             serde_json::from_slice(&bytes).map_err(|e| format!("parse: {e}"))?;
+        state.cloud_password.clear();
         state.ensure_selection();
         state.ensure_oil_reminders();
         state.save();
@@ -2409,6 +2429,37 @@ mod tests {
         s.user_mode = "SHOP".into();
         assert!(!s.feature_flags().show_tires);
         assert!(!s.feature_flags().show_parts);
+    }
+
+    #[test]
+    fn backup_strips_webdav_password() {
+        let mut s = AppState::default();
+        s.cloud_webdav_url = "https://cloud.example/dav/".into();
+        s.cloud_username = "user".into();
+        s.cloud_password = "super-secret".into();
+        let path = s.write_backup_file().expect("backup");
+        let raw = std::fs::read_to_string(&path).expect("read");
+        assert!(!raw.contains("super-secret"), "password leaked into backup");
+        assert!(raw.contains("cloud.example") || raw.contains("https://"));
+        // In-memory password still present for local upload
+        assert_eq!(s.cloud_password, "super-secret");
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn webdav_settings_require_https_and_keep_password() {
+        let mut s = AppState::default();
+        assert!(s
+            .set_cloud_settings("http://insecure.example/".into(), "u".into(), "p".into())
+            .is_err());
+        s.set_cloud_settings("https://secure.example/dav/".into(), "u".into(), "p1".into())
+            .unwrap();
+        assert_eq!(s.cloud_password, "p1");
+        // blank password keeps previous
+        s.set_cloud_settings("https://secure.example/dav/".into(), "u2".into(), "".into())
+            .unwrap();
+        assert_eq!(s.cloud_username, "u2");
+        assert_eq!(s.cloud_password, "p1");
     }
 
     #[test]
