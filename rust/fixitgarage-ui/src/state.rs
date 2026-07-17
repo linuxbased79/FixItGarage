@@ -28,6 +28,12 @@ pub struct AppState {
     pub next_reminder_id: u64,
     #[serde(default)]
     pub next_component_id: u64,
+    #[serde(default)]
+    pub next_photo_id: u64,
+    #[serde(default)]
+    pub next_tire_purchase_id: u64,
+    #[serde(default)]
+    pub next_rotation_id: u64,
     pub vehicles: Vec<Vehicle>,
     pub services: Vec<ServiceRecord>,
     #[serde(default)]
@@ -41,8 +47,55 @@ pub struct AppState {
     /// History of oil dipstick readings (from oil-level checks).
     #[serde(default)]
     pub oil_level_logs: Vec<OilLevelLog>,
+    #[serde(default)]
+    pub issue_photos: Vec<IssuePhoto>,
+    #[serde(default)]
+    pub tire_purchases: Vec<TirePurchase>,
+    #[serde(default)]
+    pub tire_rotations: Vec<TireRotationLog>,
     pub tire_layout: TireLayoutStored,
     pub tire_pattern: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IssuePhoto {
+    pub id: u64,
+    pub vehicle_id: u64,
+    pub caption: String,
+    pub notes: String,
+    /// Local path or content URI when a photo was attached/captured.
+    pub file_path: String,
+    pub created_epoch_ms: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TirePurchase {
+    pub id: u64,
+    pub vehicle_id: u64,
+    pub brand: String,
+    pub model: String,
+    pub size: String,
+    pub cost: f64,
+    pub mileage: Option<u32>,
+    pub date_epoch_ms: i64,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TireRotationLog {
+    pub id: u64,
+    pub vehicle_id: u64,
+    pub pattern: String,
+    pub before_fl: String,
+    pub before_fr: String,
+    pub before_rl: String,
+    pub before_rr: String,
+    pub after_fl: String,
+    pub after_fr: String,
+    pub after_rl: String,
+    pub after_rr: String,
+    pub mileage: Option<u32>,
+    pub date_epoch_ms: i64,
 }
 
 /// User-friendly dipstick reading when logging an oil level check.
@@ -90,7 +143,7 @@ fn default_dark_mode() -> String {
     "DARK".into()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TireLayoutStored {
     pub fl: String,
     pub fr: String,
@@ -177,6 +230,9 @@ impl Default for AppState {
             next_note_id: 1,
             next_reminder_id: 1,
             next_component_id: 1,
+            next_photo_id: 1,
+            next_tire_purchase_id: 1,
+            next_rotation_id: 1,
             vehicles: Vec::new(),
             services: Vec::new(),
             parts: Vec::new(),
@@ -184,6 +240,9 @@ impl Default for AppState {
             notes: Vec::new(),
             reminders: Vec::new(),
             oil_level_logs: Vec::new(),
+            issue_photos: Vec::new(),
+            tire_purchases: Vec::new(),
+            tire_rotations: Vec::new(),
             tire_layout: TireLayoutStored {
                 fl: "A".into(),
                 fr: "B".into(),
@@ -354,11 +413,33 @@ impl AppState {
     }
 
     pub fn apply_tire_rotation(&mut self) {
+        let before = self.tire_layout.clone();
         let layout = TireLayout::from(&self.tire_layout);
         let pattern =
             RotationPattern::from_str(&self.tire_pattern).unwrap_or(RotationPattern::ForwardCross);
         let after = apply_rotation(&layout, pattern);
-        self.tire_layout = TireLayoutStored::from(&after);
+        let after_stored = TireLayoutStored::from(&after);
+        if let Some(vid) = self.selected_vehicle_id {
+            let id = self.next_rotation_id;
+            self.next_rotation_id += 1;
+            let mileage = self.selected_vehicle().map(|v| v.current_mileage);
+            self.tire_rotations.push(TireRotationLog {
+                id,
+                vehicle_id: vid,
+                pattern: pattern.label().into(),
+                before_fl: before.fl,
+                before_fr: before.fr,
+                before_rl: before.rl,
+                before_rr: before.rr,
+                after_fl: after_stored.fl.clone(),
+                after_fr: after_stored.fr.clone(),
+                after_rl: after_stored.rl.clone(),
+                after_rr: after_stored.rr.clone(),
+                mileage,
+                date_epoch_ms: Utc::now().timestamp_millis(),
+            });
+        }
+        self.tire_layout = after_stored;
     }
 
     pub fn export_csv(&self) -> String {
@@ -406,10 +487,38 @@ impl AppState {
         cost: f64,
         gallons: Option<f64>,
     ) {
+        self.add_service_full(
+            title,
+            mileage,
+            source,
+            cost,
+            0.0,
+            gallons,
+            None,
+            Utc::now().timestamp_millis(),
+            String::new(),
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_service_full(
+        &mut self,
+        title: String,
+        mileage: u32,
+        source: &str,
+        parts_cost: f64,
+        labor_cost: f64,
+        gallons: Option<f64>,
+        fuel_cost: Option<f64>,
+        date_epoch_ms: i64,
+        shop_name: String,
+    ) {
         if title.trim().is_empty() {
             return;
         }
-        let vehicle_id = match self.selected_vehicle_id.or_else(|| self.vehicles.first().map(|v| v.id))
+        let vehicle_id = match self
+            .selected_vehicle_id
+            .or_else(|| self.vehicles.first().map(|v| v.id))
         {
             Some(id) => id,
             None => return,
@@ -423,21 +532,111 @@ impl AppState {
         self.services.push(ServiceRecord {
             id,
             vehicle_id,
-            date_epoch_ms: Utc::now().timestamp_millis(),
+            date_epoch_ms,
             mileage,
             title: title.trim().into(),
             source,
-            labor_cost: 0.0,
-            parts_cost: cost,
+            labor_cost,
+            parts_cost,
             gallons,
-            fuel_cost: None,
-            shop_name: String::new(),
+            fuel_cost,
+            shop_name,
         });
         if let Some(v) = self.vehicles.iter_mut().find(|v| v.id == vehicle_id) {
             if mileage > v.current_mileage {
                 v.current_mileage = mileage;
             }
         }
+        self.save();
+    }
+
+    /// Receipt import: date, mileage, gallons, total split into parts/labor, shop name.
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_receipt(
+        &mut self,
+        title: String,
+        date_str: &str,
+        mileage: u32,
+        gallons: Option<f64>,
+        parts_cost: f64,
+        labor_cost: f64,
+        fuel_cost: Option<f64>,
+        shop_name: String,
+        source: &str,
+    ) {
+        let date_epoch = parse_date_to_epoch(date_str).unwrap_or_else(|| Utc::now().timestamp_millis());
+        let title = if title.trim().is_empty() {
+            "Receipt".into()
+        } else {
+            title
+        };
+        self.add_service_full(
+            title,
+            mileage,
+            source,
+            parts_cost,
+            labor_cost,
+            gallons,
+            fuel_cost,
+            date_epoch,
+            shop_name,
+        );
+    }
+
+    pub fn add_issue_photo(&mut self, caption: String, notes: String, file_path: String) {
+        let Some(vid) = self.selected_vehicle_id else {
+            return;
+        };
+        if caption.trim().is_empty() && notes.trim().is_empty() {
+            return;
+        }
+        let id = self.next_photo_id;
+        self.next_photo_id += 1;
+        let path = if file_path.trim().is_empty() {
+            format!("pending-photo-{id}")
+        } else {
+            file_path.trim().into()
+        };
+        self.issue_photos.push(IssuePhoto {
+            id,
+            vehicle_id: vid,
+            caption: if caption.trim().is_empty() {
+                "Issue photo".into()
+            } else {
+                caption.trim().into()
+            },
+            notes,
+            file_path: path,
+            created_epoch_ms: Utc::now().timestamp_millis(),
+        });
+        self.save();
+    }
+
+    pub fn add_tire_purchase(
+        &mut self,
+        brand: String,
+        model: String,
+        size: String,
+        cost: f64,
+        mileage: Option<u32>,
+        notes: String,
+    ) {
+        let Some(vid) = self.selected_vehicle_id else {
+            return;
+        };
+        let id = self.next_tire_purchase_id;
+        self.next_tire_purchase_id += 1;
+        self.tire_purchases.push(TirePurchase {
+            id,
+            vehicle_id: vid,
+            brand: brand.trim().into(),
+            model: model.trim().into(),
+            size: size.trim().into(),
+            cost,
+            mileage,
+            date_epoch_ms: Utc::now().timestamp_millis(),
+            notes,
+        });
         self.save();
     }
 

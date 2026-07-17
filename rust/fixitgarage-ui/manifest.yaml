@@ -5,6 +5,9 @@ android:
     sdk:
       min_sdk_version: 26
       target_sdk_version: 33
+    uses_permission:
+      - name: android.permission.INTERNET
+      - name: android.permission.CAMERA
     application:
       label: FixItGarage
       has_code: false

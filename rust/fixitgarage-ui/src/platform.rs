@@ -1,4 +1,4 @@
-//! Platform helpers (open URL, etc.).
+//! Platform helpers (open URL, camera, etc.).
 
 /// Open a URL in the system browser.
 pub fn open_url(url: &str) {
@@ -75,6 +75,91 @@ fn open_url_android(url: &str) -> Result<(), String> {
         &[JValue::Int(flag)],
     )
     .map_err(|e| format!("addFlags: {e}"))?;
+
+    env.call_method(
+        &context,
+        "startActivity",
+        "(Landroid/content/Intent;)V",
+        &[JValue::Object(&intent)],
+    )
+    .map_err(|e| format!("startActivity: {e}"))?;
+
+    Ok(())
+}
+
+/// Try to open the device camera (Android). Desktop: no-op with path suggestion.
+/// Returns a suggested local photo path for the issue log.
+pub fn capture_issue_photo_path() -> String {
+    let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
+    let path = dirs::data_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("fixitgarage")
+        .join("photos")
+        .join(format!("issue-{stamp}.jpg"));
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let path_str = path.display().to_string();
+
+    #[cfg(target_os = "android")]
+    {
+        if let Err(e) = open_camera_android(&path_str) {
+            eprintln!("camera intent failed: {e}");
+        }
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        // Desktop: create a tiny placeholder so the path exists
+        if !path.exists() {
+            let _ = std::fs::write(
+                &path,
+                b"FixItGarage photo placeholder - use Android camera for real capture.\n",
+            );
+        }
+    }
+
+    path_str
+}
+
+#[cfg(target_os = "android")]
+fn open_camera_android(output_path: &str) -> Result<(), String> {
+    use jni::objects::{JObject, JValue};
+    use jni::JavaVM;
+
+    let ctx = ndk_context::android_context();
+    let vm =
+        unsafe { JavaVM::from_raw(ctx.vm().cast()) }.map_err(|e| format!("JavaVM: {e}"))?;
+    let mut env = vm
+        .attach_current_thread()
+        .map_err(|e| format!("attach: {e}"))?;
+    let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+
+    let intent_class = env
+        .find_class("android/content/Intent")
+        .map_err(|e| format!("Intent: {e}"))?;
+    let action = env
+        .new_string("android.media.action.IMAGE_CAPTURE")
+        .map_err(|e| format!("action str: {e}"))?;
+    let intent = env
+        .new_object(
+            &intent_class,
+            "(Ljava/lang/String;)V",
+            &[JValue::Object(&action)],
+        )
+        .map_err(|e| format!("new Intent: {e}"))?;
+
+    // FLAG_ACTIVITY_NEW_TASK
+    env.call_method(
+        &intent,
+        "addFlags",
+        "(I)Landroid/content/Intent;",
+        &[JValue::Int(0x1000_0000)],
+    )
+    .map_err(|e| format!("addFlags: {e}"))?;
+
+    // Best-effort: many cameras work with bare IMAGE_CAPTURE without FileProvider.
+    // Full EXTRA_OUTPUT needs a content URI (FileProvider) — documented as follow-up.
+    let _ = output_path;
 
     env.call_method(
         &context,

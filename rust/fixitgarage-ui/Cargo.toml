@@ -56,3 +56,6 @@ theme = "@android:style/Theme.DeviceDefault.NoActionBar"
 [[package.metadata.android.uses_permission]]
 name = "android.permission.INTERNET"
 
+[[package.metadata.android.uses_permission]]
+name = "android.permission.CAMERA"
+

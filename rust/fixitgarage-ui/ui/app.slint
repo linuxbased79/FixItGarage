@@ -36,6 +36,18 @@ export struct ReminderRow {
     is-oil-level: bool,
 }
 
+export struct PhotoRow {
+    id: int,
+    title: string,
+    detail: string,
+}
+
+export struct HistoryRow {
+    id: int,
+    title: string,
+    detail: string,
+}
+
 export global Theme {
     in-out property <bool> dark: false;
     out property <color> bg: dark ? #0D1117 : #FAFAFA;
@@ -136,7 +148,7 @@ export component MainWindow inherits Window {
     in-out property <bool> wizard-done: false;
     in-out property <string> user-mode: "BOTH";
     // 0 home 1 vehicles 2 service 3 tires 4 costs 5 settings
-    // 6 parts 7 battery 8 wipers 9 brakes 10 notes 11 reminders
+    // 6 parts 7 battery 8 wipers 9 brakes 10 notes 11 reminders 12 photos 13 receipt
     in-out property <int> page: 0;
 
     in-out property <bool> show-tires: true;
@@ -160,6 +172,9 @@ export component MainWindow inherits Window {
     ];
     in-out property <[NoteRow]> notes: [];
     in-out property <[ReminderRow]> reminders: [];
+    in-out property <[PhotoRow]> photos: [];
+    in-out property <[HistoryRow]> tire-purchases: [];
+    in-out property <[HistoryRow]> tire-rotations: [];
 
     in-out property <string> form-name: "";
     in-out property <string> form-make: "";
@@ -170,6 +185,7 @@ export component MainWindow inherits Window {
     in-out property <string> svc-title: "";
     in-out property <string> svc-mileage: "";
     in-out property <string> svc-cost: "";
+    in-out property <string> svc-labor: "";
     in-out property <string> svc-gallons: "";
     in-out property <string> svc-source: "DIY";
     in-out property <string> mpg-label: "MPG: —";
@@ -209,6 +225,29 @@ export component MainWindow inherits Window {
     in-out property <string> rem-date: "";
     in-out property <string> rem-mileage: "";
 
+    // Receipt / OCR-ready fields
+    in-out property <string> rcp-title: "";
+    in-out property <string> rcp-date: "";
+    in-out property <string> rcp-mileage: "";
+    in-out property <string> rcp-gallons: "";
+    in-out property <string> rcp-parts: "";
+    in-out property <string> rcp-labor: "";
+    in-out property <string> rcp-fuel: "";
+    in-out property <string> rcp-shop: "";
+
+    // Issue photo form
+    in-out property <string> photo-caption: "";
+    in-out property <string> photo-notes: "";
+    in-out property <string> photo-path: "";
+
+    // Tire purchase form
+    in-out property <string> tire-brand: "";
+    in-out property <string> tire-model: "";
+    in-out property <string> tire-size: "";
+    in-out property <string> tire-cost: "";
+    in-out property <string> tire-buy-mileage: "";
+    in-out property <string> tire-buy-notes: "";
+
     // Oil dipstick reading when completing an oil-level check
     in-out property <string> oil-level-choice: "Full";
     in-out property <string> last-oil-level-summary: "No oil level logged yet.";
@@ -233,6 +272,10 @@ export component MainWindow inherits Window {
     callback add-reminder();
     callback complete-reminder(int);
     callback set-oil-level-choice(string);
+    callback add-photo();
+    callback capture-photo();
+    callback save-receipt();
+    callback save-tire-purchase();
     callback export-csv();
     callback open-feedback();
     callback open-donate();
@@ -288,6 +331,8 @@ export component MainWindow inherits Window {
                         title: "Quick actions";
                         body: last-oil-level-summary;
                         Button { text: "Oil level check"; primary: true; clicked => { root.navigate(11); } }
+                        Button { text: "Scan / log receipt"; clicked => { root.navigate(13); } }
+                        Button { text: "Issue photos"; clicked => { root.navigate(12); } }
                         Button { text: "Log service"; clicked => { root.navigate(2); } }
                         if show-tires: Button { text: "Tire rotation"; clicked => { root.navigate(3); } }
                         if show-parts: Button { text: "Parts log"; clicked => { root.navigate(6); } }
@@ -343,7 +388,8 @@ export component MainWindow inherits Window {
                             ChoiceBtn { label: "DIY"; active: root.svc-source == "DIY"; clicked => { root.set-source("DIY"); } }
                             ChoiceBtn { label: "Shop"; active: root.svc-source == "SHOP"; clicked => { root.set-source("SHOP"); } }
                         }
-                        LineEdit { placeholder-text: "Parts + labor cost"; text <=> root.svc-cost; }
+                        LineEdit { placeholder-text: "Parts cost"; text <=> root.svc-cost; }
+                        LineEdit { placeholder-text: "Labor cost"; text <=> root.svc-labor; }
                         LineEdit { placeholder-text: "Gallons (fuel, optional)"; text <=> root.svc-gallons; }
                         Button { text: "Save service"; primary: true; clicked => { root.add-service(); } }
                     }
@@ -387,6 +433,30 @@ export component MainWindow inherits Window {
                             ChoiceBtn { label: "Side"; active: root.tire-pattern == "side_to_side"; clicked => { root.set-pattern("side_to_side"); } }
                         }
                         Button { text: "Apply rotation"; primary: true; clicked => { root.apply-rotation(); } }
+                    }
+                    if show-tires: Card {
+                        title: "Tire purchase"; body: "Log a new set (receipt scan later).";
+                        LineEdit { placeholder-text: "Brand"; text <=> root.tire-brand; }
+                        LineEdit { placeholder-text: "Model"; text <=> root.tire-model; }
+                        LineEdit { placeholder-text: "Size (e.g. 225/65R17)"; text <=> root.tire-size; }
+                        LineEdit { placeholder-text: "Cost"; text <=> root.tire-cost; }
+                        LineEdit { placeholder-text: "Mileage at purchase"; text <=> root.tire-buy-mileage; }
+                        LineEdit { placeholder-text: "Notes"; text <=> root.tire-buy-notes; }
+                        Button { text: "Save tire purchase"; primary: true; clicked => { root.save-tire-purchase(); } }
+                    }
+                    if show-tires: Card {
+                        title: "Purchase history"; body: "";
+                        for p in tire-purchases: Text {
+                            text: p.title + " — " + p.detail;
+                            font-size: 13px; color: Theme.text; wrap: word-wrap;
+                        }
+                    }
+                    if show-tires: Card {
+                        title: "Rotation history"; body: "";
+                        for r in tire-rotations: Text {
+                            text: r.title + " — " + r.detail;
+                            font-size: 13px; color: Theme.text; wrap: word-wrap;
+                        }
                     }
                 }
             }
@@ -438,6 +508,8 @@ export component MainWindow inherits Window {
                         Button { text: "Brakes"; clicked => { root.navigate(9); } }
                         Button { text: "Notes"; clicked => { root.navigate(10); } }
                         Button { text: "Reminders"; clicked => { root.navigate(11); } }
+                        Button { text: "Issue photos"; clicked => { root.navigate(12); } }
+                        Button { text: "Receipt log"; clicked => { root.navigate(13); } }
                     }
                     Card {
                         title: "Data"; body: "Local-first. Cloud backup planned.";
@@ -660,6 +732,61 @@ export component MainWindow inherits Window {
                 }
             }
         }
+
+
+            // PHOTOS
+            if page == 12: ScrollView {
+                width: 100%; height: 100%;
+                VerticalBox {
+                    padding: 16px; spacing: 10px;
+                    PageTitle { label: "Issue photos"; }
+                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    Text {
+                        text: "Log problems with a caption. On Android, Take photo opens the camera; then save the log entry.";
+                        font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
+                    }
+                    Card {
+                        title: "New issue"; body: "";
+                        LineEdit { placeholder-text: "Caption (e.g. Front right leak)"; text <=> root.photo-caption; }
+                        LineEdit { placeholder-text: "Notes / what you see"; text <=> root.photo-notes; }
+                        Text {
+                            text: photo-path == "" ? "No photo path yet" : ("Photo: " + photo-path);
+                            font-size: 12px; color: Theme.text-soft; wrap: word-wrap;
+                        }
+                        Button { text: "Take photo"; clicked => { root.capture-photo(); } }
+                        Button { text: "Save issue log"; primary: true; clicked => { root.add-photo(); } }
+                    }
+                    for ph in photos: Card { title: ph.title; body: ph.detail; }
+                    Button { text: "Back"; clicked => { root.navigate(5); } }
+                }
+            }
+
+            // RECEIPT
+            if page == 13: ScrollView {
+                width: 100%; height: 100%;
+                VerticalBox {
+                    padding: 16px; spacing: 10px;
+                    PageTitle { label: "Receipt log"; }
+                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    Text {
+                        text: "OCR camera fill-in is next. Enter values from the receipt (date, mileage, gallons, parts, labor).";
+                        font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
+                    }
+                    Card {
+                        title: "Receipt fields"; body: "Saves into maintenance history for this vehicle.";
+                        LineEdit { placeholder-text: "Title (e.g. Oil change shop)"; text <=> root.rcp-title; }
+                        LineEdit { placeholder-text: "Date YYYY-MM-DD"; text <=> root.rcp-date; }
+                        LineEdit { placeholder-text: "Mileage"; text <=> root.rcp-mileage; }
+                        LineEdit { placeholder-text: "Gallons (fuel)"; text <=> root.rcp-gallons; }
+                        LineEdit { placeholder-text: "Parts cost"; text <=> root.rcp-parts; }
+                        LineEdit { placeholder-text: "Labor cost"; text <=> root.rcp-labor; }
+                        LineEdit { placeholder-text: "Fuel cost (optional)"; text <=> root.rcp-fuel; }
+                        LineEdit { placeholder-text: "Shop name"; text <=> root.rcp-shop; }
+                        Button { text: "Save receipt to history"; primary: true; clicked => { root.save-receipt(); } }
+                    }
+                    Button { text: "Back to service"; clicked => { root.navigate(2); } }
+                }
+            }
 
         // Bottom nav
         Rectangle {

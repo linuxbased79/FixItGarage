@@ -4,7 +4,7 @@ mod platform;
 mod state;
 
 use chrono::{TimeZone, Utc};
-use platform::open_url;
+use platform::{capture_issue_photo_path, open_url};
 use state::{reminder_status_line, AppState};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -98,7 +98,8 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                 }
                 let title = ui.get_svc_title().to_string();
                 let mileage = ui.get_svc_mileage().parse().unwrap_or(0);
-                let cost = ui.get_svc_cost().parse().unwrap_or(0.0);
+                let parts = ui.get_svc_cost().parse().unwrap_or(0.0);
+                let labor = ui.get_svc_labor().parse().unwrap_or(0.0);
                 let gallons = {
                     let g = ui.get_svc_gallons().to_string();
                     if g.trim().is_empty() {
@@ -108,10 +109,21 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     }
                 };
                 let source = ui.get_svc_source().to_string();
-                s.add_service(title, mileage, &source, cost, gallons);
+                s.add_service_full(
+                    title,
+                    mileage,
+                    &source,
+                    parts,
+                    labor,
+                    gallons,
+                    None,
+                    chrono::Utc::now().timestamp_millis(),
+                    String::new(),
+                );
                 ui.set_svc_title("".into());
                 ui.set_svc_mileage("".into());
                 ui.set_svc_cost("".into());
+                ui.set_svc_labor("".into());
                 ui.set_svc_gallons("".into());
                 ui.set_status_message("Service saved.".into());
                 refresh_ui(&ui, &s);
@@ -281,8 +293,117 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         ui.on_set_oil_level_choice(move |choice| {
             if let Some(ui) = ui_weak.upgrade() {
                 ui.set_oil_level_choice(choice);
-                // no full refresh needed
                 let _ = state;
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_capture_photo(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let path = capture_issue_photo_path();
+                ui.set_photo_path(path.clone().into());
+                ui.set_status_message("Camera opened (or path ready). Add caption and Save.".into());
+                let _ = state;
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_add_photo(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let mut s = state.borrow_mut();
+                s.add_issue_photo(
+                    ui.get_photo_caption().to_string(),
+                    ui.get_photo_notes().to_string(),
+                    ui.get_photo_path().to_string(),
+                );
+                ui.set_photo_caption("".into());
+                ui.set_photo_notes("".into());
+                ui.set_photo_path("".into());
+                ui.set_status_message("Issue photo logged.".into());
+                refresh_ui(&ui, &s);
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_save_receipt(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let mut s = state.borrow_mut();
+                if s.selected_vehicle_id.is_none() {
+                    ui.set_status_message("Select a vehicle first.".into());
+                    return;
+                }
+                let gallons = {
+                    let g = ui.get_rcp_gallons().to_string();
+                    if g.trim().is_empty() {
+                        None
+                    } else {
+                        g.parse().ok()
+                    }
+                };
+                let fuel = {
+                    let f = ui.get_rcp_fuel().to_string();
+                    if f.trim().is_empty() {
+                        None
+                    } else {
+                        f.parse().ok()
+                    }
+                };
+                s.add_receipt(
+                    ui.get_rcp_title().to_string(),
+                    &ui.get_rcp_date().to_string(),
+                    ui.get_rcp_mileage().parse().unwrap_or(0),
+                    gallons,
+                    ui.get_rcp_parts().parse().unwrap_or(0.0),
+                    ui.get_rcp_labor().parse().unwrap_or(0.0),
+                    fuel,
+                    ui.get_rcp_shop().to_string(),
+                    "SHOP",
+                );
+                ui.set_rcp_title("".into());
+                ui.set_rcp_date("".into());
+                ui.set_rcp_mileage("".into());
+                ui.set_rcp_gallons("".into());
+                ui.set_rcp_parts("".into());
+                ui.set_rcp_labor("".into());
+                ui.set_rcp_fuel("".into());
+                ui.set_rcp_shop("".into());
+                ui.set_status_message("Receipt saved to maintenance history.".into());
+                refresh_ui(&ui, &s);
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_save_tire_purchase(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let mut s = state.borrow_mut();
+                s.add_tire_purchase(
+                    ui.get_tire_brand().to_string(),
+                    ui.get_tire_model().to_string(),
+                    ui.get_tire_size().to_string(),
+                    ui.get_tire_cost().parse().unwrap_or(0.0),
+                    ui.get_tire_buy_mileage().parse().ok(),
+                    ui.get_tire_buy_notes().to_string(),
+                );
+                ui.set_tire_brand("".into());
+                ui.set_tire_model("".into());
+                ui.set_tire_size("".into());
+                ui.set_tire_cost("".into());
+                ui.set_tire_buy_mileage("".into());
+                ui.set_tire_buy_notes("".into());
+                ui.set_status_message("Tire purchase saved.".into());
+                refresh_ui(&ui, &s);
             }
         });
     }
@@ -475,6 +596,86 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     if ui.get_oil_level_choice().is_empty() {
         ui.set_oil_level_choice("Full".into());
     }
+
+    let photos: Vec<PhotoRow> = state
+        .issue_photos
+        .iter()
+        .filter(|p| state.selected_vehicle_id == Some(p.vehicle_id))
+        .rev()
+        .map(|p| PhotoRow {
+            id: p.id as i32,
+            title: p.caption.clone().into(),
+            detail: format!(
+                "{} · {}\n{}",
+                format_service_date(p.created_epoch_ms),
+                p.file_path,
+                p.notes
+            )
+            .into(),
+        })
+        .collect();
+    ui.set_photos(slint::ModelRc::new(slint::VecModel::from(photos)));
+
+    let purchases: Vec<HistoryRow> = state
+        .tire_purchases
+        .iter()
+        .filter(|p| state.selected_vehicle_id == Some(p.vehicle_id))
+        .rev()
+        .map(|p| {
+            let mi = p
+                .mileage
+                .map(|m| format!("{m} mi"))
+                .unwrap_or_else(|| "—".into());
+            HistoryRow {
+                id: p.id as i32,
+                title: format!("{} {} {}", p.brand, p.model, p.size)
+                    .trim()
+                    .to_string()
+                    .into(),
+                detail: format!(
+                    "{} · {} · ${:.2} · {}",
+                    format_service_date(p.date_epoch_ms),
+                    mi,
+                    p.cost,
+                    p.notes
+                )
+                .into(),
+            }
+        })
+        .collect();
+    ui.set_tire_purchases(slint::ModelRc::new(slint::VecModel::from(purchases)));
+
+    let rotations: Vec<HistoryRow> = state
+        .tire_rotations
+        .iter()
+        .filter(|r| state.selected_vehicle_id == Some(r.vehicle_id))
+        .rev()
+        .map(|r| {
+            let mi = r
+                .mileage
+                .map(|m| format!("{m} mi"))
+                .unwrap_or_else(|| "—".into());
+            HistoryRow {
+                id: r.id as i32,
+                title: format!("{} rotation", r.pattern).into(),
+                detail: format!(
+                    "{} · {} · {}{} / {}{} → {}{} / {}{}",
+                    format_service_date(r.date_epoch_ms),
+                    mi,
+                    r.before_fl,
+                    r.before_fr,
+                    r.before_rl,
+                    r.before_rr,
+                    r.after_fl,
+                    r.after_fr,
+                    r.after_rl,
+                    r.after_rr
+                )
+                .into(),
+            }
+        })
+        .collect();
+    ui.set_tire_rotations(slint::ModelRc::new(slint::VecModel::from(rotations)));
 }
 
 /// Android entry point (NativeActivity / android-activity).
