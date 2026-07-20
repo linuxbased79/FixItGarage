@@ -3,6 +3,14 @@
 
 import { Button, LineEdit, ScrollView, VerticalBox, HorizontalBox } from "std-widgets.slint";
 
+// Slint's default ScrollView has Flickable.interactive=false, so on touch devices
+// you can only scroll with the thin scrollbar on the right edge. Enable pan/flick
+// from anywhere (standard phone-app behavior).
+component AppScrollView inherits ScrollView {
+    mouse-drag-pan-enabled: true;
+    horizontal-scrollbar-policy: ScrollBarPolicy.always-off;
+}
+
 // OpenDyslexic (SIL OFL) — optional accessibility font for dyslexia-friendly reading
 import "./fonts/OpenDyslexic-Regular.otf";
 import "./fonts/OpenDyslexic-Bold.otf";
@@ -528,7 +536,7 @@ export component MainWindow inherits Window {
             vertical-stretch: 1; background: Theme.bg;
 
             // HOME
-            if page == 0: ScrollView {
+            if page == 0: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 12px;
@@ -617,7 +625,7 @@ export component MainWindow inherits Window {
             }
 
             // VEHICLES
-            if page == 1: ScrollView {
+            if page == 1: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 10px;
@@ -675,7 +683,7 @@ export component MainWindow inherits Window {
             }
 
             // SERVICE
-            if page == 2: ScrollView {
+            if page == 2: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 10px;
@@ -725,7 +733,7 @@ export component MainWindow inherits Window {
             }
 
             // TIRES
-            if page == 3: ScrollView {
+            if page == 3: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 12px;
@@ -908,7 +916,7 @@ export component MainWindow inherits Window {
             }
 
             // COSTS
-            if page == 4: ScrollView {
+            if page == 4: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 12px;
@@ -923,7 +931,7 @@ export component MainWindow inherits Window {
             }
 
             // MORE — tools & trackers hub (not settings)
-            if page == 5: ScrollView {
+            if page == 5: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 12px;
@@ -969,7 +977,7 @@ export component MainWindow inherits Window {
             }
 
             // SETTINGS — preferences only (gear tab)
-            if page == 15: ScrollView {
+            if page == 15: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
                     // Extra bottom pad so the last language options / cards are scrollable
@@ -1166,7 +1174,7 @@ export component MainWindow inherits Window {
             }
 
             // PARTS
-            if page == 6: ScrollView {
+            if page == 6: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 10px;
@@ -1203,7 +1211,7 @@ export component MainWindow inherits Window {
             }
 
             // BATTERY
-            if page == 7: ScrollView {
+            if page == 7: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 10px;
@@ -1226,7 +1234,7 @@ export component MainWindow inherits Window {
             }
 
             // WIPERS — driver (left) / passenger (right) / rear often different sizes
-            if page == 8: ScrollView {
+            if page == 8: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 10px;
@@ -1276,7 +1284,7 @@ export component MainWindow inherits Window {
             }
 
             // BRAKES
-            if page == 9: ScrollView {
+            if page == 9: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 10px;
@@ -1306,7 +1314,7 @@ export component MainWindow inherits Window {
             }
 
             // NOTES
-            if page == 10: ScrollView {
+            if page == 10: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 10px;
@@ -1327,7 +1335,7 @@ export component MainWindow inherits Window {
             }
 
             // REMINDERS
-            if page == 11: ScrollView {
+            if page == 11: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 10px;
@@ -1408,7 +1416,7 @@ export component MainWindow inherits Window {
 
 
             // PHOTOS
-            if page == 12: ScrollView {
+            if page == 12: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 10px;
@@ -1435,7 +1443,7 @@ export component MainWindow inherits Window {
             }
 
             // RECEIPT
-            if page == 13: ScrollView {
+            if page == 13: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 10px;
@@ -1488,7 +1496,7 @@ export component MainWindow inherits Window {
 
 
             // FUEL / MPG HISTORY
-            if page == 14: ScrollView {
+            if page == 14: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 10px;

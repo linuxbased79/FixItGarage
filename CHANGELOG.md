@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.2.28
+- **Touch scrolling**: pan/flick from anywhere on the page (not only the thin right-edge scrollbar)
+
 ## 0.2.27
 - **Settings languages**: show all packs (System, EN, ES, FR, DE, JA, KO, ZH) as a full scrollable list
 - Extra bottom padding so language options are not cut off by the nav bar
