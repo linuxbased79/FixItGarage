@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.27
+- **Settings languages**: show all packs (System, EN, ES, FR, DE, JA, KO, ZH) as a full scrollable list
+- Extra bottom padding so language options are not cut off by the nav bar
+
 ## 0.2.26
 - **Android UI**: bottom nav clears system navigation bar (△ ○ □ / gesture) so Settings is tappable
 - Safe-area top/bottom insets applied to chrome and wizard

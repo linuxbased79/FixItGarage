@@ -357,7 +357,7 @@ export component MainWindow inherits Window {
     in-out property <string> label-tread: "mm";
     in-out property <string> unit-distance: "mi";
     in-out property <string> unit-fuel: "gal";
-    // Language: SYSTEM | EN | ES | FR | DE
+    // Language: SYSTEM | EN | ES | FR | DE | JA | KO | ZH
     in-out property <string> language: "SYSTEM";
     in-out property <string> language-active-label: "System default → en";
     // Translated chrome (nav + settings + more + home section titles)
@@ -972,7 +972,13 @@ export component MainWindow inherits Window {
             if page == 15: ScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
-                    padding: 16px; spacing: 12px;
+                    // Extra bottom pad so the last language options / cards are scrollable
+                    // above the app nav + system navigation bar.
+                    padding-left: 16px;
+                    padding-right: 16px;
+                    padding-top: 16px;
+                    padding-bottom: 48px + root.safe-area-bottom;
+                    spacing: 12px;
                     PageTitle { label: root.tr-settings-title; }
                     Text {
                         text: root.tr-settings-intro;
@@ -1031,30 +1037,58 @@ export component MainWindow inherits Window {
                     Card {
                         title: root.tr-settings-language;
                         body: root.tr-settings-language-body;
-                        ChoiceBtn {
-                            label: root.tr-settings-lang-system;
-                            active: root.language == "SYSTEM";
-                            clicked => { root.set-language("SYSTEM"); }
-                        }
-                        HorizontalBox {
+                        // Full-width list (not tight 2-column rows) so every pack is visible
+                        // and scrollable above the system nav bar.
+                        VerticalBox {
                             spacing: 6px;
-                            ChoiceBtn { label: "English"; active: root.language == "EN"; clicked => { root.set-language("EN"); } }
-                            ChoiceBtn { label: "Español"; active: root.language == "ES"; clicked => { root.set-language("ES"); } }
-                        }
-                        HorizontalBox {
-                            spacing: 6px;
-                            ChoiceBtn { label: "Français"; active: root.language == "FR"; clicked => { root.set-language("FR"); } }
-                            ChoiceBtn { label: "Deutsch"; active: root.language == "DE"; clicked => { root.set-language("DE"); } }
-                        }
-                        HorizontalBox {
-                            spacing: 6px;
-                            ChoiceBtn { label: "日本語"; active: root.language == "JA"; clicked => { root.set-language("JA"); } }
-                            ChoiceBtn { label: "한국어"; active: root.language == "KO"; clicked => { root.set-language("KO"); } }
-                        }
-                        ChoiceBtn {
-                            label: "简体中文";
-                            active: root.language == "ZH";
-                            clicked => { root.set-language("ZH"); }
+                            ChoiceBtn {
+                                label: root.tr-settings-lang-system;
+                                active: root.language == "SYSTEM";
+                                horizontal-stretch: 1;
+                                clicked => { root.set-language("SYSTEM"); }
+                            }
+                            ChoiceBtn {
+                                label: "English";
+                                active: root.language == "EN";
+                                horizontal-stretch: 1;
+                                clicked => { root.set-language("EN"); }
+                            }
+                            ChoiceBtn {
+                                label: "Español";
+                                active: root.language == "ES";
+                                horizontal-stretch: 1;
+                                clicked => { root.set-language("ES"); }
+                            }
+                            ChoiceBtn {
+                                label: "Français";
+                                active: root.language == "FR";
+                                horizontal-stretch: 1;
+                                clicked => { root.set-language("FR"); }
+                            }
+                            ChoiceBtn {
+                                label: "Deutsch";
+                                active: root.language == "DE";
+                                horizontal-stretch: 1;
+                                clicked => { root.set-language("DE"); }
+                            }
+                            ChoiceBtn {
+                                label: "日本語";
+                                active: root.language == "JA";
+                                horizontal-stretch: 1;
+                                clicked => { root.set-language("JA"); }
+                            }
+                            ChoiceBtn {
+                                label: "한국어";
+                                active: root.language == "KO";
+                                horizontal-stretch: 1;
+                                clicked => { root.set-language("KO"); }
+                            }
+                            ChoiceBtn {
+                                label: "简体中文";
+                                active: root.language == "ZH";
+                                horizontal-stretch: 1;
+                                clicked => { root.set-language("ZH"); }
+                            }
                         }
                         Text {
                             text: root.language-active-label;
