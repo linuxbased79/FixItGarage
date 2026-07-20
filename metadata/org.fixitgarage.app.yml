@@ -19,6 +19,30 @@ RepoType: git
 Repo: https://github.com/linuxbased79/FixItGarage.git
 
 Builds:
+  - versionName: 0.2.25
+    versionCode: 2025
+    commit: v0.2.25
+    subdir: rust
+    output: dist/FixItGarage-0.2.25-arm64.apk
+    # Requires: Android NDK, rustup + aarch64-linux-android, xbuild (`x`),
+    # OpenJDK, Android SDK build-tools (aapt2, d8, zipalign, apksigner).
+    # See rust/F-DROID.md.
+    sudo:
+      - apt-get update
+      - apt-get install -y openjdk-17-jdk-headless unzip curl python3
+    prebuild:
+      - rustup target add aarch64-linux-android
+      - cargo install xbuild --git https://github.com/rust-mobile/xbuild.git || true
+      - bash fixitgarage-ui/models/download-models.sh || true
+    build:
+      - export ANDROID_HOME=$$ANDROID_SDK_ROOT$$
+      - export ANDROID_NDK_ROOT=$$NDK$$
+      - export PATH="$$PATH$$:$$HOME$$/.cargo/bin:$$ANDROID_HOME$$/build-tools/$$BUILD_TOOLS$$"
+      - mkdir -p dist
+      - x build -p fixitgarage-ui --platform android --arch arm64 --format apk --release
+      - cp target/x/release/android/fixitgarage-ui.apk dist/FixItGarage-0.2.25-arm64-raw.apk
+      - bash scripts/package-apk-with-boot.sh dist/FixItGarage-0.2.25-arm64-raw.apk dist/FixItGarage-0.2.25-arm64.apk 0.2.25 2025
+
   - versionName: 0.2.24
     versionCode: 2024
     commit: v0.2.24
@@ -50,5 +74,5 @@ Builds:
 ArchivePolicy: 4 versions
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 0.2.24
-CurrentVersionCode: 2024
+CurrentVersion: 0.2.25
+CurrentVersionCode: 2025

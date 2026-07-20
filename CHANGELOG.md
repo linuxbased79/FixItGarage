@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.25
+- **Android launcher icon**: ship brand adaptive + density mipmaps (no more default robot icon)
+- Manifest sets `android:icon` / `android:roundIcon` for Rust/xbuild APK packaging
+
 ## 0.2.24
 - **Security**: shared JSON backups never include WebDAV password; restore clears passwords
 - **Security**: WebDAV requires `https://` only; password not re-shown in Settings after save
