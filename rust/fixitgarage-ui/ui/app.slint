@@ -174,6 +174,11 @@ export component MainWindow inherits Window {
     // Empty = system/default UI font; "OpenDyslexic" when accessibility option is on
     default-font-family: Theme.ui-font;
 
+    /// Extra space above the system navigation bar (3-button / gesture). Set from Rust on Android.
+    in-out property <length> safe-area-bottom: 0px;
+    /// Extra space below the status bar / cutout. Set from Rust on Android.
+    in-out property <length> safe-area-top: 0px;
+
     in-out property <bool> wizard-done: false;
     in-out property <string> user-mode: "BOTH";
     /// OpenDyslexic accessibility font (saved on device)
@@ -485,7 +490,12 @@ export component MainWindow inherits Window {
     if !wizard-done: Rectangle {
         width: 100%; height: 100%; background: Theme.bg;
         VerticalBox {
-            padding: 24px; spacing: 14px; alignment: start;
+            padding-left: 24px;
+            padding-right: 24px;
+            padding-top: 24px + root.safe-area-top;
+            padding-bottom: 24px + root.safe-area-bottom;
+            spacing: 14px;
+            alignment: start;
             Text { text: "Welcome to FixItGarage"; font-size: 26px; font-weight: 800; color: Theme.title; wrap: word-wrap; }
             Text {
                 text: "How do you mostly maintain your vehicles? We'll show the tools that fit you.";
@@ -512,6 +522,8 @@ export component MainWindow inherits Window {
 
     if wizard-done: VerticalLayout {
         spacing: 0;
+        // Clear status bar / camera cutout
+        Rectangle { height: root.safe-area-top; background: Theme.bg; }
         Rectangle {
             vertical-stretch: 1; background: Theme.bg;
 
@@ -1459,28 +1471,46 @@ export component MainWindow inherits Window {
                 }
             }
 
-        // Bottom nav — Settings is the gear tab (page 15); More is tools hub (5–14)
+        // Bottom nav — lifted by safe-area-bottom so it clears the system nav (△ ○ □ / gesture bar).
+        // Settings is the gear tab (page 15); More is tools hub (5–14).
         Rectangle {
-            height: 60px; background: Theme.nav-bg; border-width: 1px; border-color: Theme.surface-border;
-            HorizontalBox {
-                padding: 4px; spacing: 2px;
-                NavBtn { label: root.nav-home; active: root.page == 0; horizontal-stretch: 1; clicked => { root.navigate(0); } }
-                NavBtn { label: root.nav-cars; active: root.page == 1; horizontal-stretch: 1; clicked => { root.navigate(1); } }
-                NavBtn { label: root.nav-service; active: root.page == 2; horizontal-stretch: 1; clicked => { root.navigate(2); } }
-                if show-tires: NavBtn { label: root.nav-tires; active: root.page == 3; horizontal-stretch: 1; clicked => { root.navigate(3); } }
-                NavBtn { label: root.nav-costs; active: root.page == 4; horizontal-stretch: 1; clicked => { root.navigate(4); } }
-                NavBtn {
-                    label: root.nav-more;
-                    active: root.page >= 5 && root.page <= 14;
-                    horizontal-stretch: 1;
-                    clicked => { root.navigate(5); }
+            height: 60px + root.safe-area-bottom;
+            background: Theme.nav-bg;
+            border-width: 1px;
+            border-color: Theme.surface-border;
+            VerticalBox {
+                padding: 0;
+                spacing: 0;
+                HorizontalBox {
+                    height: 60px;
+                    padding-left: 4px;
+                    padding-right: 4px;
+                    padding-top: 4px;
+                    padding-bottom: 4px;
+                    spacing: 2px;
+                    NavBtn { label: root.nav-home; active: root.page == 0; horizontal-stretch: 1; clicked => { root.navigate(0); } }
+                    NavBtn { label: root.nav-cars; active: root.page == 1; horizontal-stretch: 1; clicked => { root.navigate(1); } }
+                    NavBtn { label: root.nav-service; active: root.page == 2; horizontal-stretch: 1; clicked => { root.navigate(2); } }
+                    if show-tires: NavBtn { label: root.nav-tires; active: root.page == 3; horizontal-stretch: 1; clicked => { root.navigate(3); } }
+                    NavBtn { label: root.nav-costs; active: root.page == 4; horizontal-stretch: 1; clicked => { root.navigate(4); } }
+                    NavBtn {
+                        label: root.nav-more;
+                        active: root.page >= 5 && root.page <= 14;
+                        horizontal-stretch: 1;
+                        clicked => { root.navigate(5); }
+                    }
+                    NavBtn {
+                        icon: "⚙";
+                        label: root.nav-settings;
+                        active: root.page == 15;
+                        horizontal-stretch: 1;
+                        clicked => { root.navigate(15); }
+                    }
                 }
-                NavBtn {
-                    icon: "⚙";
-                    label: root.nav-settings;
-                    active: root.page == 15;
-                    horizontal-stretch: 1;
-                    clicked => { root.navigate(15); }
+                // Fills the system navigation bar zone (same color as app nav)
+                Rectangle {
+                    height: root.safe-area-bottom;
+                    background: Theme.nav-bg;
                 }
             }
         }

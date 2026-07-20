@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.26
+- **Android UI**: bottom nav clears system navigation bar (△ ○ □ / gesture) so Settings is tappable
+- Safe-area top/bottom insets applied to chrome and wizard
+
 ## 0.2.25
 - **Android launcher icon**: ship brand adaptive + density mipmaps (no more default robot icon)
 - Manifest sets `android:icon` / `android:roundIcon` for Rust/xbuild APK packaging

@@ -1528,7 +1528,7 @@ dependencies = [
 
 [[package]]
 name = "fixitgarage-cli"
-version = "0.2.25"
+version = "0.2.26"
 dependencies = [
  "chrono",
  "clap",
@@ -1537,7 +1537,7 @@ dependencies = [
 
 [[package]]
 name = "fixitgarage-core"
-version = "0.2.25"
+version = "0.2.26"
 dependencies = [
  "chrono",
  "serde",
@@ -1547,7 +1547,7 @@ dependencies = [
 
 [[package]]
 name = "fixitgarage-ui"
-version = "0.2.25"
+version = "0.2.26"
 dependencies = [
  "chrono",
  "dirs",

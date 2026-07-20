@@ -1,0 +1,1 @@
+Bottom navigation clears the system nav bar so Settings and other tabs are tappable.

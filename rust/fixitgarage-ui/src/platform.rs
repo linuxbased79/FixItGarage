@@ -2246,3 +2246,123 @@ fn system_locale_android() -> Result<String, String> {
         .map_err(|e| format!("get_string: {e}"))?;
     Ok(s.into())
 }
+
+/// System bar insets in density-independent pixels (top status / bottom nav).
+/// Used so the app chrome clears the 3-button / gesture navigation bar.
+pub fn system_safe_area_dp() -> (f32, f32) {
+    #[cfg(target_os = "android")]
+    {
+        match system_safe_area_dp_android() {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("system_safe_area_dp: {e}");
+                // Pixel-class 3-button nav is typically ~48dp; status ~24–28dp
+                (28.0, 48.0)
+            }
+        }
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        (0.0, 0.0)
+    }
+}
+
+#[cfg(target_os = "android")]
+fn system_safe_area_dp_android() -> Result<(f32, f32), String> {
+    use jni::objects::{JObject, JValue};
+    use jni::JavaVM;
+
+    let ctx = ndk_context::android_context();
+    let vm =
+        unsafe { JavaVM::from_raw(ctx.vm().cast()) }.map_err(|e| format!("JavaVM: {e}"))?;
+    let mut env = vm
+        .attach_current_thread()
+        .map_err(|e| format!("attach: {e}"))?;
+    let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+
+    let resources = env
+        .call_method(
+            &context,
+            "getResources",
+            "()Landroid/content/res/Resources;",
+            &[],
+        )
+        .map_err(|e| format!("getResources: {e}"))?
+        .l()
+        .map_err(|e| format!("resources: {e}"))?;
+
+    let metrics = env
+        .call_method(
+            &resources,
+            "getDisplayMetrics",
+            "()Landroid/util/DisplayMetrics;",
+            &[],
+        )
+        .map_err(|e| format!("getDisplayMetrics: {e}"))?
+        .l()
+        .map_err(|e| format!("metrics: {e}"))?;
+
+    let density = env
+        .get_field(&metrics, "density", "F")
+        .map_err(|e| format!("density: {e}"))?
+        .f()
+        .map_err(|e| format!("density f: {e}"))?;
+    let density = if density > 0.1 { density } else { 3.0 };
+
+    let mut dimen_px = |name: &str| -> Result<i32, String> {
+        let name_j = env
+            .new_string(name)
+            .map_err(|e| format!("name: {e}"))?;
+        let def_type = env
+            .new_string("dimen")
+            .map_err(|e| format!("dimen: {e}"))?;
+        let def_pkg = env
+            .new_string("android")
+            .map_err(|e| format!("android: {e}"))?;
+        let id = env
+            .call_method(
+                &resources,
+                "getIdentifier",
+                "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)I",
+                &[
+                    JValue::Object(&name_j),
+                    JValue::Object(&def_type),
+                    JValue::Object(&def_pkg),
+                ],
+            )
+            .map_err(|e| format!("getIdentifier {name}: {e}"))?
+            .i()
+            .map_err(|e| format!("id i: {e}"))?;
+        if id == 0 {
+            return Ok(0);
+        }
+        let px = env
+            .call_method(
+                &resources,
+                "getDimensionPixelSize",
+                "(I)I",
+                &[JValue::Int(id)],
+            )
+            .map_err(|e| format!("getDimensionPixelSize {name}: {e}"))?
+            .i()
+            .map_err(|e| format!("px i: {e}"))?;
+        Ok(px)
+    };
+
+    let status_px = dimen_px("status_bar_height").unwrap_or(0);
+    let mut nav_px = dimen_px("navigation_bar_height").unwrap_or(0);
+
+    // Some gesture-nav devices report 0 here while a thin bar still steals taps.
+    // Enforce a minimum bottom inset on phones so the last tab stays tappable.
+    let min_nav_px = (48.0 * density).round() as i32;
+    if nav_px < min_nav_px {
+        // Prefer real value when present (gesture bar ~16–24dp); else use 48dp for 3-button.
+        if nav_px <= 0 {
+            nav_px = min_nav_px;
+        }
+    }
+
+    let top_dp = (status_px as f32 / density).max(0.0);
+    let bottom_dp = (nav_px as f32 / density).max(24.0);
+    Ok((top_dp, bottom_dp))
+}

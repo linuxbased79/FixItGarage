@@ -17,8 +17,8 @@ use platform::{
     cancel_app_wake, capture_issue_photo_path, capture_receipt_for_ocr, notify, notify_with_id,
     ocr_target, open_ocr_helper, open_ocr_helper_for_tire, open_url, pending_ocr_image_path,
     read_clipboard, schedule_app_wake, send_pending_image_to_ocr, set_ocr_target, share_file,
-    share_text, share_text_to_cloud, system_locale, take_pending_ocr_text, write_alarm_schedule,
-    PKG_DROPBOX, PKG_GOOGLE_DRIVE, PKG_ONEDRIVE, PKG_PROTON_DRIVE,
+    share_text, share_text_to_cloud, system_locale, system_safe_area_dp, take_pending_ocr_text,
+    write_alarm_schedule, PKG_DROPBOX, PKG_GOOGLE_DRIVE, PKG_ONEDRIVE, PKG_PROTON_DRIVE,
 };
 use receipt_parse::{parse_receipt_text, parse_tire_receipt_text};
 use state::{reminder_status_line_units, AppState};
@@ -42,6 +42,16 @@ fn format_service_date(epoch_ms: i64) -> String {
 pub fn run_app() -> Result<(), slint::PlatformError> {
     let ui = MainWindow::new()?;
     let state = Rc::new(RefCell::new(AppState::load()));
+
+    // Lift chrome above system bars (status / 3-button or gesture navigation).
+    // Without this, the bottom Settings tab sits under △ ○ □ and cannot be tapped.
+    // Slint length properties take Coord (logical px / dp).
+    {
+        let (top_dp, bottom_dp) = system_safe_area_dp();
+        ui.set_safe_area_top(top_dp);
+        // Extra few dp so the last tab never sits in the system gesture dead-zone.
+        ui.set_safe_area_bottom(bottom_dp + 8.0);
+    }
 
     refresh_ui(&ui, &state.borrow());
     // Due notifications (all vehicles) + schedule future date alarms
