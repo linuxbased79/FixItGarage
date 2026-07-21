@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.29
+- **Bottom nav**: 4 large tabs (Home / Cars / Service / More) with icons and bigger labels
+- **i18n**: language change updates page titles, More hub, home cards, vehicle bar, and common chrome (not every form field yet)
+
 ## 0.2.28
 - **Touch scrolling**: pan/flick from anywhere on the page (not only the thin right-edge scrollbar)
 

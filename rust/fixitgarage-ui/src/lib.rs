@@ -1799,13 +1799,33 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     ui.set_show_diy_trackers(flags.show_diy_trackers);
     ui.set_show_shop_emphasis(flags.show_shop_emphasis);
 
+    // Language packs first so labels below use the chosen pack
+    let lang_pref = state.language_pref();
+    let lang = resolve_lang(lang_pref, &system_locale());
+    ui.set_language(lang_pref.as_str().into());
+    let pref_label = match lang_pref {
+        LanguagePref::System => t(lang, "settings.lang_system"),
+        LanguagePref::En => t(lang, "settings.lang_en"),
+        LanguagePref::Es => t(lang, "settings.lang_es"),
+        LanguagePref::Fr => t(lang, "settings.lang_fr"),
+        LanguagePref::De => t(lang, "settings.lang_de"),
+        LanguagePref::Ja => t(lang, "settings.lang_ja"),
+        LanguagePref::Ko => t(lang, "settings.lang_ko"),
+        LanguagePref::Zh => t(lang, "settings.lang_zh"),
+    };
+    ui.set_language_active_label(format!("{pref_label} → {}", lang.code()).into());
+
     ui.set_mode_label(state.mode_label().into());
-    ui.set_vehicle_count_label(format!("{} vehicles", state.vehicles.len()).into());
+    ui.set_vehicle_count_label(
+        t(lang, "vehicle.count")
+            .replace("{n}", &state.vehicles.len().to_string())
+            .into(),
+    );
 
     let sel_name = state
         .selected_vehicle()
         .map(|v| v.name.clone())
-        .unwrap_or_else(|| "No vehicle selected".into());
+        .unwrap_or_else(|| t(lang, "vehicle.none"));
     ui.set_selected_vehicle_label(sel_name.into());
     ui.set_selected_vehicle_id(state.selected_vehicle_id.unwrap_or(0) as i32);
 
@@ -1818,15 +1838,6 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     ui.set_unit_distance(u.distance_unit().into());
     ui.set_unit_fuel(u.fuel_unit().into());
 
-    // Language packs (SYSTEM = follow OS locale)
-    let lang_pref = state.language_pref();
-    let lang = resolve_lang(lang_pref, &system_locale());
-    ui.set_language(lang_pref.as_str().into());
-    ui.set_language_active_label(format!(
-        "{} → {}",
-        lang_pref.label(),
-        lang.code()
-    ).into());
     ui.set_nav_home(t(lang, "nav.home").into());
     ui.set_nav_cars(t(lang, "nav.cars").into());
     ui.set_nav_service(t(lang, "nav.service").into());
@@ -1869,6 +1880,45 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     ui.set_tr_home_glance(t(lang, "home.at_a_glance").into());
     ui.set_tr_home_upcoming(t(lang, "home.upcoming").into());
     ui.set_tr_app_title(t(lang, "app.title").into());
+    ui.set_tr_home_due(t(lang, "home.due_reminders").into());
+    ui.set_tr_home_tread(t(lang, "home.tread_warning").into());
+    ui.set_tr_home_no_upcoming(t(lang, "home.no_upcoming").into());
+    ui.set_tr_home_open_reminders(t(lang, "home.open_reminders").into());
+    ui.set_tr_home_manage_vehicles(t(lang, "home.manage_vehicles").into());
+    ui.set_tr_home_log_service(t(lang, "home.log_service").into());
+    ui.set_tr_home_fuel(t(lang, "home.fuel_history").into());
+    ui.set_tr_home_tire_rotation(t(lang, "home.tire_rotation").into());
+    ui.set_tr_page_vehicles(t(lang, "page.vehicles").into());
+    ui.set_tr_page_service(t(lang, "page.service").into());
+    ui.set_tr_page_tires(t(lang, "page.tires").into());
+    ui.set_tr_page_costs(t(lang, "page.costs").into());
+    ui.set_tr_page_parts(t(lang, "page.parts").into());
+    ui.set_tr_page_battery(t(lang, "page.battery").into());
+    ui.set_tr_page_wipers(t(lang, "page.wipers").into());
+    ui.set_tr_page_brakes(t(lang, "page.brakes").into());
+    ui.set_tr_page_notes(t(lang, "page.notes").into());
+    ui.set_tr_page_reminders(t(lang, "page.reminders").into());
+    ui.set_tr_page_photos(t(lang, "page.photos").into());
+    ui.set_tr_page_receipts(t(lang, "page.receipts").into());
+    ui.set_tr_page_fuel(t(lang, "page.fuel").into());
+    ui.set_tr_more_parts(t(lang, "more.parts").into());
+    ui.set_tr_more_battery(t(lang, "more.battery").into());
+    ui.set_tr_more_wipers(t(lang, "more.wipers").into());
+    ui.set_tr_more_brakes(t(lang, "more.brakes").into());
+    ui.set_tr_more_notes(t(lang, "more.notes").into());
+    ui.set_tr_more_reminders(t(lang, "more.reminders").into());
+    ui.set_tr_more_photos(t(lang, "more.photos").into());
+    ui.set_tr_more_receipts(t(lang, "more.receipts").into());
+    ui.set_tr_more_fuel(t(lang, "more.fuel").into());
+    ui.set_tr_more_log_service(t(lang, "more.log_service").into());
+    ui.set_tr_more_tire_tracker(t(lang, "more.tire_tracker").into());
+    ui.set_tr_more_selling(t(lang, "more.selling").into());
+    ui.set_tr_more_selling_body(t(lang, "more.selling_body").into());
+    ui.set_tr_more_seller_pdf(t(lang, "more.seller_pdf").into());
+    ui.set_tr_more_seller_text(t(lang, "more.seller_text").into());
+    ui.set_tr_common_switch(t(lang, "common.switch").into());
+    ui.set_tr_common_vehicle(t(lang, "common.vehicle").into());
+    ui.set_tr_common_back_more(t(lang, "common.back_more").into());
     // Oil level choices for current unit system
     let oil_opts = oil_level_options(u);
     ui.set_oil_opt_0(oil_opts[0].into());

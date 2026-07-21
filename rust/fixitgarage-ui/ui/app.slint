@@ -104,26 +104,29 @@ component TireCorner inherits Rectangle {
 
 component NavBtn inherits TouchArea {
     in property <string> label;
-    /// Optional icon glyph (e.g. ⚙ for Settings). Empty = text-only tab.
+    /// Optional icon glyph (e.g. 🏠). Prefer icon + short label for phone tabs.
     in property <string> icon: "";
     in property <bool> active;
-    height: 56px; min-width: 44px;
+    // Larger touch targets for phones (Material ~56–64dp)
+    height: 68px; min-width: 64px; horizontal-stretch: 1;
     Rectangle {
-        background: root.active ? Theme.accent-soft : transparent; border-radius: 8px;
+        background: root.active ? Theme.accent-soft : transparent; border-radius: 12px;
         VerticalBox {
-            padding-top: 4px; padding-bottom: 2px; spacing: 0px; alignment: center;
+            padding-top: 6px; padding-bottom: 4px; spacing: 2px; alignment: center;
             if root.icon != "": Text {
                 text: root.icon;
                 color: root.active ? Theme.accent-on : Theme.text-muted;
-                font-size: 18px; font-weight: 600;
+                font-size: 24px; font-weight: 600;
                 horizontal-alignment: center; width: 100%;
             }
-            Text {
+            if root.label != "": Text {
                 text: root.label;
                 color: root.active ? Theme.accent-on : Theme.text-muted;
-                font-size: root.icon != "" ? 9px : 11px;
-                font-weight: root.active ? 700 : 500;
+                // Was 9–11px — unreadable with 6–7 tabs. Keep readable with fewer tabs.
+                font-size: 13px;
+                font-weight: root.active ? 800 : 600;
                 horizontal-alignment: center; width: 100%;
+                overflow: elide;
             }
         }
     }
@@ -165,14 +168,16 @@ component PageTitle inherits Text {
 
 component VehicleBar inherits HorizontalBox {
     in property <string> label;
+    in property <string> prefix: "Vehicle";
+    in property <string> switch-label: "Switch";
     callback open-vehicles();
     spacing: 8px;
     Text {
-        text: "Vehicle: " + root.label;
+        text: root.prefix + ": " + root.label;
         font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
         vertical-alignment: center; horizontal-stretch: 1;
     }
-    Button { text: "Switch"; clicked => { root.open-vehicles(); } }
+    Button { text: root.switch-label; clicked => { root.open-vehicles(); } }
 }
 
 export component MainWindow inherits Window {
@@ -411,6 +416,45 @@ export component MainWindow inherits Window {
     in-out property <string> tr-home-quick: "Quick actions";
     in-out property <string> tr-home-glance: "At a glance";
     in-out property <string> tr-home-upcoming: "Upcoming";
+    in-out property <string> tr-home-due: "Due reminders";
+    in-out property <string> tr-home-tread: "Tread warning";
+    in-out property <string> tr-home-no-upcoming: "No upcoming items for this vehicle.";
+    in-out property <string> tr-home-open-reminders: "Open reminders";
+    in-out property <string> tr-home-manage-vehicles: "Manage vehicles";
+    in-out property <string> tr-home-log-service: "Log service";
+    in-out property <string> tr-home-fuel: "Fuel / MPG history";
+    in-out property <string> tr-home-tire-rotation: "Tire rotation";
+    in-out property <string> tr-page-vehicles: "Vehicles";
+    in-out property <string> tr-page-service: "Maintenance";
+    in-out property <string> tr-page-tires: "Tire tracker";
+    in-out property <string> tr-page-costs: "Operational costs";
+    in-out property <string> tr-page-parts: "Parts log";
+    in-out property <string> tr-page-battery: "Battery age";
+    in-out property <string> tr-page-wipers: "Wiper blades";
+    in-out property <string> tr-page-brakes: "Brakes";
+    in-out property <string> tr-page-notes: "Notes";
+    in-out property <string> tr-page-reminders: "Reminders & oil level";
+    in-out property <string> tr-page-photos: "Issue photos";
+    in-out property <string> tr-page-receipts: "Receipt log";
+    in-out property <string> tr-page-fuel: "Fuel / economy history";
+    in-out property <string> tr-more-parts: "Parts log";
+    in-out property <string> tr-more-battery: "Battery age";
+    in-out property <string> tr-more-wipers: "Wiper blades";
+    in-out property <string> tr-more-brakes: "Brakes";
+    in-out property <string> tr-more-notes: "Notes";
+    in-out property <string> tr-more-reminders: "Reminders & oil level";
+    in-out property <string> tr-more-photos: "Issue photos";
+    in-out property <string> tr-more-receipts: "Receipt log";
+    in-out property <string> tr-more-fuel: "Fuel / economy history";
+    in-out property <string> tr-more-log-service: "Log service";
+    in-out property <string> tr-more-tire-tracker: "Tire tracker";
+    in-out property <string> tr-more-selling: "Selling my car";
+    in-out property <string> tr-more-selling-body: "Build a professional maintenance packet.";
+    in-out property <string> tr-more-seller-pdf: "Create seller packet (PDF)";
+    in-out property <string> tr-more-seller-text: "Share seller summary (text)";
+    in-out property <string> tr-common-switch: "Switch";
+    in-out property <string> tr-common-vehicle: "Vehicle";
+    in-out property <string> tr-common-back-more: "Back to More";
     // Oil level choice labels (swap with unit system)
     in-out property <string> oil-opt-0: "Full";
     in-out property <string> oil-opt-1: "½ quart low";
@@ -549,7 +593,7 @@ export component MainWindow inherits Window {
                         Button { text: "⚙"; clicked => { root.navigate(15); } }
                     }
                     Text { text: mode-label; font-size: 14px; color: Theme.text-muted; }
-                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Card {
                         title: root.tr-home-glance;
                         body: "";
@@ -557,19 +601,19 @@ export component MainWindow inherits Window {
                         Text { text: dash-month; font-size: 14px; color: Theme.text; }
                         Text { text: dash-year; font-size: 14px; color: Theme.text; }
                         Text { text: dash-dues; font-size: 13px; color: Theme.text-muted; wrap: word-wrap; }
-                        Button { text: "Fuel / MPG history"; clicked => { root.navigate(14); } }
+                        Button { text: root.tr-home-fuel; clicked => { root.navigate(14); } }
                         Button { text: root.nav-costs; clicked => { root.navigate(4); } }
                     }
                     if has-due-reminders: Card {
-                        title: "Due reminders";
+                        title: root.tr-home-due;
                         body: due-reminders-banner;
-                        Button { text: "Open reminders"; primary: true; clicked => { root.navigate(11); } }
+                        Button { text: root.tr-home-open-reminders; primary: true; clicked => { root.navigate(11); } }
                     }
                     Card {
                         title: root.tr-home-upcoming;
                         body: "";
                         if upcoming-reminders.length == 0: Text {
-                            text: "No upcoming items for this vehicle.";
+                            text: root.tr-home-no-upcoming;
                             font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
                         }
                         for u in upcoming-reminders: Text {
@@ -579,22 +623,22 @@ export component MainWindow inherits Window {
                         Button { text: "Manage reminders"; clicked => { root.navigate(11); } }
                     }
                     if has-low-tread: Card {
-                        title: "Tread warning";
+                        title: root.tr-home-tread;
                         body: tread-warning;
                         Button { text: "Open tires"; primary: true; clicked => { root.navigate(3); } }
                     }
                     if has-old-battery: Card {
-                        title: "Battery age";
+                        title: root.tr-page-battery;
                         body: battery-warning;
                         Button { text: "Open battery tracker"; primary: true; clicked => { root.navigate(7); } }
                     }
                     if has-brakes-due: Card {
-                        title: "Brake service";
+                        title: root.tr-page-brakes;
                         body: brake-warning;
                         Button { text: "Open brake tracker"; primary: true; clicked => { root.navigate(9); } }
                     }
                     if has-old-wipers: Card {
-                        title: "Wiper blades";
+                        title: root.tr-page-wipers;
                         body: wiper-warning;
                         Button { text: "Open wiper tracker"; primary: true; clicked => { root.navigate(8); } }
                     }
@@ -605,20 +649,20 @@ export component MainWindow inherits Window {
                     }
                     Card {
                         title: root.tr-home-vehicles; body: vehicle-count-label;
-                        Button { text: "Manage vehicles"; clicked => { root.navigate(1); } }
+                        Button { text: root.tr-home-manage-vehicles; clicked => { root.navigate(1); } }
                     }
                     Card {
                         title: root.tr-home-quick;
                         body: last-oil-level-summary;
                         Button { text: "Oil level check"; primary: true; clicked => { root.navigate(11); } }
                         Button { text: "Scan / log receipt"; clicked => { root.navigate(13); } }
-                        Button { text: "Issue photos"; clicked => { root.navigate(12); } }
-                        Button { text: "Log service"; clicked => { root.navigate(2); } }
-                        Button { text: "Fuel / MPG history"; clicked => { root.navigate(14); } }
-                        if show-tires: Button { text: "Tire rotation"; clicked => { root.navigate(3); } }
-                        if show-parts: Button { text: "Parts log"; clicked => { root.navigate(6); } }
+                        Button { text: root.tr-more-photos; clicked => { root.navigate(12); } }
+                        Button { text: root.tr-home-log-service; clicked => { root.navigate(2); } }
+                        Button { text: root.tr-home-fuel; clicked => { root.navigate(14); } }
+                        if show-tires: Button { text: root.tr-home-tire-rotation; clicked => { root.navigate(3); } }
+                        if show-parts: Button { text: root.tr-more-parts; clicked => { root.navigate(6); } }
                         Button { text: "Reminders"; clicked => { root.navigate(11); } }
-                        Button { text: "Notes"; clicked => { root.navigate(10); } }
+                        Button { text: root.tr-more-notes; clicked => { root.navigate(10); } }
                     }
                     if status-message != "": Text { text: status-message; color: Theme.ok; font-size: 12px; wrap: word-wrap; }
                 }
@@ -629,7 +673,7 @@ export component MainWindow inherits Window {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 10px;
-                    PageTitle { label: "Vehicles"; }
+                    PageTitle { label: root.tr-page-vehicles; }
                     Text { text: "Tap a vehicle to select it for services, costs, and trackers."; font-size: 13px; color: Theme.text-muted; wrap: word-wrap; }
                     Card {
                         title: "Add vehicle"; body: "Optional VIN enables free NHTSA (US) recall checks.";
@@ -687,8 +731,8 @@ export component MainWindow inherits Window {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 10px;
-                    PageTitle { label: "Maintenance"; }
-                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    PageTitle { label: root.tr-page-service; }
+                    VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text { text: mpg-label; font-size: 13px; color: Theme.text-muted; wrap: word-wrap; }
                     LineEdit {
                         placeholder-text: "Search history (title, shop, DIY/shop, mileage)";
@@ -704,7 +748,7 @@ export component MainWindow inherits Window {
                         }
                         HorizontalBox {
                             spacing: 6px;
-                            Button { text: "Tire rotation"; clicked => { root.fill-service-template("rotation"); } }
+                            Button { text: root.tr-home-tire-rotation; clicked => { root.fill-service-template("rotation"); } }
                             Button { text: "Shop visit"; clicked => { root.fill-service-template("shop"); } }
                         }
                     }
@@ -737,9 +781,9 @@ export component MainWindow inherits Window {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 12px;
-                    PageTitle { label: "Tire tracker"; }
+                    PageTitle { label: root.tr-page-tires; }
                     if !show-tires: Text { text: "Hidden in shop-only mode. Switch feature focus in Settings."; color: Theme.text-muted; wrap: word-wrap; }
-                    if show-tires: VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    if show-tires: VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     if show-tires: Text {
                         text: "Tire positions are saved per vehicle — switch cars to see each layout.";
                         font-size: 12px; color: Theme.text-muted; wrap: word-wrap;
@@ -920,8 +964,8 @@ export component MainWindow inherits Window {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 12px;
-                    PageTitle { label: "Operational costs"; }
-                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    PageTitle { label: root.tr-page-costs; }
+                    VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text {
                         text: "All maintenance for this vehicle: services, fuel, labor, and tire purchases.";
                         font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
@@ -944,34 +988,34 @@ export component MainWindow inherits Window {
                         text: root.tr-more-intro;
                         font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
                     }
-                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Card {
                         title: root.tr-more-trackers; body: "";
-                        if show-parts: Button { text: "Parts log"; clicked => { root.navigate(6); } }
-                        Button { text: "Battery age"; clicked => { root.navigate(7); } }
-                        Button { text: "Wiper blades"; clicked => { root.navigate(8); } }
-                        Button { text: "Brakes"; clicked => { root.navigate(9); } }
+                        if show-parts: Button { text: root.tr-more-parts; clicked => { root.navigate(6); } }
+                        Button { text: root.tr-more-battery; clicked => { root.navigate(7); } }
+                        Button { text: root.tr-more-wipers; clicked => { root.navigate(8); } }
+                        Button { text: root.tr-more-brakes; clicked => { root.navigate(9); } }
                     }
                     Card {
                         title: root.tr-more-logs; body: "";
-                        Button { text: "Notes"; clicked => { root.navigate(10); } }
-                        Button { text: "Reminders & oil level"; clicked => { root.navigate(11); } }
-                        Button { text: "Issue photos"; clicked => { root.navigate(12); } }
-                        Button { text: "Receipt log"; clicked => { root.navigate(13); } }
-                        Button { text: "Fuel / economy history"; clicked => { root.navigate(14); } }
+                        Button { text: root.tr-more-notes; clicked => { root.navigate(10); } }
+                        Button { text: root.tr-more-reminders; clicked => { root.navigate(11); } }
+                        Button { text: root.tr-more-photos; clicked => { root.navigate(12); } }
+                        Button { text: root.tr-more-receipts; clicked => { root.navigate(13); } }
+                        Button { text: root.tr-more-fuel; clicked => { root.navigate(14); } }
                     }
                     Card {
                         title: root.tr-more-quick; body: "";
-                        Button { text: "Log service"; clicked => { root.navigate(2); } }
-                        if show-tires: Button { text: "Tire tracker"; clicked => { root.navigate(3); } }
+                        Button { text: root.tr-home-log-service; clicked => { root.navigate(2); } }
+                        if show-tires: Button { text: root.tr-more-tire-tracker; clicked => { root.navigate(3); } }
                         Button { text: root.nav-costs; clicked => { root.navigate(4); } }
                         Button { text: root.tr-more-open-settings; primary: true; clicked => { root.navigate(15); } }
                     }
                     Card {
-                        title: "Selling my car";
-                        body: "Build a professional maintenance packet (PDF + shareable text) for the selected vehicle — services, tires, parts, costs, photos. Great for proving upkeep to a buyer.";
-                        Button { text: "Create seller packet (PDF)"; primary: true; clicked => { root.create-seller-packet(); } }
-                        Button { text: "Share seller summary (text)"; clicked => { root.share-seller-summary(); } }
+                        title: root.tr-more-selling;
+                        body: root.tr-more-selling-body;
+                        Button { text: root.tr-more-seller-pdf; primary: true; clicked => { root.create-seller-packet(); } }
+                        Button { text: root.tr-more-seller-text; clicked => { root.share-seller-summary(); } }
                     }
                 }
             }
@@ -1178,8 +1222,8 @@ export component MainWindow inherits Window {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 10px;
-                    PageTitle { label: "Parts log"; }
-                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    PageTitle { label: root.tr-page-parts; }
+                    VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Card {
                         title: "Current"; body: "";
                         Text { text: "Air: " + part-air; color: Theme.text; wrap: word-wrap; font-size: 13px; }
@@ -1206,7 +1250,7 @@ export component MainWindow inherits Window {
                         LineEdit { placeholder-text: "Notes"; text <=> root.part-notes; }
                         Button { text: "Save part"; primary: true; clicked => { root.save-part(); } }
                     }
-                    Button { text: "Back to More"; clicked => { root.navigate(5); } }
+                    Button { text: root.tr-common-back-more; clicked => { root.navigate(5); } }
                 }
             }
 
@@ -1215,8 +1259,8 @@ export component MainWindow inherits Window {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 10px;
-                    PageTitle { label: "Battery age"; }
-                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    PageTitle { label: root.tr-page-battery; }
+                    VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Card { title: "Current"; body: sum-battery; }
                     Card { title: "Age check"; body: battery-warning; }
                     Card {
@@ -1229,7 +1273,7 @@ export component MainWindow inherits Window {
                             clicked => { root.comp-type = "BATTERY"; root.save-component(); }
                         }
                     }
-                    Button { text: "Back to More"; clicked => { root.navigate(5); } }
+                    Button { text: root.tr-common-back-more; clicked => { root.navigate(5); } }
                 }
             }
 
@@ -1238,8 +1282,8 @@ export component MainWindow inherits Window {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 10px;
-                    PageTitle { label: "Wiper blades"; }
-                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    PageTitle { label: root.tr-page-wipers; }
+                    VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text {
                         text: "Many vehicles need different blade sizes. Labels use left/right as when sitting in the car (driver = left, passenger = right).";
                         font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
@@ -1279,7 +1323,7 @@ export component MainWindow inherits Window {
                         LineEdit { placeholder-text: root.label-distance + " at install"; text <=> root.comp-mileage; }
                         Button { text: "Save this blade"; primary: true; clicked => { root.save-component(); } }
                     }
-                    Button { text: "Back to More"; clicked => { root.navigate(5); } }
+                    Button { text: root.tr-common-back-more; clicked => { root.navigate(5); } }
                 }
             }
 
@@ -1288,8 +1332,8 @@ export component MainWindow inherits Window {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 10px;
-                    PageTitle { label: "Brakes"; }
-                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    PageTitle { label: root.tr-page-brakes; }
+                    VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text {
                         text: "Saving pads/fluid creates smart reminders (~30k mi / 2 years). Check Reminders for due items.";
                         font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
@@ -1309,7 +1353,7 @@ export component MainWindow inherits Window {
                         LineEdit { placeholder-text: "Notes"; text <=> root.comp-notes; }
                         Button { text: "Save brakes"; primary: true; clicked => { root.save-component(); } }
                     }
-                    Button { text: "Back to More"; clicked => { root.navigate(5); } }
+                    Button { text: root.tr-common-back-more; clicked => { root.navigate(5); } }
                 }
             }
 
@@ -1318,8 +1362,8 @@ export component MainWindow inherits Window {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 10px;
-                    PageTitle { label: "Notes"; }
-                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    PageTitle { label: root.tr-page-notes; }
+                    VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Card {
                         title: "New note"; body: "";
                         LineEdit { placeholder-text: "Title"; text <=> root.note-title; }
@@ -1330,7 +1374,7 @@ export component MainWindow inherits Window {
                         title: n.title; body: n.body;
                         Button { text: "Delete"; clicked => { root.delete-note(n.id); } }
                     }
-                    Button { text: "Back to More"; clicked => { root.navigate(5); } }
+                    Button { text: root.tr-common-back-more; clicked => { root.navigate(5); } }
                 }
             }
 
@@ -1339,8 +1383,8 @@ export component MainWindow inherits Window {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 10px;
-                    PageTitle { label: "Reminders"; }
-                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    PageTitle { label: root.tr-page-reminders; }
+                    VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text {
                         text: "Oil level checks every 3 months are auto-created for new vehicles. Pick how full the oil is, then mark done.";
                         font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
@@ -1409,7 +1453,7 @@ export component MainWindow inherits Window {
                             clicked => { root.complete-reminder(r.id); }
                         }
                     }
-                    Button { text: "Back to More"; clicked => { root.navigate(5); } }
+                    Button { text: root.tr-common-back-more; clicked => { root.navigate(5); } }
                 }
             }
         }
@@ -1420,8 +1464,8 @@ export component MainWindow inherits Window {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 10px;
-                    PageTitle { label: "Issue photos"; }
-                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    PageTitle { label: root.tr-page-photos; }
+                    VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text {
                         text: "Log problems with a caption. On Android, Take photo opens the camera; then save the log entry.";
                         font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
@@ -1438,7 +1482,7 @@ export component MainWindow inherits Window {
                         Button { text: "Save issue log"; primary: true; clicked => { root.add-photo(); } }
                     }
                     for ph in photos: Card { title: ph.title; body: ph.detail; }
-                    Button { text: "Back to More"; clicked => { root.navigate(5); } }
+                    Button { text: root.tr-common-back-more; clicked => { root.navigate(5); } }
                 }
             }
 
@@ -1447,8 +1491,8 @@ export component MainWindow inherits Window {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 10px;
-                    PageTitle { label: "Receipt log"; }
-                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    PageTitle { label: root.tr-page-receipts; }
+                    VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text {
                         text: "On-device OCR (no Google): Capture photo → On-device OCR. Fallback: Send to OCR app / Share text back / Paste & fill. Metric km/L/€ OK.";
                         font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
@@ -1500,8 +1544,8 @@ export component MainWindow inherits Window {
                 width: 100%; height: 100%;
                 VerticalBox {
                     padding: 16px; spacing: 10px;
-                    PageTitle { label: "Fuel / MPG history"; }
-                    VehicleBar { label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
+                    PageTitle { label: root.tr-page-fuel; }
+                    VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text { text: mpg-label; font-size: 15px; font-weight: 700; color: Theme.title; }
                     Text {
                         text: "Each fuel fill with gallons logged. Per-fill MPG uses miles since the previous fill (full-tank method).";
@@ -1513,10 +1557,10 @@ export component MainWindow inherits Window {
                 }
             }
 
-        // Bottom nav — lifted by safe-area-bottom so it clears the system nav (△ ○ □ / gesture bar).
-        // Settings is the gear tab (page 15); More is tools hub (5–14).
+        // Bottom nav — 4 large primary tabs (phone-friendly). Tires/Costs/Settings live under More + home shortcuts.
+        // Lifted by safe-area-bottom so it clears the system nav (△ ○ □ / gesture bar).
         Rectangle {
-            height: 60px + root.safe-area-bottom;
+            height: 72px + root.safe-area-bottom;
             background: Theme.nav-bg;
             border-width: 1px;
             border-color: Theme.surface-border;
@@ -1524,29 +1568,36 @@ export component MainWindow inherits Window {
                 padding: 0;
                 spacing: 0;
                 HorizontalBox {
-                    height: 60px;
-                    padding-left: 4px;
-                    padding-right: 4px;
-                    padding-top: 4px;
-                    padding-bottom: 4px;
-                    spacing: 2px;
-                    NavBtn { label: root.nav-home; active: root.page == 0; horizontal-stretch: 1; clicked => { root.navigate(0); } }
-                    NavBtn { label: root.nav-cars; active: root.page == 1; horizontal-stretch: 1; clicked => { root.navigate(1); } }
-                    NavBtn { label: root.nav-service; active: root.page == 2; horizontal-stretch: 1; clicked => { root.navigate(2); } }
-                    if show-tires: NavBtn { label: root.nav-tires; active: root.page == 3; horizontal-stretch: 1; clicked => { root.navigate(3); } }
-                    NavBtn { label: root.nav-costs; active: root.page == 4; horizontal-stretch: 1; clicked => { root.navigate(4); } }
+                    height: 72px;
+                    padding-left: 6px;
+                    padding-right: 6px;
+                    padding-top: 2px;
+                    padding-bottom: 2px;
+                    spacing: 4px;
                     NavBtn {
-                        label: root.nav-more;
-                        active: root.page >= 5 && root.page <= 14;
-                        horizontal-stretch: 1;
-                        clicked => { root.navigate(5); }
+                        icon: "🏠";
+                        label: root.nav-home;
+                        active: root.page == 0;
+                        clicked => { root.navigate(0); }
                     }
                     NavBtn {
-                        icon: "⚙";
-                        label: root.nav-settings;
-                        active: root.page == 15;
-                        horizontal-stretch: 1;
-                        clicked => { root.navigate(15); }
+                        icon: "🚗";
+                        label: root.nav-cars;
+                        active: root.page == 1;
+                        clicked => { root.navigate(1); }
+                    }
+                    NavBtn {
+                        icon: "🔧";
+                        label: root.nav-service;
+                        active: root.page == 2;
+                        clicked => { root.navigate(2); }
+                    }
+                    NavBtn {
+                        icon: "☰";
+                        label: root.nav-more;
+                        // More hub + nested tools + settings (gear) all highlight here
+                        active: root.page >= 3;
+                        clicked => { root.navigate(5); }
                     }
                 }
                 // Fills the system navigation bar zone (same color as app nav)

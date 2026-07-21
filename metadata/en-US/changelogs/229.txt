@@ -1,0 +1,1 @@
+Larger bottom navigation (4 tabs). Language setting translates more of the app UI.
