@@ -25,8 +25,8 @@ use state::{reminder_status_line_units, AppState};
 use std::cell::RefCell;
 use std::rc::Rc;
 use units::{
-    display_to_gallons, display_to_miles, display_to_mm, gallons_to_display, miles_to_display,
-    mm_to_display, oil_level_options,
+    display_to_gallons, display_to_miles, display_to_mm, format_economy, gallons_to_display,
+    miles_to_display, mm_to_display, oil_level_options,
 };
 
 slint::include_modules!();
@@ -494,6 +494,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
             if let Some(ui) = ui_weak.upgrade() {
                 let s = state.borrow();
                 let u = s.unit_system();
+                let lang = resolve_lang(s.language_pref(), &system_locale());
                 let odo = s
                     .selected_vehicle()
                     .map(|v| miles_to_display(v.current_mileage, u))
@@ -501,47 +502,41 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                 let k = kind.to_string().to_ascii_lowercase();
                 match k.as_str() {
                     "oil" => {
-                        ui.set_svc_title("Oil change".into());
+                        ui.set_svc_title(t(lang, "service.oil_change").into());
                         ui.set_svc_source("DIY".into());
                         ui.set_svc_mileage(if odo > 0 { odo.to_string().into() } else { "".into() });
                         ui.set_svc_gallons("".into());
                         ui.set_svc_fuel("".into());
                         ui.set_svc_shop("".into());
-                        ui.set_status_message("Template: DIY oil change — add parts cost and Save.".into());
+                        ui.set_status_message(t(lang, "template.oil_status").into());
                     }
                     "fuel" => {
-                        ui.set_svc_title("Fuel fill-up".into());
+                        ui.set_svc_title(t(lang, "service.fuel_fillup_title").into());
                         ui.set_svc_source("DIY".into());
                         ui.set_svc_mileage(if odo > 0 { odo.to_string().into() } else { "".into() });
                         ui.set_svc_cost("".into());
                         ui.set_svc_labor("".into());
                         ui.set_svc_shop("".into());
                         ui.set_status_message(
-                            format!(
-                                "Template: fuel fill — enter {} and fuel cost, then Save.",
-                                u.fuel_label()
-                            )
-                            .into(),
+                            t(lang, "template.fuel_status")
+                                .replace("{fuel}", u.fuel_label())
+                                .into(),
                         );
                     }
                     "rotation" => {
-                        ui.set_svc_title("Tire rotation".into());
+                        ui.set_svc_title(t(lang, "service.tire_rotation_title").into());
                         ui.set_svc_source("DIY".into());
                         ui.set_svc_mileage(if odo > 0 { odo.to_string().into() } else { "".into() });
                         ui.set_svc_gallons("".into());
                         ui.set_svc_fuel("".into());
-                        ui.set_status_message(
-                            "Template: tire rotation — also apply pattern on Tires tab.".into(),
-                        );
+                        ui.set_status_message(t(lang, "template.rotation_status").into());
                     }
                     "shop" => {
-                        ui.set_svc_title("Shop service".into());
+                        ui.set_svc_title(t(lang, "service.shop_visit_title").into());
                         ui.set_svc_source("SHOP".into());
                         ui.set_svc_mileage(if odo > 0 { odo.to_string().into() } else { "".into() });
                         ui.set_svc_gallons("".into());
-                        ui.set_status_message(
-                            "Template: shop visit — fill shop name, parts & labor.".into(),
-                        );
+                        ui.set_status_message(t(lang, "template.shop_status").into());
                     }
                     _ => {
                         ui.set_status_message("Unknown template.".into());
@@ -1919,6 +1914,33 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     ui.set_tr_common_switch(t(lang, "common.switch").into());
     ui.set_tr_common_vehicle(t(lang, "common.vehicle").into());
     ui.set_tr_common_back_more(t(lang, "common.back_more").into());
+    ui.set_tr_common_delete(t(lang, "common.delete").into());
+    // Service page
+    ui.set_tr_svc_search_ph(t(lang, "service.search_ph").into());
+    ui.set_tr_svc_quick_templates(t(lang, "service.quick_templates").into());
+    ui.set_tr_svc_quick_templates_body(t(lang, "service.quick_templates_body").into());
+    ui.set_tr_svc_oil_change(t(lang, "service.oil_change").into());
+    ui.set_tr_svc_fuel_fill(t(lang, "service.fuel_fill").into());
+    ui.set_tr_svc_shop_visit(t(lang, "service.shop_visit").into());
+    ui.set_tr_svc_log_title(t(lang, "service.log_title").into());
+    ui.set_tr_svc_log_body(
+        if flags.show_shop_emphasis {
+            t(lang, "service.log_body_shop")
+        } else {
+            t(lang, "service.log_body_diy")
+        }
+        .into(),
+    );
+    ui.set_tr_svc_title_ph(t(lang, "service.title_ph").into());
+    ui.set_tr_svc_diy(t(lang, "service.diy").into());
+    ui.set_tr_svc_shop(t(lang, "service.shop").into());
+    ui.set_tr_svc_parts_cost(t(lang, "service.parts_cost").into());
+    ui.set_tr_svc_labor_cost(t(lang, "service.labor_cost").into());
+    ui.set_tr_svc_fuel_optional(t(lang, "service.fuel_optional").into());
+    ui.set_tr_svc_fuel_cost_ph(t(lang, "service.fuel_cost_ph").into());
+    ui.set_tr_svc_shop_name_ph(t(lang, "service.shop_name_ph").into());
+    ui.set_tr_svc_notes_ph(t(lang, "service.notes_ph").into());
+    ui.set_tr_svc_save(t(lang, "service.save").into());
     // Oil level choices for current unit system
     let oil_opts = oil_level_options(u);
     ui.set_oil_opt_0(oil_opts[0].into());
@@ -1928,7 +1950,16 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     ui.set_oil_opt_4(oil_opts[4].into());
     ui.set_oil_opt_5(oil_opts[5].into());
 
-    ui.set_mpg_label(state.mpg_label().into());
+    // Economy line uses translated "select a vehicle" / "avg" / "need fills"
+    let economy_unit = u.economy_unit();
+    let mpg_label = match state.average_mpg() {
+        Some(mpg) => format!("{} {}", format_economy(mpg, u), t(lang, "service.avg")),
+        None if state.selected_vehicle_id.is_none() => {
+            format!("{economy_unit}: {}", t(lang, "service.select_vehicle"))
+        }
+        None => format!("{economy_unit}: {}", t(lang, "service.need_fills")),
+    };
+    ui.set_mpg_label(mpg_label.into());
     let tire_cfg = state.selected_tire_config();
     ui.set_tire_fl(tire_cfg.layout.fl.clone().into());
     ui.set_tire_fr(tire_cfg.layout.fr.clone().into());

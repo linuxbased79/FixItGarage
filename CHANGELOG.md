@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.2.30
+- **i18n Service page**: templates, form labels, placeholders, Save/Delete, and MPG line follow the selected language
+
 ## 0.2.29
 - **Bottom nav**: 4 large tabs (Home / Cars / Service / More) with icons and bigger labels
 - **i18n**: language change updates page titles, More hub, home cards, vehicle bar, and common chrome (not every form field yet)

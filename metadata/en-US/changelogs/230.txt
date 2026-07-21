@@ -1,0 +1,1 @@
+Service/maintenance screen fully translated with the selected language pack.

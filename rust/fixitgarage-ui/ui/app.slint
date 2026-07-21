@@ -455,6 +455,26 @@ export component MainWindow inherits Window {
     in-out property <string> tr-common-switch: "Switch";
     in-out property <string> tr-common-vehicle: "Vehicle";
     in-out property <string> tr-common-back-more: "Back to More";
+    in-out property <string> tr-common-delete: "Delete";
+    // Service / maintenance page
+    in-out property <string> tr-svc-search-ph: "Search history";
+    in-out property <string> tr-svc-quick-templates: "Quick templates";
+    in-out property <string> tr-svc-quick-templates-body: "Fills the form — edit costs then Save.";
+    in-out property <string> tr-svc-oil-change: "Oil change";
+    in-out property <string> tr-svc-fuel-fill: "Fuel fill";
+    in-out property <string> tr-svc-shop-visit: "Shop visit";
+    in-out property <string> tr-svc-log-title: "Log service";
+    in-out property <string> tr-svc-log-body: "Shop & DIY history for this vehicle.";
+    in-out property <string> tr-svc-title-ph: "Title (e.g. Oil change)";
+    in-out property <string> tr-svc-diy: "DIY";
+    in-out property <string> tr-svc-shop: "Shop";
+    in-out property <string> tr-svc-parts-cost: "Parts cost";
+    in-out property <string> tr-svc-labor-cost: "Labor cost";
+    in-out property <string> tr-svc-fuel-optional: "(fuel, optional)";
+    in-out property <string> tr-svc-fuel-cost-ph: "Fuel cost (optional)";
+    in-out property <string> tr-svc-shop-name-ph: "Shop name";
+    in-out property <string> tr-svc-notes-ph: "Notes (optional)";
+    in-out property <string> tr-svc-save: "Save service";
     // Oil level choice labels (swap with unit system)
     in-out property <string> oil-opt-0: "Full";
     in-out property <string> oil-opt-1: "½ quart low";
@@ -735,43 +755,43 @@ export component MainWindow inherits Window {
                     VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text { text: mpg-label; font-size: 13px; color: Theme.text-muted; wrap: word-wrap; }
                     LineEdit {
-                        placeholder-text: "Search history (title, shop, DIY/shop, mileage)";
+                        placeholder-text: root.tr-svc-search-ph;
                         text <=> root.service-search;
                         edited => { root.set-service-search(root.service-search); }
                     }
                     Card {
-                        title: "Quick templates"; body: "Fills the form — edit costs then Save.";
+                        title: root.tr-svc-quick-templates; body: root.tr-svc-quick-templates-body;
                         HorizontalBox {
                             spacing: 6px;
-                            Button { text: "Oil change"; clicked => { root.fill-service-template("oil"); } }
-                            Button { text: "Fuel fill"; clicked => { root.fill-service-template("fuel"); } }
+                            Button { text: root.tr-svc-oil-change; clicked => { root.fill-service-template("oil"); } }
+                            Button { text: root.tr-svc-fuel-fill; clicked => { root.fill-service-template("fuel"); } }
                         }
                         HorizontalBox {
                             spacing: 6px;
                             Button { text: root.tr-home-tire-rotation; clicked => { root.fill-service-template("rotation"); } }
-                            Button { text: "Shop visit"; clicked => { root.fill-service-template("shop"); } }
+                            Button { text: root.tr-svc-shop-visit; clicked => { root.fill-service-template("shop"); } }
                         }
                     }
                     Card {
-                        title: "Log service"; body: show-shop-emphasis ? "Shop & DIY history for this vehicle." : "DIY-focused logging.";
-                        LineEdit { placeholder-text: "Title (e.g. Oil change)"; text <=> root.svc-title; }
+                        title: root.tr-svc-log-title; body: root.tr-svc-log-body;
+                        LineEdit { placeholder-text: root.tr-svc-title-ph; text <=> root.svc-title; }
                         LineEdit { placeholder-text: root.label-distance; text <=> root.svc-mileage; }
                         HorizontalBox {
                             spacing: 8px;
-                            ChoiceBtn { label: "DIY"; active: root.svc-source == "DIY"; clicked => { root.set-source("DIY"); } }
-                            ChoiceBtn { label: "Shop"; active: root.svc-source == "SHOP"; clicked => { root.set-source("SHOP"); } }
+                            ChoiceBtn { label: root.tr-svc-diy; active: root.svc-source == "DIY"; clicked => { root.set-source("DIY"); } }
+                            ChoiceBtn { label: root.tr-svc-shop; active: root.svc-source == "SHOP"; clicked => { root.set-source("SHOP"); } }
                         }
-                        LineEdit { placeholder-text: "Parts cost"; text <=> root.svc-cost; }
-                        LineEdit { placeholder-text: "Labor cost"; text <=> root.svc-labor; }
-                        LineEdit { placeholder-text: root.label-fuel + " (fuel, optional)"; text <=> root.svc-gallons; }
-                        LineEdit { placeholder-text: "Fuel cost (optional)"; text <=> root.svc-fuel; }
-                        if root.svc-source == "SHOP": LineEdit { placeholder-text: "Shop name"; text <=> root.svc-shop; }
-                        LineEdit { placeholder-text: "Notes (optional)"; text <=> root.svc-notes; }
-                        Button { text: "Save service"; primary: true; clicked => { root.add-service(); } }
+                        LineEdit { placeholder-text: root.tr-svc-parts-cost; text <=> root.svc-cost; }
+                        LineEdit { placeholder-text: root.tr-svc-labor-cost; text <=> root.svc-labor; }
+                        LineEdit { placeholder-text: root.label-fuel + " " + root.tr-svc-fuel-optional; text <=> root.svc-gallons; }
+                        LineEdit { placeholder-text: root.tr-svc-fuel-cost-ph; text <=> root.svc-fuel; }
+                        if root.svc-source == "SHOP": LineEdit { placeholder-text: root.tr-svc-shop-name-ph; text <=> root.svc-shop; }
+                        LineEdit { placeholder-text: root.tr-svc-notes-ph; text <=> root.svc-notes; }
+                        Button { text: root.tr-svc-save; primary: true; clicked => { root.add-service(); } }
                     }
                     for s in services: Card {
                         title: s.title; body: s.subtitle + (s.cost != "" ? " · " + s.cost : "");
-                        Button { text: "Delete"; clicked => { root.delete-service(s.id); } }
+                        Button { text: root.tr-common-delete; clicked => { root.delete-service(s.id); } }
                     }
                 }
             }
