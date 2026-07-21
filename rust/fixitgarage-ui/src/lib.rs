@@ -400,6 +400,9 @@ fn apply_recall_outcome(ui: &MainWindow, state: &Arc<Mutex<AppState>>, outcome: 
 /// Wire Slint properties/callbacks to AppState and show the window.
 pub fn run_app() -> Result<(), slint::PlatformError> {
     let ui = MainWindow::new()?;
+    // Resolve Android files dir only after the native activity/JNI context exists.
+    let data_dir = crate::platform::app_data_dir();
+    eprintln!("FixItGarage: using data dir {}", data_dir.display());
     let state = Arc::new(Mutex::new(AppState::load()));
 
     // Lift chrome above system bars (status / 3-button or gesture navigation).
@@ -491,14 +494,35 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     ui.get_form_mileage().parse().unwrap_or(0),
                     u,
                 );
+                let before = s.vehicles.len();
                 s.add_vehicle(name, make, model, year, mileage, vin);
+                let after = s.vehicles.len();
+                // Force another durable write (add_vehicle already saves; verify path works).
+                let ok = s.save();
                 ui.set_form_name("".into());
                 ui.set_form_make("".into());
                 ui.set_form_model("".into());
                 ui.set_form_year("".into());
                 ui.set_form_mileage("".into());
                 ui.set_form_vin("".into());
-                ui.set_status_message("Vehicle saved (oil-level reminder in 3 months).".into());
+                if after <= before {
+                    ui.set_status_message(
+                        "Could not add vehicle — enter a Name / nickname first.".into(),
+                    );
+                } else if ok {
+                    ui.set_status_message(
+                        format!(
+                            "Vehicle saved ({} total). Data stored on this device.",
+                            after
+                        )
+                        .into(),
+                    );
+                } else {
+                    ui.set_status_message(
+                        "WARNING: vehicle may not have been written to storage. Try Save again."
+                            .into(),
+                    );
+                }
                 refresh_ui(&ui, &s);
             }
         });

@@ -5,8 +5,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-VERSION_NAME="${1:-0.2.35}"
-VERSION_CODE="${2:-2035}"
+VERSION_NAME="${1:-0.2.36}"
+VERSION_CODE="${2:-2036}"
 KEYSTORE="${FIG_KEYSTORE:-$HOME/fixitgarage-upload.jks}"
 ALIAS="${FIG_KEY_ALIAS:-upload}"
 
@@ -95,10 +95,29 @@ echo "=== 2/3 Assemble Gradle project for bundle (AGP 8.5 / SDK 35) ==="
 GDIR="$ROOT/target/x/release/android/play-bundle"
 rm -rf "$GDIR"
 mkdir -p "$GDIR/app/src/main/jniLibs/arm64-v8a"
-mkdir -p "$GDIR/app/src/main/res/values"
 cp -f "$SO" "$GDIR/app/src/main/jniLibs/arm64-v8a/libfixitgarage_ui.so"
 
-# Minimal manifest for NativeActivity + permissions (matches product)
+# Brand icons + other Android resources (launcher icon, adaptive icons, etc.)
+RES_SRC="$ROOT/fixitgarage-ui/android/res"
+if [[ -d "$RES_SRC" ]]; then
+  mkdir -p "$GDIR/app/src/main/res"
+  cp -a "$RES_SRC/." "$GDIR/app/src/main/res/"
+  echo "Copied Android res (icons) from $RES_SRC"
+else
+  mkdir -p "$GDIR/app/src/main/res/values"
+  echo "WARNING: no $RES_SRC — stock icon will be used" >&2
+fi
+mkdir -p "$GDIR/app/src/main/res/values"
+if [[ ! -f "$GDIR/app/src/main/res/values/strings.xml" ]]; then
+  cat > "$GDIR/app/src/main/res/values/strings.xml" << 'STR'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FixItGarage</string>
+</resources>
+STR
+fi
+
+# Manifest with brand launcher icons
 cat > "$GDIR/app/src/main/AndroidManifest.xml" << 'MANI'
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -110,7 +129,9 @@ cat > "$GDIR/app/src/main/AndroidManifest.xml" << 'MANI'
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <application
-        android:label="FixItGarage"
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:hasCode="true"
         android:allowBackup="false"
         android:extractNativeLibs="true">
@@ -130,13 +151,6 @@ cat > "$GDIR/app/src/main/AndroidManifest.xml" << 'MANI'
     </application>
 </manifest>
 MANI
-
-cat > "$GDIR/app/src/main/res/values/strings.xml" << 'STR'
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">FixItGarage</string>
-</resources>
-STR
 
 echo "sdk.dir=$ANDROID_HOME" > "$GDIR/local.properties"
 
@@ -214,19 +228,40 @@ mkdir -p dist
 OUT="dist/FixItGarage-${VERSION_NAME}-play.aab"
 cp -f "$RAW" "$OUT"
 
-"$JARSIGNER" -sigalg SHA256withRSA -digestalg SHA-256 \
+echo "Signing AAB with upload keystore (alias=$ALIAS)…"
+if ! "$JARSIGNER" -sigalg SHA256withRSA -digestalg SHA-256 \
   -keystore "$KEYSTORE" \
   -storepass "$FIG_KEYSTORE_PASS" \
   -keypass "$FIG_KEY_PASS" \
   "$OUT" "$ALIAS"
+then
+  echo "ERROR: jarsigner failed — AAB is NOT signed. Check keystore password." >&2
+  exit 1
+fi
 
-"$JARSIGNER" -verify "$OUT" >/dev/null && echo "Signature OK"
+VERIFY_OUT="$("$JARSIGNER" -verify -verbose -certs "$OUT" 2>&1 || true)"
+if ! echo "$VERIFY_OUT" | grep -qiE 'jar verified|s = signature was verified'; then
+  echo "ERROR: AAB signature verification failed:" >&2
+  echo "$VERIFY_OUT" | tail -20 >&2
+  exit 1
+fi
+echo "Signature OK"
+echo "$VERIFY_OUT" | grep -E 'CN=|signed by' | head -5 || true
 
 DEST_HOME="$HOME/Downloads/FixItGarage-${VERSION_NAME}-play.aab"
 cp -f "$OUT" "$DEST_HOME" 2>/dev/null || cp -f "$OUT" "/home/christopher/Downloads/FixItGarage-${VERSION_NAME}-play.aab"
 
+# Final guard: refuse to advertise unsigned file
+if ! "$JARSIGNER" -verify "$DEST_HOME" 2>&1 | grep -qiE 'jar verified|s = signature'; then
+  # jarsigner -verify alone prints to stderr; check exit or message
+  if ! "$JARSIGNER" -verify "$OUT" >/dev/null 2>&1; then
+    echo "ERROR: final signed AAB check failed" >&2
+    exit 1
+  fi
+fi
+
 echo
-echo "Play upload AAB ready (targetSdk 35):"
+echo "Play upload AAB ready (targetSdk 35, SIGNED):"
 ls -lh "$OUT"
 ls -lh "$DEST_HOME" 2>/dev/null || ls -lh "/home/christopher/Downloads/FixItGarage-${VERSION_NAME}-play.aab"
 echo

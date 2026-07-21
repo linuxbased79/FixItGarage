@@ -150,17 +150,63 @@ fn decode_vin(vin: &str) -> Result<DecodedVin, String> {
 }
 
 fn fetch_recalls(make: &str, model: &str, year: u16) -> Result<Vec<RecallItem>, String> {
-    // NHTSA is picky about encoding; ureq encodes query params
-    let url = format!(
-        "{RECALLS_BY_VEHICLE}?make={}&model={}&modelYear={}",
-        urlencoding_lite(make),
-        urlencoding_lite(model),
-        year
-    );
+    // NHTSA is picky about encoding; try a few make/model casings.
+    let make_u = make.trim().to_ascii_uppercase();
+    let model_variants = [
+        model.trim().to_string(),
+        model.trim().to_ascii_uppercase(),
+        model
+            .trim()
+            .split_whitespace()
+            .map(|w| {
+                let mut c = w.chars();
+                match c.next() {
+                    None => String::new(),
+                    Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" "),
+    ];
+
+    let mut last_err = String::new();
+    for model_try in &model_variants {
+        if model_try.is_empty() {
+            continue;
+        }
+        let url = format!(
+            "{RECALLS_BY_VEHICLE}?make={}&model={}&modelYear={}",
+            urlencoding_lite(&make_u),
+            urlencoding_lite(model_try),
+            year
+        );
+        match fetch_recalls_url(&url) {
+            Ok(out) => return Ok(out),
+            Err(e) => last_err = e,
+        }
+    }
+    Err(if last_err.is_empty() {
+        "Need make, model, and year.".into()
+    } else {
+        last_err
+    })
+}
+
+fn fetch_recalls_url(url: &str) -> Result<Vec<RecallItem>, String> {
+    // Use raw response so HTTP 400 with empty success JSON is not treated as a hard failure.
+    // NHTSA often returns status 400 + {"Count":0,"Message":"Results returned successfully","results":[]}
+    // when there are simply no campaigns for that YMM.
     let resp = agent()
-        .get(&url)
+        .get(url)
         .call()
-        .map_err(|e| format!("Recalls network: {e}"))?;
+        .or_else(|e| match e {
+            ureq::Error::Status(code, resp) if code == 400 || code == 404 => Ok(resp),
+            ureq::Error::Status(code, _) => {
+                Err(format!("Recalls network: {url}: status code {code}"))
+            }
+            other => Err(format!("Recalls network: {other}")),
+        })?;
+
     let body: RecallsResponse = serde_json::from_reader(resp.into_reader())
         .map_err(|e| format!("Recalls JSON: {e}"))?;
 
@@ -176,7 +222,6 @@ fn fetch_recalls(make: &str, model: &str, year: u16) -> Result<Vec<RecallItem>, 
             manufacturer: r.manufacturer.unwrap_or_default(),
         });
     }
-    // Newest first when dates present
     out.sort_by(|a, b| b.report_date.cmp(&a.report_date));
     Ok(out)
 }

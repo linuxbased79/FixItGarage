@@ -1082,16 +1082,77 @@ fn android_files_dir() -> Result<std::path::PathBuf, String> {
 }
 
 /// App-private data directory for `state.json` and other durable files.
-/// On Android this uses `Context.getFilesDir()` so data survives restarts.
+/// On Android this prefers `Context.getFilesDir()` (survives restarts).
+/// The resolved path is cached so load and save never diverge.
 pub fn app_data_dir() -> std::path::PathBuf {
+    use std::sync::OnceLock;
+    static DIR: OnceLock<std::path::PathBuf> = OnceLock::new();
+    DIR.get_or_init(resolve_app_data_dir).clone()
+}
+
+/// All places we might have written state (for migration / recovery).
+pub fn app_data_dir_candidates() -> Vec<std::path::PathBuf> {
     #[cfg(target_os = "android")]
     {
+        let mut out = Vec::new();
         if let Ok(p) = android_files_dir() {
-            let _ = std::fs::create_dir_all(&p);
-            return p;
+            out.push(p);
         }
-        let p = android_files_fallback_path();
+        // Standard package private storage (works even if JNI probe fails).
+        out.push(std::path::PathBuf::from(
+            "/data/user/0/org.fixitgarage.app/files",
+        ));
+        out.push(std::path::PathBuf::from(
+            "/data/data/org.fixitgarage.app/files",
+        ));
+        // Legacy dirs crate / XDG-style (often wrong on Android, but may hold old data).
+        out.push(android_files_fallback_path());
+        if let Ok(home) = std::env::var("HOME") {
+            if !home.is_empty() {
+                out.push(std::path::PathBuf::from(home).join("files"));
+                out.push(std::path::PathBuf::from(home).join(".local/share/fixitgarage"));
+            }
+        }
+        // Dedup while preserving order
+        let mut seen = std::collections::HashSet::new();
+        out.retain(|p| seen.insert(p.clone()));
+        out
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        vec![dirs::data_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join("fixitgarage")]
+    }
+}
+
+fn probe_writable(dir: &std::path::Path) -> bool {
+    if std::fs::create_dir_all(dir).is_err() {
+        return false;
+    }
+    let probe = dir.join(".fig_write_probe");
+    match std::fs::write(&probe, b"ok") {
+        Ok(()) => {
+            let _ = std::fs::remove_file(&probe);
+            true
+        }
+        Err(_) => false,
+    }
+}
+
+fn resolve_app_data_dir() -> std::path::PathBuf {
+    for c in app_data_dir_candidates() {
+        if probe_writable(&c) {
+            eprintln!("FixItGarage: app data dir = {}", c.display());
+            return c;
+        }
+    }
+    // Last resort — still try package files dir even if probe failed.
+    #[cfg(target_os = "android")]
+    {
+        let p = std::path::PathBuf::from("/data/user/0/org.fixitgarage.app/files");
         let _ = std::fs::create_dir_all(&p);
+        eprintln!("FixItGarage: app data dir fallback = {}", p.display());
         return p;
     }
     #[cfg(not(target_os = "android"))]

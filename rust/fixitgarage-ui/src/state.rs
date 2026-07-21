@@ -408,68 +408,119 @@ impl AppState {
         crate::platform::app_data_dir().join("state.json")
     }
 
-    /// Older builds may have written under dirs::data_dir()/fixitgarage (unreliable on Android).
-    fn legacy_data_path() -> PathBuf {
-        dirs::data_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("fixitgarage")
-            .join("state.json")
-    }
-
     pub fn load() -> Self {
-        let path = Self::data_path();
-        // Prefer primary path; migrate from legacy location if needed.
-        let try_load = |p: &std::path::Path| -> Option<AppState> {
+        let try_load = |p: &std::path::Path| -> Option<(AppState, std::fs::Metadata)> {
+            let meta = std::fs::metadata(p).ok()?;
             let bytes = std::fs::read(p).ok()?;
-            serde_json::from_slice::<AppState>(&bytes).ok()
+            let state = serde_json::from_slice::<AppState>(&bytes).ok()?;
+            Some((state, meta))
         };
-        if let Some(mut state) = try_load(&path) {
+
+        // Scan every candidate path and pick the richest / newest state file.
+        // This recovers data written to the wrong place by older builds.
+        let mut best: Option<(AppState, u64, std::time::SystemTime)> = None;
+        let mut paths: Vec<PathBuf> = crate::platform::app_data_dir_candidates()
+            .into_iter()
+            .map(|d| d.join("state.json"))
+            .collect();
+        // Always include the canonical path first after resolve.
+        paths.insert(0, Self::data_path());
+        let mut seen = std::collections::HashSet::new();
+        paths.retain(|p| seen.insert(p.clone()));
+
+        for p in &paths {
+            if let Some((state, meta)) = try_load(p) {
+                let n = state.vehicles.len() as u64;
+                let modified = meta.modified().unwrap_or(std::time::UNIX_EPOCH);
+                let replace = match &best {
+                    None => true,
+                    Some((_, bn, bm)) => n > *bn || (n == *bn && modified > *bm),
+                };
+                if replace {
+                    eprintln!(
+                        "FixItGarage: found state at {} ({} vehicles)",
+                        p.display(),
+                        n
+                    );
+                    best = Some((state, n, modified));
+                }
+            }
+        }
+
+        if let Some((mut state, n, _)) = best {
             state.ensure_selection();
             state.migrate_tire_configs();
             state.ensure_oil_reminders();
+            // Re-save into the canonical durable path.
+            if n > 0 || state.wizard_done {
+                state.save();
+            }
             return state;
         }
-        let legacy = Self::legacy_data_path();
-        if legacy != path {
-            if let Some(mut state) = try_load(&legacy) {
-                state.ensure_selection();
-                state.migrate_tire_configs();
-                state.ensure_oil_reminders();
-                // Copy into durable Android files dir (or correct desktop path).
-                state.save();
-                return state;
-            }
-        }
+        eprintln!(
+            "FixItGarage: no state.json found; starting empty (canonical={})",
+            Self::data_path().display()
+        );
         Self::default()
     }
 
-    pub fn save(&self) {
+    /// Returns true if the file was written successfully.
+    pub fn save(&self) -> bool {
         let path = Self::data_path();
         if let Some(parent) = path.parent() {
             if let Err(e) = std::fs::create_dir_all(parent) {
                 eprintln!("FixItGarage: create data dir failed: {e} ({})", parent.display());
-                return;
+                return false;
             }
         }
-        match serde_json::to_vec_pretty(self) {
-            Ok(json) => {
-                // Atomic-ish write: temp then rename.
-                let tmp = path.with_extension("json.tmp");
-                if let Err(e) = std::fs::write(&tmp, &json) {
-                    eprintln!("FixItGarage: write state failed: {e} ({})", tmp.display());
-                    return;
+        let json = match serde_json::to_vec_pretty(self) {
+            Ok(j) => j,
+            Err(e) => {
+                eprintln!("FixItGarage: serialize state failed: {e}");
+                return false;
+            }
+        };
+
+        // Direct write + fsync is more reliable on Android than rename across layers.
+        match std::fs::File::create(&path) {
+            Ok(mut f) => {
+                use std::io::Write;
+                if let Err(e) = f.write_all(&json) {
+                    eprintln!("FixItGarage: write state failed: {e} ({})", path.display());
+                    return false;
                 }
-                if let Err(e) = std::fs::rename(&tmp, &path) {
-                    // Some Android FS may not support rename across; try direct write.
-                    if let Err(e2) = std::fs::write(&path, &json) {
+                if let Err(e) = f.sync_all() {
+                    eprintln!("FixItGarage: fsync state failed: {e} ({})", path.display());
+                }
+                // Verify round-trip readable
+                match std::fs::read(&path) {
+                    Ok(bytes) if bytes.len() == json.len() => {
                         eprintln!(
-                            "FixItGarage: save state failed: rename {e}; write {e2} ({})",
-                            path.display()
+                            "FixItGarage: saved {} bytes → {} ({} vehicles)",
+                            json.len(),
+                            path.display(),
+                            self.vehicles.len()
                         );
+                        true
+                    }
+                    Ok(bytes) => {
+                        eprintln!(
+                            "FixItGarage: save size mismatch wrote {} read {}",
+                            json.len(),
+                            bytes.len()
+                        );
+                        false
+                    }
+                    Err(e) => {
+                        eprintln!("FixItGarage: save verify read failed: {e}");
+                        false
                     }
                 }
             }
-            Err(e) => eprintln!("FixItGarage: serialize state failed: {e}"),
+            Err(e) => {
+                eprintln!("FixItGarage: create state file failed: {e} ({})", path.display());
+                false
+            }
         }
     }
 

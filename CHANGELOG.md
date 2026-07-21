@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.36
+- **Hard fix vehicle save:** resolve Android storage via getFilesDir + package files paths; scan all candidates on load; fsync after write; confirm save in status
+- **NHTSA recalls:** HTTP 400 with empty results = zero campaigns (not a hard error) for years like 2024 Forte
+
 ## 0.2.35
 - **Fix data loss:** vehicle data is saved under Android app private storage so it survives force-close and restart
 - **Fix VIN recall crash:** NHTSA checks run on a background thread (no UI freeze / force-close)
