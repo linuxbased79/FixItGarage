@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.33
+- **Layout fix**: Photos / Receipts / Fuel pages were outside the content area and drew under the bottom nav (buttons un-tappable). All pages now sit above the tab bar.
+- **Scroll padding**: Extra bottom padding on all scroll pages so last controls (choice buttons, Save) clear the nav.
+- **i18n**: Parts, Battery, Notes, Photos, and remaining Receipt strings for all 7 language packs.
+
+
 ## 0.2.32
 - **i18n leftovers (all 7 languages)**: oil level choices (Full / quarts / liters), tire rotation patterns, tire preview text, Reminders oil tips, Wipers, Brakes, and component “no entry” summaries
 - Oil selection stores English canonical values while labels display in the active language

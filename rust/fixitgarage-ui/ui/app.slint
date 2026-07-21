@@ -571,6 +571,39 @@ export component MainWindow inherits Window {
     in-out property <string> tr-brakes-rr-pads: "Rr pads";
     in-out property <string> tr-brakes-fluid-btn: "Fluid";
     in-out property <string> tr-brakes-save: "Save brakes";
+    // Parts
+    in-out property <string> tr-parts-current: "Current";
+    in-out property <string> tr-parts-air: "Air";
+    in-out property <string> tr-parts-cabin: "Cabin";
+    in-out property <string> tr-parts-oil-filt: "Oil filt";
+    in-out property <string> tr-parts-oil-filter: "Oil filter";
+    in-out property <string> tr-parts-oil-type: "Oil type";
+    in-out property <string> tr-parts-save-update: "Save / update";
+    in-out property <string> tr-parts-save-body: "Saving air/cabin/oil filter schedules a smart reminder (~12 mo / 15k for air & cabin; ~6 mo / 5k for oil filter).";
+    in-out property <string> tr-parts-part-number: "Part number";
+    in-out property <string> tr-parts-viscosity: "Oil viscosity (if oil type)";
+    in-out property <string> tr-parts-installed: "Installed";
+    in-out property <string> tr-parts-save: "Save part";
+    // Battery
+    in-out property <string> tr-batt-current: "Current";
+    in-out property <string> tr-batt-age: "Age check";
+    in-out property <string> tr-batt-update: "Update";
+    in-out property <string> tr-batt-date-hint: "Date as YYYY-MM-DD";
+    in-out property <string> tr-batt-install-ph: "Install date YYYY-MM-DD";
+    in-out property <string> tr-batt-notes-ph: "Notes (brand, CCA…)";
+    in-out property <string> tr-batt-save: "Save battery";
+    // Photos (issue log)
+    in-out property <string> tr-photos-intro: "Log problems with a caption. On Android, Take photo opens the camera; then save the log entry.";
+    in-out property <string> tr-photos-notes-ph: "Notes / what you see";
+    in-out property <string> tr-photos-no-path: "No photo path yet";
+    in-out property <string> tr-photos-photo-prefix: "Photo:";
+    // Receipt extras still English
+    in-out property <string> tr-receipt-fields-body: "Saves into maintenance history for this vehicle.";
+    in-out property <string> tr-receipt-no-photo: "No photo yet — capture or Share an image to FixItGarage.";
+    in-out property <string> tr-receipt-open-ocr: "Open OCR app";
+    in-out property <string> tr-receipt-quick-camera: "Quick camera";
+    in-out property <string> tr-receipt-fuel-suffix: "(fuel)";
+    in-out property <string> tr-receipt-shop-ph: "Shop name";
     in-out property <string> tr-settings-about-body: "FixItGarage — security hardening: backups, HTTPS WebDAV, no Auto Backup.";
     in-out property <string> tr-settings-accessibility: "Accessibility · reading";
     in-out property <string> tr-settings-accessibility-body: "";
@@ -772,7 +805,7 @@ export component MainWindow inherits Window {
             if page == 0: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
-                    padding: 16px; spacing: 12px;
+                    padding-left: 16px; padding-right: 16px; padding-top: 16px; padding-bottom: 40px; spacing: 12px;
                     HorizontalBox {
                         spacing: 8px;
                         Text {
@@ -861,7 +894,7 @@ export component MainWindow inherits Window {
             if page == 1: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
-                    padding: 16px; spacing: 10px;
+                    padding-left: 16px; padding-right: 16px; padding-top: 16px; padding-bottom: 40px; spacing: 10px;
                     PageTitle { label: root.tr-page-vehicles; }
                     Text { text: root.tr-vehicles-hint; font-size: 13px; color: Theme.text-muted; wrap: word-wrap; }
                     Card {
@@ -919,7 +952,7 @@ export component MainWindow inherits Window {
             if page == 2: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
-                    padding: 16px; spacing: 10px;
+                    padding-left: 16px; padding-right: 16px; padding-top: 16px; padding-bottom: 40px; spacing: 10px;
                     PageTitle { label: root.tr-page-service; }
                     VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text { text: mpg-label; font-size: 13px; color: Theme.text-muted; wrap: word-wrap; }
@@ -969,7 +1002,7 @@ export component MainWindow inherits Window {
             if page == 3: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
-                    padding: 16px; spacing: 12px;
+                    padding-left: 16px; padding-right: 16px; padding-top: 16px; padding-bottom: 40px; spacing: 12px;
                     PageTitle { label: root.tr-page-tires; }
                     if !show-tires: Text { text: root.tr-tires-hidden; color: Theme.text-muted; wrap: word-wrap; }
                     if show-tires: VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
@@ -1152,7 +1185,7 @@ export component MainWindow inherits Window {
             if page == 4: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
-                    padding: 16px; spacing: 12px;
+                    padding-left: 16px; padding-right: 16px; padding-top: 16px; padding-bottom: 40px; spacing: 12px;
                     PageTitle { label: root.tr-page-costs; }
                     VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text {
@@ -1167,7 +1200,7 @@ export component MainWindow inherits Window {
             if page == 5: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
-                    padding: 16px; spacing: 12px;
+                    padding-left: 16px; padding-right: 16px; padding-top: 16px; padding-bottom: 40px; spacing: 12px;
                     HorizontalBox {
                         spacing: 8px;
                         PageTitle { label: root.tr-more-title; horizontal-stretch: 1; }
@@ -1410,34 +1443,34 @@ export component MainWindow inherits Window {
             if page == 6: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
-                    padding: 16px; spacing: 10px;
+                    padding-left: 16px; padding-right: 16px; padding-top: 16px; padding-bottom: 40px; spacing: 10px;
                     PageTitle { label: root.tr-page-parts; }
                     VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Card {
-                        title: "Current"; body: "";
-                        Text { text: "Air: " + part-air; color: Theme.text; wrap: word-wrap; font-size: 13px; }
-                        Text { text: "Cabin: " + part-cabin; color: Theme.text; wrap: word-wrap; font-size: 13px; }
-                        Text { text: "Oil filter: " + part-oil-filter; color: Theme.text; wrap: word-wrap; font-size: 13px; }
-                        Text { text: "Oil type: " + part-oil-type; color: Theme.text; wrap: word-wrap; font-size: 13px; }
+                        title: root.tr-parts-current; body: "";
+                        Text { text: root.tr-parts-air + ": " + part-air; color: Theme.text; wrap: word-wrap; font-size: 13px; }
+                        Text { text: root.tr-parts-cabin + ": " + part-cabin; color: Theme.text; wrap: word-wrap; font-size: 13px; }
+                        Text { text: root.tr-parts-oil-filter + ": " + part-oil-filter; color: Theme.text; wrap: word-wrap; font-size: 13px; }
+                        Text { text: root.tr-parts-oil-type + ": " + part-oil-type; color: Theme.text; wrap: word-wrap; font-size: 13px; }
                     }
                     Card {
-                        title: "Save / update"; body: "Saving air/cabin/oil filter schedules a smart reminder (~12 mo / 15k for air & cabin; ~6 mo / 5k for oil filter).";
+                        title: root.tr-parts-save-update; body: root.tr-parts-save-body;
                         HorizontalBox {
                             spacing: 4px;
-                            ChoiceBtn { label: "Air"; active: root.part-type == "ENGINE_AIR_FILTER"; clicked => { root.part-type = "ENGINE_AIR_FILTER"; } }
-                            ChoiceBtn { label: "Cabin"; active: root.part-type == "CABIN_FILTER"; clicked => { root.part-type = "CABIN_FILTER"; } }
+                            ChoiceBtn { label: root.tr-parts-air; active: root.part-type == "ENGINE_AIR_FILTER"; clicked => { root.part-type = "ENGINE_AIR_FILTER"; } }
+                            ChoiceBtn { label: root.tr-parts-cabin; active: root.part-type == "CABIN_FILTER"; clicked => { root.part-type = "CABIN_FILTER"; } }
                         }
                         HorizontalBox {
                             spacing: 4px;
-                            ChoiceBtn { label: "Oil filt"; active: root.part-type == "OIL_FILTER"; clicked => { root.part-type = "OIL_FILTER"; } }
-                            ChoiceBtn { label: "Oil type"; active: root.part-type == "OIL_TYPE"; clicked => { root.part-type = "OIL_TYPE"; } }
+                            ChoiceBtn { label: root.tr-parts-oil-filt; active: root.part-type == "OIL_FILTER"; clicked => { root.part-type = "OIL_FILTER"; } }
+                            ChoiceBtn { label: root.tr-parts-oil-type; active: root.part-type == "OIL_TYPE"; clicked => { root.part-type = "OIL_TYPE"; } }
                         }
-                        LineEdit { placeholder-text: "Brand"; text <=> root.part-brand; }
-                        LineEdit { placeholder-text: "Part number"; text <=> root.part-number; }
-                        LineEdit { placeholder-text: "Oil viscosity (if oil type)"; text <=> root.part-oil; }
-                        LineEdit { placeholder-text: "Installed " + root.label-distance; text <=> root.part-mileage; }
-                        LineEdit { placeholder-text: "Notes"; text <=> root.part-notes; }
-                        Button { text: "Save part"; primary: true; clicked => { root.save-part(); } }
+                        LineEdit { placeholder-text: root.tr-common-brand; text <=> root.part-brand; }
+                        LineEdit { placeholder-text: root.tr-parts-part-number; text <=> root.part-number; }
+                        LineEdit { placeholder-text: root.tr-parts-viscosity; text <=> root.part-oil; }
+                        LineEdit { placeholder-text: root.tr-parts-installed + " " + root.label-distance; text <=> root.part-mileage; }
+                        LineEdit { placeholder-text: root.tr-common-notes; text <=> root.part-notes; }
+                        Button { text: root.tr-parts-save; primary: true; clicked => { root.save-part(); } }
                     }
                     Button { text: root.tr-common-back-more; clicked => { root.navigate(5); } }
                 }
@@ -1447,18 +1480,18 @@ export component MainWindow inherits Window {
             if page == 7: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
-                    padding: 16px; spacing: 10px;
+                    padding-left: 16px; padding-right: 16px; padding-top: 16px; padding-bottom: 40px; spacing: 10px;
                     PageTitle { label: root.tr-page-battery; }
                     VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
-                    Card { title: "Current"; body: sum-battery; }
-                    Card { title: "Age check"; body: battery-warning; }
+                    Card { title: root.tr-batt-current; body: sum-battery; }
+                    Card { title: root.tr-batt-age; body: battery-warning; }
                     Card {
-                        title: "Update"; body: "Date as YYYY-MM-DD";
-                        LineEdit { placeholder-text: "Install date YYYY-MM-DD"; text <=> root.comp-date; }
-                        LineEdit { placeholder-text: root.label-distance + " at install"; text <=> root.comp-mileage; }
-                        LineEdit { placeholder-text: "Notes (brand, CCA…)"; text <=> root.comp-notes; }
+                        title: root.tr-batt-update; body: root.tr-batt-date-hint;
+                        LineEdit { placeholder-text: root.tr-batt-install-ph; text <=> root.comp-date; }
+                        LineEdit { placeholder-text: root.label-distance + " " + root.tr-wipers-at-install; text <=> root.comp-mileage; }
+                        LineEdit { placeholder-text: root.tr-batt-notes-ph; text <=> root.comp-notes; }
                         Button {
-                            text: "Save battery"; primary: true;
+                            text: root.tr-batt-save; primary: true;
                             clicked => { root.comp-type = "BATTERY"; root.save-component(); }
                         }
                     }
@@ -1470,7 +1503,7 @@ export component MainWindow inherits Window {
             if page == 8: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
-                    padding: 16px; spacing: 10px;
+                    padding-left: 16px; padding-right: 16px; padding-top: 16px; padding-bottom: 40px; spacing: 10px;
                     PageTitle { label: root.tr-page-wipers; }
                     VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text {
@@ -1520,7 +1553,7 @@ export component MainWindow inherits Window {
             if page == 9: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
-                    padding: 16px; spacing: 10px;
+                    padding-left: 16px; padding-right: 16px; padding-top: 16px; padding-bottom: 40px; spacing: 10px;
                     PageTitle { label: root.tr-page-brakes; }
                     VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text {
@@ -1550,18 +1583,18 @@ export component MainWindow inherits Window {
             if page == 10: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
-                    padding: 16px; spacing: 10px;
+                    padding-left: 16px; padding-right: 16px; padding-top: 16px; padding-bottom: 40px; spacing: 10px;
                     PageTitle { label: root.tr-page-notes; }
                     VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Card {
-                        title: "New note"; body: "";
-                        LineEdit { placeholder-text: "Title"; text <=> root.note-title; }
-                        LineEdit { placeholder-text: "Body"; text <=> root.note-body; }
+                        title: root.tr-notes-new; body: "";
+                        LineEdit { placeholder-text: root.tr-common-title; text <=> root.note-title; }
+                        LineEdit { placeholder-text: root.tr-notes-body; text <=> root.note-body; }
                         Button { text: root.tr-notes-save; primary: true; clicked => { root.add-note(); } }
                     }
                     for n in notes: Card {
                         title: n.title; body: n.body;
-                        Button { text: "Delete"; clicked => { root.delete-note(n.id); } }
+                        Button { text: root.tr-common-delete; clicked => { root.delete-note(n.id); } }
                     }
                     Button { text: root.tr-common-back-more; clicked => { root.navigate(5); } }
                 }
@@ -1571,7 +1604,7 @@ export component MainWindow inherits Window {
             if page == 11: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
-                    padding: 16px; spacing: 10px;
+                    padding-left: 16px; padding-right: 16px; padding-top: 16px; padding-bottom: 40px; spacing: 10px;
                     PageTitle { label: root.tr-page-reminders; }
                     VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text {
@@ -1645,26 +1678,24 @@ export component MainWindow inherits Window {
                     Button { text: root.tr-common-back-more; clicked => { root.navigate(5); } }
                 }
             }
-        }
-
 
             // PHOTOS
             if page == 12: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
-                    padding: 16px; spacing: 10px;
+                    padding-left: 16px; padding-right: 16px; padding-top: 16px; padding-bottom: 40px; spacing: 10px;
                     PageTitle { label: root.tr-page-photos; }
                     VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text {
-                        text: "Log problems with a caption. On Android, Take photo opens the camera; then save the log entry.";
+                        text: root.tr-photos-intro;
                         font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
                     }
                     Card {
-                        title: "New issue"; body: "";
+                        title: root.tr-photos-new; body: "";
                         LineEdit { placeholder-text: root.tr-photos-caption-ph; text <=> root.photo-caption; }
-                        LineEdit { placeholder-text: "Notes / what you see"; text <=> root.photo-notes; }
+                        LineEdit { placeholder-text: root.tr-photos-notes-ph; text <=> root.photo-notes; }
                         Text {
-                            text: photo-path == "" ? "No photo path yet" : ("Photo: " + photo-path);
+                            text: photo-path == "" ? root.tr-photos-no-path : (root.tr-photos-photo-prefix + " " + photo-path);
                             font-size: 12px; color: Theme.text-soft; wrap: word-wrap;
                         }
                         Button { text: root.tr-photos-take; clicked => { root.capture-photo(); } }
@@ -1679,15 +1710,15 @@ export component MainWindow inherits Window {
             if page == 13: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
-                    padding: 16px; spacing: 10px;
+                    padding-left: 16px; padding-right: 16px; padding-top: 16px; padding-bottom: 40px; spacing: 10px;
                     PageTitle { label: root.tr-page-receipts; }
                     VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text {
-                        text: "On-device OCR (no Google): Capture photo → On-device OCR. Fallback: Send to OCR app / Share text back / Paste & fill. Metric km/L/€ OK.";
+                        text: root.tr-receipt-hint;
                         font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
                     }
                     Card {
-                        title: "Receipt fields"; body: "Saves into maintenance history for this vehicle.";
+                        title: root.tr-receipt-fields; body: root.tr-receipt-fields-body;
                         HorizontalBox {
                             spacing: 6px;
                             Button { text: root.tr-receipt-capture; primary: true; clicked => { root.capture-receipt-for-ocr(); } }
@@ -1703,24 +1734,24 @@ export component MainWindow inherits Window {
                             Button { text: root.tr-tires-paste-fill; clicked => { root.paste-receipt-clipboard(); } }
                         }
                         Text {
-                            text: rcp-photo-path == "" ? "No photo yet — capture or Share an image to FixItGarage." : ("Photo: " + rcp-photo-path);
+                            text: rcp-photo-path == "" ? root.tr-receipt-no-photo : (root.tr-photos-photo-prefix + " " + rcp-photo-path);
                             font-size: 12px; color: Theme.text-soft; wrap: word-wrap;
                         }
                         HorizontalBox {
                             spacing: 6px;
-                            Button { text: "Open OCR app"; clicked => { root.open-ocr-helper(); } }
-                            Button { text: "Quick camera"; clicked => { root.capture-receipt-photo(); } }
+                            Button { text: root.tr-receipt-open-ocr; clicked => { root.open-ocr-helper(); } }
+                            Button { text: root.tr-receipt-quick-camera; clicked => { root.capture-receipt-photo(); } }
                         }
                         LineEdit { placeholder-text: root.tr-receipt-paste-ph; text <=> root.rcp-paste; }
                         Button { text: root.tr-receipt-auto-fill; clicked => { root.parse-receipt-text(); } }
                         LineEdit { placeholder-text: root.tr-receipt-title-ph; text <=> root.rcp-title; }
-                        LineEdit { placeholder-text: "Date YYYY-MM-DD"; text <=> root.rcp-date; }
+                        LineEdit { placeholder-text: root.tr-common-date-ymd; text <=> root.rcp-date; }
                         LineEdit { placeholder-text: root.label-distance; text <=> root.rcp-mileage; }
-                        LineEdit { placeholder-text: root.label-fuel + " (fuel)"; text <=> root.rcp-gallons; }
-                        LineEdit { placeholder-text: "Parts cost"; text <=> root.rcp-parts; }
-                        LineEdit { placeholder-text: "Labor cost"; text <=> root.rcp-labor; }
-                        LineEdit { placeholder-text: "Fuel cost (optional)"; text <=> root.rcp-fuel; }
-                        LineEdit { placeholder-text: "Shop name"; text <=> root.rcp-shop; }
+                        LineEdit { placeholder-text: root.label-fuel + " " + root.tr-receipt-fuel-suffix; text <=> root.rcp-gallons; }
+                        LineEdit { placeholder-text: root.tr-svc-parts-cost; text <=> root.rcp-parts; }
+                        LineEdit { placeholder-text: root.tr-svc-labor-cost; text <=> root.rcp-labor; }
+                        LineEdit { placeholder-text: root.tr-svc-fuel-cost-ph; text <=> root.rcp-fuel; }
+                        LineEdit { placeholder-text: root.tr-receipt-shop-ph; text <=> root.rcp-shop; }
                         Button { text: root.tr-receipt-save; primary: true; clicked => { root.save-receipt(); } }
                     }
                     Button { text: root.tr-common-back-more; clicked => { root.navigate(2); } }
@@ -1732,7 +1763,7 @@ export component MainWindow inherits Window {
             if page == 14: AppScrollView {
                 width: 100%; height: 100%;
                 VerticalBox {
-                    padding: 16px; spacing: 10px;
+                    padding-left: 16px; padding-right: 16px; padding-top: 16px; padding-bottom: 40px; spacing: 10px;
                     PageTitle { label: root.tr-page-fuel; }
                     VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text { text: mpg-label; font-size: 15px; font-weight: 700; color: Theme.title; }
@@ -1746,8 +1777,11 @@ export component MainWindow inherits Window {
                 }
             }
 
+        } // end content area (pages sit above bottom nav)
+
         // Bottom nav — 4 large primary tabs (phone-friendly). Tires/Costs/Settings live under More + home shortcuts.
         // Lifted by safe-area-bottom so it clears the system nav (△ ○ □ / gesture bar).
+        // Must be a sibling of the content Rectangle (not inside it) so pages never draw under the tabs.
         Rectangle {
             height: 72px + root.safe-area-bottom;
             background: Theme.nav-bg;
