@@ -1081,6 +1081,29 @@ fn android_files_dir() -> Result<std::path::PathBuf, String> {
     Ok(std::path::PathBuf::from(Into::<String>::into(s)))
 }
 
+/// App-private data directory for `state.json` and other durable files.
+/// On Android this uses `Context.getFilesDir()` so data survives restarts.
+pub fn app_data_dir() -> std::path::PathBuf {
+    #[cfg(target_os = "android")]
+    {
+        if let Ok(p) = android_files_dir() {
+            let _ = std::fs::create_dir_all(&p);
+            return p;
+        }
+        let p = android_files_fallback_path();
+        let _ = std::fs::create_dir_all(&p);
+        return p;
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let p = dirs::data_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join("fixitgarage");
+        let _ = std::fs::create_dir_all(&p);
+        p
+    }
+}
+
 /// Launch an app by package name if installed. Returns true on success.
 #[cfg(target_os = "android")]
 fn try_launch_package(package: &str) -> bool {

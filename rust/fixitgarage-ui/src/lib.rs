@@ -22,8 +22,7 @@ use platform::{
 };
 use receipt_parse::{parse_receipt_text, parse_tire_receipt_text};
 use state::{reminder_status_line_units, AppState};
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use units::{
     display_to_gallons, display_to_miles, display_to_mm, format_economy, gallons_to_display,
     miles_to_display, mm_to_display, UnitSystem,
@@ -208,10 +207,200 @@ fn part_summary_i18n(state: &AppState, part_type: &str, lang: Lang) -> String {
     }
 }
 
+/// If the user typed vehicle details but never tapped Save, persist them before
+/// network work so a crash cannot wipe the form.
+fn ensure_vehicle_from_form(ui: &MainWindow, state: &Arc<Mutex<AppState>>) {
+    let mut s = state.lock().unwrap();
+    let name = ui.get_form_name().to_string();
+    let make = ui.get_form_make().to_string();
+    let model = ui.get_form_model().to_string();
+    let year = ui.get_form_year().parse().ok();
+    let vin = ui.get_form_vin().to_string();
+    let u = s.unit_system();
+    let mileage = display_to_miles(ui.get_form_mileage().parse().unwrap_or(0), u);
+
+    if s.selected_vehicle_id.is_some() {
+        // Keep selected vehicle in sync with the form (VIN + details).
+        let existing_name = s
+            .selected_vehicle()
+            .map(|v| v.name.clone())
+            .unwrap_or_else(|| "My vehicle".into());
+        let save_name = if name.trim().is_empty() {
+            existing_name
+        } else {
+            name
+        };
+        s.update_selected_vehicle_details(
+            save_name,
+            make,
+            model,
+            year,
+            Some(mileage).filter(|&m| m > 0),
+            Some(vin),
+        );
+        return;
+    }
+
+    // No vehicle yet — create one from the form if we have enough to identify it.
+    let name = if name.trim().is_empty() {
+        let hint = format!(
+            "{} {}",
+            year.map(|y| y.to_string()).unwrap_or_default(),
+            make
+        )
+        .trim()
+        .to_string();
+        if hint.is_empty() {
+            if vin.trim().is_empty() {
+                return;
+            }
+            "My vehicle".into()
+        } else {
+            hint
+        }
+    } else {
+        name
+    };
+    s.add_vehicle(name, make, model, year, mileage, vin);
+}
+
+enum RecallOutcome {
+    Vin {
+        vin: String,
+        result: Result<recalls::RecallCheckResult, String>,
+    },
+    Ymm {
+        make: String,
+        model: String,
+        year: u16,
+        result: Result<Vec<recalls::RecallItem>, String>,
+    },
+}
+
+fn apply_recall_outcome(ui: &MainWindow, state: &Arc<Mutex<AppState>>, outcome: RecallOutcome) {
+    match outcome {
+        RecallOutcome::Ymm {
+            make,
+            model,
+            year,
+            result,
+        } => match result {
+            Ok(list) => {
+                let rows: Vec<RecallRow> = list
+                    .iter()
+                    .map(|r| RecallRow {
+                        campaign: r.campaign.clone().into(),
+                        component: r.component.clone().into(),
+                        summary: truncate_ui(&r.summary, 280).into(),
+                        detail: format!("{} · {}", r.report_date, r.manufacturer).into(),
+                    })
+                    .collect();
+                let n = rows.len();
+                ui.set_recalls(rows.as_slice().into());
+                ui.set_recall_status(
+                    format!(
+                        "NHTSA: {n} recall campaign(s) for {year} {make} {model}. Free repairs at dealer when open for your VIN."
+                    )
+                    .into(),
+                );
+                ui.set_status_message(format!("Found {n} recall(s).").into());
+            }
+            Err(e) => {
+                ui.set_recall_status(format!("Recall check failed: {e}").into());
+                ui.set_status_message(format!("Recalls: {e}").into());
+            }
+        },
+        RecallOutcome::Vin { vin, result } => match result {
+            Ok(result) => {
+                let vin_norm = recalls::normalize_vin(&vin).unwrap_or(vin);
+                {
+                    let mut s = state.lock().unwrap();
+                    // If still no vehicle, create one from decode.
+                    if s.selected_vehicle_id.is_none() {
+                        let name = format!(
+                            "{} {} {}",
+                            result.decoded.year.map(|y| y.to_string()).unwrap_or_default(),
+                            result.decoded.make,
+                            result.decoded.model
+                        )
+                        .trim()
+                        .to_string();
+                        s.add_vehicle(
+                            if name.is_empty() {
+                                "My vehicle".into()
+                            } else {
+                                name
+                            },
+                            result.decoded.make.clone(),
+                            result.decoded.model.clone(),
+                            result.decoded.year,
+                            0,
+                            vin_norm.clone(),
+                        );
+                    } else {
+                        s.apply_vin_decode_to_selected(
+                            vin_norm.clone(),
+                            Some(result.decoded.make.clone()),
+                            Some(result.decoded.model.clone()),
+                            result.decoded.year,
+                        );
+                    }
+                }
+                ui.set_form_vin(vin_norm.into());
+                if !result.decoded.make.is_empty() {
+                    ui.set_form_make(result.decoded.make.clone().into());
+                }
+                if !result.decoded.model.is_empty() {
+                    ui.set_form_model(result.decoded.model.clone().into());
+                }
+                if let Some(y) = result.decoded.year {
+                    ui.set_form_year(y.to_string().into());
+                }
+                let rows: Vec<RecallRow> = result
+                    .recalls
+                    .iter()
+                    .map(|r| RecallRow {
+                        campaign: r.campaign.clone().into(),
+                        component: r.component.clone().into(),
+                        summary: truncate_ui(&r.summary, 280).into(),
+                        detail: format!("{} · {}", r.report_date, r.manufacturer).into(),
+                    })
+                    .collect();
+                let n = rows.len();
+                ui.set_recalls(rows.as_slice().into());
+                let status = if n == 0 {
+                    format!(
+                        "No NHTSA campaigns listed for {} {} {}. Still verify open status on NHTSA VIN page.",
+                        result.decoded.year.unwrap_or(0),
+                        result.decoded.make,
+                        result.decoded.model
+                    )
+                } else {
+                    format!(
+                        "{n} campaign(s) for {} {} {}. Use “Open NHTSA VIN page” to see if this VIN still needs repair.",
+                        result.decoded.year.unwrap_or(0),
+                        result.decoded.make,
+                        result.decoded.model
+                    )
+                };
+                ui.set_recall_status(status.into());
+                ui.set_status_message(format!("Recalls: {n} found. Vehicle saved.").into());
+                refresh_ui(ui, &state.lock().unwrap());
+            }
+            Err(e) => {
+                ui.set_recall_status(format!("Recall check failed: {e}").into());
+                ui.set_status_message(format!("Recalls: {e}").into());
+                // Still refresh so a just-saved vehicle appears in the list.
+                refresh_ui(ui, &state.lock().unwrap());
+            }
+        },
+    }
+}
+
 /// Wire Slint properties/callbacks to AppState and show the window.
 pub fn run_app() -> Result<(), slint::PlatformError> {
     let ui = MainWindow::new()?;
-    let state = Rc::new(RefCell::new(AppState::load()));
+    let state = Arc::new(Mutex::new(AppState::load()));
 
     // Lift chrome above system bars (status / 3-button or gesture navigation).
     // Without this, the bottom Settings tab sits under △ ○ □ and cannot be tapped.
@@ -223,10 +412,10 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         ui.set_safe_area_bottom(bottom_dp + 8.0);
     }
 
-    refresh_ui(&ui, &state.borrow());
+    refresh_ui(&ui, &state.lock().unwrap());
     // Due notifications (all vehicles) + schedule future date alarms
     {
-        let mut s = state.borrow_mut();
+        let mut s = state.lock().unwrap();
         fire_due_notifications(&mut s);
         reschedule_reminder_alarms(&s);
     }
@@ -235,7 +424,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let ui_weak = ui.as_weak();
         let state = state.clone();
         ui.on_finish_wizard(move |mode| {
-            let mut s = state.borrow_mut();
+            let mut s = state.lock().unwrap();
             s.wizard_done = true;
             s.user_mode = mode.to_string();
             s.save();
@@ -249,7 +438,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let ui_weak = ui.as_weak();
         let state = state.clone();
         ui.on_navigate(move |page| {
-            let s = state.borrow();
+            let s = state.lock().unwrap();
             if let Some(ui) = ui_weak.upgrade() {
                 ui.set_page(page);
                 refresh_ui(&ui, &s);
@@ -265,7 +454,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let ui_weak = ui.as_weak();
         let state = state.clone();
         ui.on_select_vehicle(move |id| {
-            let mut s = state.borrow_mut();
+            let mut s = state.lock().unwrap();
             s.select_vehicle(id as u64);
             if let Some(ui) = ui_weak.upgrade() {
                 if let Some(v) = s.selected_vehicle() {
@@ -291,7 +480,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_add_vehicle(move || {
             if let Some(ui) = ui_weak.upgrade() {
-                let mut s = state.borrow_mut();
+                let mut s = state.lock().unwrap();
                 let name = ui.get_form_name().to_string();
                 let make = ui.get_form_make().to_string();
                 let model = ui.get_form_model().to_string();
@@ -320,7 +509,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_update_selected_mileage(move || {
             if let Some(ui) = ui_weak.upgrade() {
-                let mut s = state.borrow_mut();
+                let mut s = state.lock().unwrap();
                 let Some(id) = s.selected_vehicle_id else {
                     ui.set_status_message("Select a vehicle first.".into());
                     return;
@@ -345,7 +534,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_update_selected_vehicle(move || {
             if let Some(ui) = ui_weak.upgrade() {
-                let mut s = state.borrow_mut();
+                let mut s = state.lock().unwrap();
                 let u = s.unit_system();
                 let miles = ui
                     .get_form_mileage()
@@ -371,108 +560,50 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_check_recalls(move || {
             if let Some(ui) = ui_weak.upgrade() {
+                // Persist form to disk first so a crash/network kill cannot wipe typed data.
+                ensure_vehicle_from_form(&ui, &state);
+
                 let mut vin = ui.get_form_vin().to_string();
                 if vin.trim().is_empty() {
-                    if let Some(v) = state.borrow().selected_vehicle() {
+                    if let Some(v) = state.lock().unwrap().selected_vehicle() {
                         vin = v.vin.clone();
                     }
                 }
-                if vin.trim().is_empty() {
-                    // Fallback: make/model/year without VIN
-                    let make = ui.get_form_make().to_string();
-                    let model = ui.get_form_model().to_string();
-                    let year: u16 = ui.get_form_year().parse().unwrap_or(0);
-                    ui.set_recall_status("Checking NHTSA by make/model/year…".into());
-                    ui.set_recalls(Vec::<RecallRow>::new().as_slice().into());
-                    match recalls::check_recalls_ymm(&make, &model, year) {
-                        Ok(list) => {
-                            let rows: Vec<RecallRow> = list
-                                .iter()
-                                .map(|r| RecallRow {
-                                    campaign: r.campaign.clone().into(),
-                                    component: r.component.clone().into(),
-                                    summary: truncate_ui(&r.summary, 280).into(),
-                                    detail: format!("{} · {}", r.report_date, r.manufacturer).into(),
-                                })
-                                .collect();
-                            let n = rows.len();
-                            ui.set_recalls(rows.as_slice().into());
-                            ui.set_recall_status(
-                                format!(
-                                    "NHTSA: {n} recall campaign(s) for {year} {make} {model}. Free repairs at dealer when open for your VIN."
-                                )
-                                .into(),
-                            );
-                            ui.set_status_message(format!("Found {n} recall(s).").into());
-                        }
-                        Err(e) => {
-                            ui.set_recall_status(format!("Recall check failed: {e}").into());
-                            ui.set_status_message(format!("Recalls: {e}").into());
-                        }
-                    }
-                    return;
-                }
-                ui.set_recall_status("Contacting NHTSA (VIN decode + recalls)…".into());
+                let make = ui.get_form_make().to_string();
+                let model = ui.get_form_model().to_string();
+                let year: u16 = ui.get_form_year().parse().unwrap_or(0);
+
                 ui.set_recalls(Vec::<RecallRow>::new().as_slice().into());
-                match recalls::check_recalls_for_vin(&vin) {
-                    Ok(result) => {
-                        let vin_norm = recalls::normalize_vin(&vin).unwrap_or(vin.clone());
-                        // Persist VIN + fill empty make/model/year
-                        {
-                            let mut s = state.borrow_mut();
-                            s.apply_vin_decode_to_selected(
-                                vin_norm.clone(),
-                                Some(result.decoded.make.clone()),
-                                Some(result.decoded.model.clone()),
-                                result.decoded.year,
-                            );
-                        }
-                        ui.set_form_vin(vin_norm.into());
-                        if !result.decoded.make.is_empty() {
-                            ui.set_form_make(result.decoded.make.clone().into());
-                        }
-                        if !result.decoded.model.is_empty() {
-                            ui.set_form_model(result.decoded.model.clone().into());
-                        }
-                        if let Some(y) = result.decoded.year {
-                            ui.set_form_year(y.to_string().into());
-                        }
-                        let rows: Vec<RecallRow> = result
-                            .recalls
-                            .iter()
-                            .map(|r| RecallRow {
-                                campaign: r.campaign.clone().into(),
-                                component: r.component.clone().into(),
-                                summary: truncate_ui(&r.summary, 280).into(),
-                                detail: format!("{} · {}", r.report_date, r.manufacturer).into(),
-                            })
-                            .collect();
-                        let n = rows.len();
-                        ui.set_recalls(rows.as_slice().into());
-                        let status = if n == 0 {
-                            format!(
-                                "No NHTSA campaigns listed for {} {} {}. Still verify open status on NHTSA VIN page.",
-                                result.decoded.year.unwrap_or(0),
-                                result.decoded.make,
-                                result.decoded.model
-                            )
-                        } else {
-                            format!(
-                                "{n} campaign(s) for {} {} {}. Use “Open NHTSA VIN page” to see if this VIN still needs repair.",
-                                result.decoded.year.unwrap_or(0),
-                                result.decoded.make,
-                                result.decoded.model
-                            )
-                        };
-                        ui.set_recall_status(status.into());
-                        ui.set_status_message(format!("Recalls: {n} found.").into());
-                        refresh_ui(&ui, &state.borrow());
-                    }
-                    Err(e) => {
-                        ui.set_recall_status(format!("Recall check failed: {e}").into());
-                        ui.set_status_message(format!("Recalls: {e}").into());
-                    }
+                if vin.trim().is_empty() {
+                    ui.set_recall_status("Checking NHTSA by make/model/year…".into());
+                } else {
+                    ui.set_recall_status("Contacting NHTSA (VIN decode + recalls)…".into());
                 }
+                ui.set_status_message("Checking recalls…".into());
+
+                let ui_weak = ui_weak.clone();
+                let state = state.clone();
+                // Network must not run on the UI thread (Android force-closes / ANR).
+                std::thread::spawn(move || {
+                    let outcome = if vin.trim().is_empty() {
+                        RecallOutcome::Ymm {
+                            make: make.clone(),
+                            model: model.clone(),
+                            year,
+                            result: recalls::check_recalls_ymm(&make, &model, year),
+                        }
+                    } else {
+                        RecallOutcome::Vin {
+                            vin: vin.clone(),
+                            result: recalls::check_recalls_for_vin(&vin),
+                        }
+                    };
+                    let _ = slint::invoke_from_event_loop(move || {
+                        if let Some(ui) = ui_weak.upgrade() {
+                            apply_recall_outcome(&ui, &state, outcome);
+                        }
+                    });
+                });
             }
         });
     }
@@ -484,7 +615,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
             if let Some(ui) = ui_weak.upgrade() {
                 let mut vin = ui.get_form_vin().to_string();
                 if vin.trim().is_empty() {
-                    if let Some(v) = state.borrow().selected_vehicle() {
+                    if let Some(v) = state.lock().unwrap().selected_vehicle() {
                         vin = v.vin.clone();
                     }
                 }
@@ -504,7 +635,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_delete_selected_vehicle(move || {
             if let Some(ui) = ui_weak.upgrade() {
-                let mut s = state.borrow_mut();
+                let mut s = state.lock().unwrap();
                 let Some(id) = s.selected_vehicle_id else {
                     ui.set_status_message("Select a vehicle first.".into());
                     return;
@@ -520,7 +651,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let ui_weak = ui.as_weak();
         let state = state.clone();
         ui.on_delete_service(move |id| {
-            let mut s = state.borrow_mut();
+            let mut s = state.lock().unwrap();
             s.delete_service(id as u64);
             if let Some(ui) = ui_weak.upgrade() {
                 ui.set_status_message("Service deleted.".into());
@@ -533,7 +664,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let ui_weak = ui.as_weak();
         let state = state.clone();
         ui.on_delete_note(move |id| {
-            let mut s = state.borrow_mut();
+            let mut s = state.lock().unwrap();
             s.delete_note(id as u64);
             if let Some(ui) = ui_weak.upgrade() {
                 ui.set_status_message("Note deleted.".into());
@@ -547,7 +678,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_save_tread(move || {
             if let Some(ui) = ui_weak.upgrade() {
-                let mut s = state.borrow_mut();
+                let mut s = state.lock().unwrap();
                 let u = s.unit_system();
                 let parse = |v: slint::SharedString| {
                     let t = v.to_string();
@@ -595,7 +726,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     return;
                 }
                 let p = parse_tire_receipt_text(&paste);
-                let u = state.borrow().unit_system();
+                let u = state.lock().unwrap().unit_system();
                 let mut filled = 0u32;
                 if let Some(b) = p.brand {
                     ui.set_tire_brand(b.into());
@@ -634,7 +765,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_save_tire_miles(move || {
             if let Some(ui) = ui_weak.upgrade() {
-                let mut s = state.borrow_mut();
+                let mut s = state.lock().unwrap();
                 let u = s.unit_system();
                 let parse = |v: slint::SharedString| {
                     let t = v.to_string();
@@ -662,7 +793,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_fill_service_template(move |kind| {
             if let Some(ui) = ui_weak.upgrade() {
-                let s = state.borrow();
+                let s = state.lock().unwrap();
                 let u = s.unit_system();
                 let lang = resolve_lang(s.language_pref(), &system_locale());
                 let odo = s
@@ -721,7 +852,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_add_service(move || {
             if let Some(ui) = ui_weak.upgrade() {
-                let mut s = state.borrow_mut();
+                let mut s = state.lock().unwrap();
                 if s.vehicles.is_empty() {
                     ui.set_status_message("Add a vehicle first.".into());
                     return;
@@ -785,7 +916,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         ui.on_set_source(move |src| {
             if let Some(ui) = ui_weak.upgrade() {
                 ui.set_svc_source(src);
-                refresh_ui(&ui, &state.borrow());
+                refresh_ui(&ui, &state.lock().unwrap());
             }
         });
     }
@@ -794,7 +925,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let ui_weak = ui.as_weak();
         let state = state.clone();
         ui.on_set_pattern(move |pattern| {
-            let mut s = state.borrow_mut();
+            let mut s = state.lock().unwrap();
             s.set_tire_pattern(pattern.to_string());
             if let Some(ui) = ui_weak.upgrade() {
                 refresh_ui(&ui, &s);
@@ -806,7 +937,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let ui_weak = ui.as_weak();
         let state = state.clone();
         ui.on_set_include_spare(move |include| {
-            let mut s = state.borrow_mut();
+            let mut s = state.lock().unwrap();
             s.set_include_spare(include);
             if let Some(ui) = ui_weak.upgrade() {
                 ui.set_status_message(
@@ -827,7 +958,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_set_spare_label(move || {
             if let Some(ui) = ui_weak.upgrade() {
-                let mut s = state.borrow_mut();
+                let mut s = state.lock().unwrap();
                 s.set_spare_label(ui.get_tire_spare().to_string());
                 refresh_ui(&ui, &s);
             }
@@ -838,7 +969,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let ui_weak = ui.as_weak();
         let state = state.clone();
         ui.on_apply_rotation(move || {
-            let mut s = state.borrow_mut();
+            let mut s = state.lock().unwrap();
             let with_spare = s.selected_tire_config().include_spare;
             s.apply_tire_rotation();
             s.save();
@@ -860,7 +991,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let ui_weak = ui.as_weak();
         let state = state.clone();
         ui.on_set_user_mode(move |mode| {
-            let mut s = state.borrow_mut();
+            let mut s = state.lock().unwrap();
             s.user_mode = mode.to_string();
             s.save();
             if let Some(ui) = ui_weak.upgrade() {
@@ -873,7 +1004,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let ui_weak = ui.as_weak();
         let state = state.clone();
         ui.on_set_units(move |units| {
-            let mut s = state.borrow_mut();
+            let mut s = state.lock().unwrap();
             s.set_units(&units);
             if let Some(ui) = ui_weak.upgrade() {
                 ui.set_status_message(format!(
@@ -889,7 +1020,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let ui_weak = ui.as_weak();
         let state = state.clone();
         ui.on_set_language(move |lang| {
-            let mut s = state.borrow_mut();
+            let mut s = state.lock().unwrap();
             s.set_language(&lang);
             if let Some(ui) = ui_weak.upgrade() {
                 let pref = s.language_pref();
@@ -913,7 +1044,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let ui_weak = ui.as_weak();
         let state = state.clone();
         ui.on_set_dyslexia_font(move |enabled| {
-            let mut s = state.borrow_mut();
+            let mut s = state.lock().unwrap();
             s.set_dyslexia_font(enabled);
             if let Some(ui) = ui_weak.upgrade() {
                 ui.set_status_message(
@@ -933,7 +1064,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let ui_weak = ui.as_weak();
         let state = state.clone();
         ui.on_set_dark_mode(move |mode| {
-            let mut s = state.borrow_mut();
+            let mut s = state.lock().unwrap();
             let mode = mode.to_string();
             s.dark_mode = if mode.eq_ignore_ascii_case("DARK") {
                 "DARK".into()
@@ -952,7 +1083,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_save_part(move || {
             if let Some(ui) = ui_weak.upgrade() {
-                let mut s = state.borrow_mut();
+                let mut s = state.lock().unwrap();
                 let u = s.unit_system();
                 let mi = ui
                     .get_part_mileage()
@@ -987,7 +1118,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_save_component(move || {
             if let Some(ui) = ui_weak.upgrade() {
-                let mut s = state.borrow_mut();
+                let mut s = state.lock().unwrap();
                 let u = s.unit_system();
                 let mi = ui
                     .get_comp_mileage()
@@ -1011,7 +1142,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_add_note(move || {
             if let Some(ui) = ui_weak.upgrade() {
-                let mut s = state.borrow_mut();
+                let mut s = state.lock().unwrap();
                 s.add_note(ui.get_note_title().to_string(), ui.get_note_body().to_string());
                 ui.set_note_title("".into());
                 ui.set_note_body("".into());
@@ -1026,7 +1157,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_add_reminder(move || {
             if let Some(ui) = ui_weak.upgrade() {
-                let mut s = state.borrow_mut();
+                let mut s = state.lock().unwrap();
                 let u = s.unit_system();
                 let due_mi = ui
                     .get_rem_mileage()
@@ -1053,7 +1184,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_complete_reminder(move |id| {
             if let Some(ui) = ui_weak.upgrade() {
-                let mut s = state.borrow_mut();
+                let mut s = state.lock().unwrap();
                 let oil = ui.get_oil_level_choice().to_string();
                 cancel_app_wake(50000 + (id % 10000));
                 s.complete_reminder(id as u64, Some(&oil));
@@ -1071,7 +1202,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
             if let Some(ui) = ui_weak.upgrade() {
                 let choice_s = choice.to_string();
                 ui.set_oil_level_choice(choice_s.clone().into());
-                let s = state.borrow();
+                let s = state.lock().unwrap();
                 let lang = resolve_lang(s.language_pref(), &system_locale());
                 let u = s.unit_system();
                 ui.set_oil_level_display(oil_level_label(lang, u, &choice_s).into());
@@ -1097,7 +1228,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_add_photo(move || {
             if let Some(ui) = ui_weak.upgrade() {
-                let mut s = state.borrow_mut();
+                let mut s = state.lock().unwrap();
                 s.add_issue_photo(
                     ui.get_photo_caption().to_string(),
                     ui.get_photo_notes().to_string(),
@@ -1117,7 +1248,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_save_receipt(move || {
             if let Some(ui) = ui_weak.upgrade() {
-                let mut s = state.borrow_mut();
+                let mut s = state.lock().unwrap();
                 if s.selected_vehicle_id.is_none() {
                     ui.set_status_message("Select a vehicle first.".into());
                     return;
@@ -1169,7 +1300,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let ui_weak = ui.as_weak();
         let state = state.clone();
         ui.on_delete_tire_purchase(move |id| {
-            let mut s = state.borrow_mut();
+            let mut s = state.lock().unwrap();
             s.delete_tire_purchase(id as u64);
             if let Some(ui) = ui_weak.upgrade() {
                 ui.set_status_message("Tire purchase deleted.".into());
@@ -1183,7 +1314,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_save_tire_purchase(move || {
             if let Some(ui) = ui_weak.upgrade() {
-                let mut s = state.borrow_mut();
+                let mut s = state.lock().unwrap();
                 let u = s.unit_system();
                 let mi = ui
                     .get_tire_buy_mileage()
@@ -1214,7 +1345,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let ui_weak = ui.as_weak();
         let state = state.clone();
         ui.on_export_csv(move || {
-            let s = state.borrow();
+            let s = state.lock().unwrap();
             let csv = s.export_csv();
             let path = AppState::data_path().with_file_name("export.csv");
             let _ = std::fs::write(&path, &csv);
@@ -1231,7 +1362,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let ui_weak = ui.as_weak();
         let state = state.clone();
         ui.on_share_csv(move || {
-            let s = state.borrow();
+            let s = state.lock().unwrap();
             let csv = s.export_csv();
             share_text("FixItGarage CSV export", &csv);
             if let Some(ui) = ui_weak.upgrade() {
@@ -1244,7 +1375,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let ui_weak = ui.as_weak();
         let state = state.clone();
         ui.on_backup_json(move || {
-            let s = state.borrow();
+            let s = state.lock().unwrap();
             match s.write_backup_file() {
                 Ok(path) => {
                     if let Some(ui) = ui_weak.upgrade() {
@@ -1270,9 +1401,9 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                 let path = ui.get_backup_path().to_string();
                 match AppState::restore_from_file(&path) {
                     Ok(new_state) => {
-                        *state.borrow_mut() = new_state;
+                        *state.lock().unwrap() = new_state;
                         ui.set_status_message("Backup restored.".into());
-                        refresh_ui(&ui, &state.borrow());
+                        refresh_ui(&ui, &state.lock().unwrap());
                     }
                     Err(e) => {
                         ui.set_status_message(format!("Restore failed: {e}").into());
@@ -1286,7 +1417,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let ui_weak = ui.as_weak();
         let state = state.clone();
         ui.on_share_backup(move || {
-            let s = state.borrow();
+            let s = state.lock().unwrap();
             match s.write_backup_file() {
                 Ok(path) => {
                     if let Ok(json) = std::fs::read_to_string(&path) {
@@ -1310,7 +1441,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let ui_weak = ui.as_weak();
         let state = state.clone();
         ui.on_share_backup_to(move |target| {
-            let s = state.borrow();
+            let s = state.lock().unwrap();
             let target = target.to_string();
             match s.write_backup_file() {
                 Ok(path) => {
@@ -1423,7 +1554,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                 };
                 match ondevice_ocr::ocr_image_path(&path) {
                     Ok(text) => {
-                        let s = state.borrow();
+                        let s = state.lock().unwrap();
                         apply_receipt_ocr_text(&ui, &s, &text);
                     }
                     Err(e) => ui.set_status_message(format!("On-device OCR: {e}").into()),
@@ -1457,7 +1588,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                 };
                 match tread_cv::estimate_tread_from_image(&path) {
                     Ok(est) => {
-                        let u = state.borrow().unit_system();
+                        let u = state.lock().unwrap().unit_system();
                         let shown = mm_to_display(est.depth_mm, u);
                         let s = format!("{shown:.1}");
                         ui.set_tread_fl(s.clone().into());
@@ -1489,7 +1620,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_apply_pending_ocr(move || {
             if let Some(ui) = ui_weak.upgrade() {
-                let s = state.borrow();
+                let s = state.lock().unwrap();
                 let tire = ocr_target() == "tire" || ui.get_page() == 3;
                 if try_consume_pending_ocr(&ui, &s, tire) {
                     // status set inside helper
@@ -1518,7 +1649,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
             if let Some(ui) = ui_weak.upgrade() {
                 let text = ui.get_rcp_paste().to_string();
                 let p = parse_receipt_text(&text);
-                let u = state.borrow().unit_system();
+                let u = state.lock().unwrap().unit_system();
                 let mut filled = 0u32;
                 if let Some(d) = p.date {
                     ui.set_rcp_date(d.into());
@@ -1574,7 +1705,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                         ui.set_rcp_paste(text.clone().into());
                         // One-tap: paste + auto-fill in the same action
                         let p = parse_receipt_text(&text);
-                        let u = state.borrow().unit_system();
+                        let u = state.lock().unwrap().unit_system();
                         let mut filled = 0u32;
                         if let Some(d) = p.date {
                             ui.set_rcp_date(d.into());
@@ -1632,7 +1763,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     Some(text) => {
                         ui.set_tire_rcp_paste(text.clone().into());
                         let p = parse_tire_receipt_text(&text);
-                        let u = state.borrow().unit_system();
+                        let u = state.lock().unwrap().unit_system();
                         let mut filled = 0u32;
                         if let Some(b) = p.brand {
                             ui.set_tire_brand(b.into());
@@ -1689,7 +1820,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_save_cloud_settings(move || {
             if let Some(ui) = ui_weak.upgrade() {
-                let mut s = state.borrow_mut();
+                let mut s = state.lock().unwrap();
                 let pass = ui.get_cloud_pass().to_string();
                 match s.set_cloud_settings(
                     ui.get_cloud_url().to_string(),
@@ -1721,7 +1852,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_upload_cloud_backup(move || {
             if let Some(ui) = ui_weak.upgrade() {
-                let s = state.borrow();
+                let s = state.lock().unwrap();
                 match s.write_backup_file() {
                     Ok(path) => match std::fs::read(&path) {
                         Ok(bytes) => {
@@ -1754,7 +1885,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         ui.on_set_service_search(move |q| {
             if let Some(ui) = ui_weak.upgrade() {
                 ui.set_service_search(q);
-                refresh_ui(&ui, &state.borrow());
+                refresh_ui(&ui, &state.lock().unwrap());
             }
         });
     }
@@ -1772,7 +1903,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_create_seller_packet(move || {
             if let Some(ui) = ui_weak.upgrade() {
-                let s = state.borrow();
+                let s = state.lock().unwrap();
                 match seller_packet::build_seller_packet(&s) {
                     Ok((path, text)) => {
                         // Also write text alongside PDF
@@ -1815,7 +1946,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_share_seller_summary(move || {
             if let Some(ui) = ui_weak.upgrade() {
-                let s = state.borrow();
+                let s = state.lock().unwrap();
                 match seller_packet::build_seller_packet(&s) {
                     Ok((path, text)) => {
                         let subject = format!(

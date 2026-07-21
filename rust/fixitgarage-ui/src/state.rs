@@ -405,6 +405,11 @@ pub struct FeatureFlags {
 
 impl AppState {
     pub fn data_path() -> PathBuf {
+        crate::platform::app_data_dir().join("state.json")
+    }
+
+    /// Older builds may have written under dirs::data_dir()/fixitgarage (unreliable on Android).
+    fn legacy_data_path() -> PathBuf {
         dirs::data_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join("fixitgarage")
@@ -413,11 +418,25 @@ impl AppState {
 
     pub fn load() -> Self {
         let path = Self::data_path();
-        if let Ok(bytes) = std::fs::read(&path) {
-            if let Ok(mut state) = serde_json::from_slice::<AppState>(&bytes) {
+        // Prefer primary path; migrate from legacy location if needed.
+        let try_load = |p: &std::path::Path| -> Option<AppState> {
+            let bytes = std::fs::read(p).ok()?;
+            serde_json::from_slice::<AppState>(&bytes).ok()
+        };
+        if let Some(mut state) = try_load(&path) {
+            state.ensure_selection();
+            state.migrate_tire_configs();
+            state.ensure_oil_reminders();
+            return state;
+        }
+        let legacy = Self::legacy_data_path();
+        if legacy != path {
+            if let Some(mut state) = try_load(&legacy) {
                 state.ensure_selection();
                 state.migrate_tire_configs();
                 state.ensure_oil_reminders();
+                // Copy into durable Android files dir (or correct desktop path).
+                state.save();
                 return state;
             }
         }
@@ -427,10 +446,30 @@ impl AppState {
     pub fn save(&self) {
         let path = Self::data_path();
         if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                eprintln!("FixItGarage: create data dir failed: {e} ({})", parent.display());
+                return;
+            }
         }
-        if let Ok(json) = serde_json::to_vec_pretty(self) {
-            let _ = std::fs::write(path, json);
+        match serde_json::to_vec_pretty(self) {
+            Ok(json) => {
+                // Atomic-ish write: temp then rename.
+                let tmp = path.with_extension("json.tmp");
+                if let Err(e) = std::fs::write(&tmp, &json) {
+                    eprintln!("FixItGarage: write state failed: {e} ({})", tmp.display());
+                    return;
+                }
+                if let Err(e) = std::fs::rename(&tmp, &path) {
+                    // Some Android FS may not support rename across; try direct write.
+                    if let Err(e2) = std::fs::write(&path, &json) {
+                        eprintln!(
+                            "FixItGarage: save state failed: rename {e}; write {e2} ({})",
+                            path.display()
+                        );
+                    }
+                }
+            }
+            Err(e) => eprintln!("FixItGarage: serialize state failed: {e}"),
         }
     }
 
