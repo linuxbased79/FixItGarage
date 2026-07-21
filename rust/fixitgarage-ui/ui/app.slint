@@ -527,10 +527,50 @@ export component MainWindow inherits Window {
     in-out property <string> tr-receipt-send-ocr: "Send photo to OCR app";
     in-out property <string> tr-receipt-title-ph: "Title (e.g. Oil change shop)";
     in-out property <string> tr-rem-add: "Add reminder";
+    in-out property <string> tr-rem-add-body: "Date YYYY-MM-DD and/or odometer. On Android, date dues schedule a wake alarm so the app can notify when due.";
     in-out property <string> tr-rem-due-date: "Due date YYYY-MM-DD";
     in-out property <string> tr-rem-reboot-hint: "Date-based alarms are saved on this device. After a phone restart, FixItGarage re-registers them automatically.";
     in-out property <string> tr-rem-save: "Save reminder";
     in-out property <string> tr-rem-title: "Reminders";
+    in-out property <string> tr-rem-mark-done: "Mark done";
+    in-out property <string> tr-rem-log-mark-done: "Log level & mark done";
+    in-out property <string> tr-oil-intro: "Oil level checks every 3 months are auto-created for new vehicles. Pick how full the oil is, then mark done.";
+    in-out property <string> tr-oil-dipstick: "Oil level (dipstick)";
+    in-out property <string> tr-oil-pick: "When you check the oil, choose the level that matches the stick:";
+    in-out property <string> tr-oil-selected: "Selected:";
+    in-out property <string> tr-oil-will-log: "Will log oil as:";
+    // Display label for currently selected oil level (localized; storage stays English canonical)
+    in-out property <string> oil-level-display: "Full";
+    in-out property <string> tr-tires-four-only: "4 tires only";
+    in-out property <string> tr-tires-pat-fwd: "Fwd cross";
+    in-out property <string> tr-tires-pat-x: "X";
+    in-out property <string> tr-tires-pat-rear: "Rear cross";
+    in-out property <string> tr-tires-pat-side: "Side";
+    in-out property <string> tr-tires-patterns-4: "4-tire patterns (spare stays put)";
+    in-out property <string> tr-tires-patterns-5: "5-tire patterns (spare included)";
+    in-out property <string> tr-tires-tread-moves: "Tread depths and mileage per tire move with each corner when you apply.";
+    in-out property <string> tr-tires-spare-id-ph: "Spare tire ID (e.g. E)";
+    in-out property <string> tr-tires-five-cycle: "5-tire patterns cycle the spare into the corners so rubber wears evenly.";
+    in-out property <string> tr-wipers-intro: "Many vehicles need different blade sizes. Labels use left/right as when sitting in the car (driver = left, passenger = right).";
+    in-out property <string> tr-wipers-driver: "Driver side (left)";
+    in-out property <string> tr-wipers-passenger: "Passenger side (right)";
+    in-out property <string> tr-wipers-rear: "Rear";
+    in-out property <string> tr-wipers-update: "Update blade";
+    in-out property <string> tr-wipers-update-body: "Pick which side, then enter size (e.g. 26 in) and install date.";
+    in-out property <string> tr-wipers-driver-btn: "Driver (left)";
+    in-out property <string> tr-wipers-passenger-btn: "Passenger (right)";
+    in-out property <string> tr-wipers-size-ph: "Blade size (e.g. 26 in / 650 mm)";
+    in-out property <string> tr-wipers-install-date-ph: "Install date YYYY-MM-DD";
+    in-out property <string> tr-wipers-at-install: "at install";
+    in-out property <string> tr-wipers-save: "Save this blade";
+    in-out property <string> tr-brakes-intro: "Saving pads/fluid creates smart reminders (~30k mi / 2 years). Check Reminders for due items.";
+    in-out property <string> tr-brakes-front-pads: "Front pads";
+    in-out property <string> tr-brakes-rear-pads: "Rear pads";
+    in-out property <string> tr-brakes-fluid: "Brake fluid";
+    in-out property <string> tr-brakes-fr-pads: "Fr pads";
+    in-out property <string> tr-brakes-rr-pads: "Rr pads";
+    in-out property <string> tr-brakes-fluid-btn: "Fluid";
+    in-out property <string> tr-brakes-save: "Save brakes";
     in-out property <string> tr-settings-about-body: "FixItGarage — security hardening: backups, HTTPS WebDAV, no Auto Backup.";
     in-out property <string> tr-settings-accessibility: "Accessibility · reading";
     in-out property <string> tr-settings-accessibility-body: "";
@@ -975,7 +1015,7 @@ export component MainWindow inherits Window {
                             }
                         }
                         Text {
-                            text: "Tread depths and mileage per tire move with each corner when you apply.";
+                            text: root.tr-tires-tread-moves;
                             font-size: 12px; color: Theme.text-muted; wrap: word-wrap;
                         }
                     }
@@ -984,7 +1024,7 @@ export component MainWindow inherits Window {
                         HorizontalBox {
                             spacing: 6px;
                             ChoiceBtn {
-                                label: "4 tires only";
+                                label: root.tr-tires-four-only;
                                 active: !root.include-spare;
                                 clicked => { root.set-include-spare(false); }
                             }
@@ -995,26 +1035,26 @@ export component MainWindow inherits Window {
                             }
                         }
                         if root.include-spare: LineEdit {
-                            placeholder-text: "Spare tire ID (e.g. E)";
+                            placeholder-text: root.tr-tires-spare-id-ph;
                             text <=> root.tire-spare;
                             edited => { root.set-spare-label(); }
                         }
                         if root.include-spare: Text {
-                            text: "5-tire patterns cycle the spare into the corners so rubber wears evenly.";
+                            text: root.tr-tires-five-cycle;
                             font-size: 12px; color: Theme.text-muted; wrap: word-wrap;
                         }
                     }
                     if show-tires: Card {
-                        title: root.tr-tires-rotation-pattern; body: root.include-spare ? "5-tire patterns (spare included)" : "4-tire patterns (spare stays put)";
+                        title: root.tr-tires-rotation-pattern; body: root.include-spare ? root.tr-tires-patterns-5 : root.tr-tires-patterns-4;
                         HorizontalBox {
                             spacing: 6px;
-                            ChoiceBtn { label: "Fwd cross"; active: root.tire-pattern == "forward_cross"; clicked => { root.set-pattern("forward_cross"); } }
-                            ChoiceBtn { label: "X"; active: root.tire-pattern == "x_pattern"; clicked => { root.set-pattern("x_pattern"); } }
+                            ChoiceBtn { label: root.tr-tires-pat-fwd; active: root.tire-pattern == "forward_cross"; clicked => { root.set-pattern("forward_cross"); } }
+                            ChoiceBtn { label: root.tr-tires-pat-x; active: root.tire-pattern == "x_pattern"; clicked => { root.set-pattern("x_pattern"); } }
                         }
                         HorizontalBox {
                             spacing: 6px;
-                            ChoiceBtn { label: "Rear cross"; active: root.tire-pattern == "rearward_cross"; clicked => { root.set-pattern("rearward_cross"); } }
-                            ChoiceBtn { label: "Side"; active: root.tire-pattern == "side_to_side"; clicked => { root.set-pattern("side_to_side"); } }
+                            ChoiceBtn { label: root.tr-tires-pat-rear; active: root.tire-pattern == "rearward_cross"; clicked => { root.set-pattern("rearward_cross"); } }
+                            ChoiceBtn { label: root.tr-tires-pat-side; active: root.tire-pattern == "side_to_side"; clicked => { root.set-pattern("side_to_side"); } }
                         }
                         Button { text: root.tr-tires-apply-rotation; primary: true; clicked => { root.apply-rotation(); } }
                     }
@@ -1434,43 +1474,43 @@ export component MainWindow inherits Window {
                     PageTitle { label: root.tr-page-wipers; }
                     VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text {
-                        text: "Many vehicles need different blade sizes. Labels use left/right as when sitting in the car (driver = left, passenger = right).";
+                        text: root.tr-wipers-intro;
                         font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
                     }
                     Card {
-                        title: "Driver side (left)";
+                        title: root.tr-wipers-driver;
                         body: sum-wiper-driver;
                     }
                     Card {
-                        title: "Passenger side (right)";
+                        title: root.tr-wipers-passenger;
                         body: sum-wiper-passenger;
                     }
                     Card {
-                        title: "Rear";
+                        title: root.tr-wipers-rear;
                         body: sum-wiper-rear;
                     }
                     Card {
-                        title: "Update blade";
-                        body: "Pick which side, then enter size (e.g. 26 in) and install date.";
+                        title: root.tr-wipers-update;
+                        body: root.tr-wipers-update-body;
                         ChoiceBtn {
-                            label: "Driver (left)";
+                            label: root.tr-wipers-driver-btn;
                             active: root.comp-type == "WIPER_DRIVER";
                             clicked => { root.comp-type = "WIPER_DRIVER"; }
                         }
                         ChoiceBtn {
-                            label: "Passenger (right)";
+                            label: root.tr-wipers-passenger-btn;
                             active: root.comp-type == "WIPER_PASSENGER";
                             clicked => { root.comp-type = "WIPER_PASSENGER"; }
                         }
                         ChoiceBtn {
-                            label: "Rear";
+                            label: root.tr-wipers-rear;
                             active: root.comp-type == "WIPER_REAR";
                             clicked => { root.comp-type = "WIPER_REAR"; }
                         }
-                        LineEdit { placeholder-text: "Blade size (e.g. 26 in / 650 mm)"; text <=> root.comp-notes; }
-                        LineEdit { placeholder-text: "Install date YYYY-MM-DD"; text <=> root.comp-date; }
-                        LineEdit { placeholder-text: root.label-distance + " at install"; text <=> root.comp-mileage; }
-                        Button { text: "Save this blade"; primary: true; clicked => { root.save-component(); } }
+                        LineEdit { placeholder-text: root.tr-wipers-size-ph; text <=> root.comp-notes; }
+                        LineEdit { placeholder-text: root.tr-wipers-install-date-ph; text <=> root.comp-date; }
+                        LineEdit { placeholder-text: root.label-distance + " " + root.tr-wipers-at-install; text <=> root.comp-mileage; }
+                        Button { text: root.tr-wipers-save; primary: true; clicked => { root.save-component(); } }
                     }
                     Button { text: root.tr-common-back-more; clicked => { root.navigate(5); } }
                 }
@@ -1484,23 +1524,23 @@ export component MainWindow inherits Window {
                     PageTitle { label: root.tr-page-brakes; }
                     VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text {
-                        text: "Saving pads/fluid creates smart reminders (~30k mi / 2 years). Check Reminders for due items.";
+                        text: root.tr-brakes-intro;
                         font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
                     }
-                    Card { title: "Front pads"; body: sum-brake-f; }
-                    Card { title: "Rear pads"; body: sum-brake-r; }
-                    Card { title: "Brake fluid"; body: sum-brake-fluid; }
+                    Card { title: root.tr-brakes-front-pads; body: sum-brake-f; }
+                    Card { title: root.tr-brakes-rear-pads; body: sum-brake-r; }
+                    Card { title: root.tr-brakes-fluid; body: sum-brake-fluid; }
                     Card {
-                        title: "Update"; body: "";
+                        title: root.tr-common-update; body: "";
                         HorizontalBox {
-                            ChoiceBtn { label: "Fr pads"; active: root.comp-type == "BRAKE_PADS_FRONT"; clicked => { root.comp-type = "BRAKE_PADS_FRONT"; } }
-                            ChoiceBtn { label: "Rr pads"; active: root.comp-type == "BRAKE_PADS_REAR"; clicked => { root.comp-type = "BRAKE_PADS_REAR"; } }
+                            ChoiceBtn { label: root.tr-brakes-fr-pads; active: root.comp-type == "BRAKE_PADS_FRONT"; clicked => { root.comp-type = "BRAKE_PADS_FRONT"; } }
+                            ChoiceBtn { label: root.tr-brakes-rr-pads; active: root.comp-type == "BRAKE_PADS_REAR"; clicked => { root.comp-type = "BRAKE_PADS_REAR"; } }
                         }
-                        ChoiceBtn { label: "Fluid"; active: root.comp-type == "BRAKE_FLUID"; clicked => { root.comp-type = "BRAKE_FLUID"; } }
-                        LineEdit { placeholder-text: "Service date YYYY-MM-DD"; text <=> root.comp-date; }
+                        ChoiceBtn { label: root.tr-brakes-fluid-btn; active: root.comp-type == "BRAKE_FLUID"; clicked => { root.comp-type = "BRAKE_FLUID"; } }
+                        LineEdit { placeholder-text: root.tr-common-date-ymd; text <=> root.comp-date; }
                         LineEdit { placeholder-text: root.label-distance; text <=> root.comp-mileage; }
-                        LineEdit { placeholder-text: "Notes"; text <=> root.comp-notes; }
-                        Button { text: "Save brakes"; primary: true; clicked => { root.save-component(); } }
+                        LineEdit { placeholder-text: root.tr-common-notes; text <=> root.comp-notes; }
+                        Button { text: root.tr-brakes-save; primary: true; clicked => { root.save-component(); } }
                     }
                     Button { text: root.tr-common-back-more; clicked => { root.navigate(5); } }
                 }
@@ -1535,69 +1575,69 @@ export component MainWindow inherits Window {
                     PageTitle { label: root.tr-page-reminders; }
                     VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text {
-                        text: "Oil level checks every 3 months are auto-created for new vehicles. Pick how full the oil is, then mark done.";
+                        text: root.tr-oil-intro;
                         font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
                     }
 
                     Card {
-                        title: "Oil level (dipstick)";
+                        title: root.tr-oil-dipstick;
                         body: last-oil-level-summary;
                         Text {
-                            text: "When you check the oil, choose the level that matches the stick:";
+                            text: root.tr-oil-pick;
                             font-size: 13px; color: Theme.text; wrap: word-wrap;
                         }
-                        // Easy choices — labels follow imperial (qt) or metric (L)
+                        // Labels are localized; storage always uses English canonical strings.
                         ChoiceBtn {
                             label: root.oil-opt-0;
-                            active: root.oil-level-choice == root.oil-opt-0 || root.oil-level-choice == "Full";
-                            clicked => { root.set-oil-level-choice(root.oil-opt-0); }
+                            active: root.oil-level-choice == "Full";
+                            clicked => { root.set-oil-level-choice("Full"); }
                         }
                         ChoiceBtn {
                             label: root.oil-opt-1;
-                            active: root.oil-level-choice == root.oil-opt-1;
-                            clicked => { root.set-oil-level-choice(root.oil-opt-1); }
+                            active: root.oil-level-choice == "½ quart low" || root.oil-level-choice == "0.5 L low";
+                            clicked => { root.set-oil-level-choice("½ quart low"); }
                         }
                         ChoiceBtn {
                             label: root.oil-opt-2;
-                            active: root.oil-level-choice == root.oil-opt-2;
-                            clicked => { root.set-oil-level-choice(root.oil-opt-2); }
+                            active: root.oil-level-choice == "1 quart low" || root.oil-level-choice == "1 L low";
+                            clicked => { root.set-oil-level-choice("1 quart low"); }
                         }
                         ChoiceBtn {
                             label: root.oil-opt-3;
-                            active: root.oil-level-choice == root.oil-opt-3;
-                            clicked => { root.set-oil-level-choice(root.oil-opt-3); }
+                            active: root.oil-level-choice == "2 quarts low" || root.oil-level-choice == "2 L low";
+                            clicked => { root.set-oil-level-choice("2 quarts low"); }
                         }
                         ChoiceBtn {
                             label: root.oil-opt-4;
-                            active: root.oil-level-choice == root.oil-opt-4;
-                            clicked => { root.set-oil-level-choice(root.oil-opt-4); }
+                            active: root.oil-level-choice == "3 quarts low" || root.oil-level-choice == "3 L low";
+                            clicked => { root.set-oil-level-choice("3 quarts low"); }
                         }
                         ChoiceBtn {
                             label: root.oil-opt-5;
-                            active: root.oil-level-choice == root.oil-opt-5 || root.oil-level-choice == "Overfilled";
-                            clicked => { root.set-oil-level-choice(root.oil-opt-5); }
+                            active: root.oil-level-choice == "Overfilled";
+                            clicked => { root.set-oil-level-choice("Overfilled"); }
                         }
                         Text {
-                            text: "Selected: " + root.oil-level-choice;
+                            text: root.tr-oil-selected + " " + root.oil-level-display;
                             font-size: 13px; font-weight: 700; color: Theme.accent-on; wrap: word-wrap;
                         }
                     }
 
                     Card {
-                        title: "Add reminder"; body: "Date YYYY-MM-DD and/or odometer. On Android, date dues schedule a wake alarm so the app can notify when due.";
-                        LineEdit { placeholder-text: "Title"; text <=> root.rem-title; }
+                        title: root.tr-rem-add; body: root.tr-rem-add-body;
+                        LineEdit { placeholder-text: root.tr-common-title; text <=> root.rem-title; }
                         LineEdit { placeholder-text: root.tr-rem-due-date; text <=> root.rem-date; }
-                        LineEdit { placeholder-text: "Due " + root.label-distance; text <=> root.rem-mileage; }
+                        LineEdit { placeholder-text: root.label-distance; text <=> root.rem-mileage; }
                         Button { text: root.tr-rem-save; primary: true; clicked => { root.add-reminder(); } }
                     }
                     for r in reminders: Card {
                         title: r.title; body: r.detail;
                         if r.is-oil-level: Text {
-                            text: "Will log oil as: " + root.oil-level-choice;
+                            text: root.tr-oil-will-log + " " + root.oil-level-display;
                             font-size: 12px; color: Theme.text-muted; wrap: word-wrap;
                         }
                         Button {
-                            text: r.is-oil-level ? "Log level & mark done" : "Mark done";
+                            text: r.is-oil-level ? root.tr-rem-log-mark-done : root.tr-rem-mark-done;
                             primary: r.is-oil-level;
                             clicked => { root.complete-reminder(r.id); }
                         }

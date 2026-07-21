@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.32
+- **i18n leftovers (all 7 languages)**: oil level choices (Full / quarts / liters), tire rotation patterns, tire preview text, Reminders oil tips, Wipers, Brakes, and component “no entry” summaries
+- Oil selection stores English canonical values while labels display in the active language
+
 ## 0.2.31
 - **i18n all tabs**: Vehicles, Home, Tires, Costs, Settings, Wizard, Receipts, Fuel and more follow the selected language (not just chrome)
 

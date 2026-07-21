@@ -10,7 +10,7 @@ Planned distribution: **F-Droid** and **Google Play**. Designed for **GrapheneOS
 
 ## Status
 
-**0.2.31** — primary product is the **Rust + Slint** APK (`org.fixitgarage.app`).
+**0.2.32** — primary product is the **Rust + Slint** APK (`org.fixitgarage.app`).
 
 | Area | Status |
 |------|--------|

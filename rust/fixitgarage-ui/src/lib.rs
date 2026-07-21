@@ -12,7 +12,7 @@ mod units;
 mod webdav;
 
 use chrono::{TimeZone, Utc};
-use i18n::{resolve_lang, t, LanguagePref};
+use i18n::{resolve_lang, t, Lang, LanguagePref};
 use platform::{
     cancel_app_wake, capture_issue_photo_path, capture_receipt_for_ocr, notify, notify_with_id,
     ocr_target, open_ocr_helper, open_ocr_helper_for_tire, open_url, pending_ocr_image_path,
@@ -26,7 +26,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use units::{
     display_to_gallons, display_to_miles, display_to_mm, format_economy, gallons_to_display,
-    miles_to_display, mm_to_display, oil_level_options,
+    miles_to_display, mm_to_display, UnitSystem,
 };
 
 slint::include_modules!();
@@ -35,6 +35,176 @@ fn format_service_date(epoch_ms: i64) -> String {
     match Utc.timestamp_millis_opt(epoch_ms) {
         chrono::LocalResult::Single(dt) => dt.format("%Y-%m-%d").to_string(),
         _ => String::new(),
+    }
+}
+
+/// Localized oil-level choice labels (imperial quarts vs metric liters).
+/// Storage always uses English imperial canonical via normalize_oil_level.
+fn oil_level_labels(lang: Lang, units: UnitSystem) -> [String; 6] {
+    let metric = matches!(units, UnitSystem::Metric);
+    [
+        t(lang, "oil.full"),
+        if metric {
+            t(lang, "oil.half_l")
+        } else {
+            t(lang, "oil.half_qt")
+        },
+        if metric {
+            t(lang, "oil.1_l")
+        } else {
+            t(lang, "oil.1_qt")
+        },
+        if metric {
+            t(lang, "oil.2_l")
+        } else {
+            t(lang, "oil.2_qt")
+        },
+        if metric {
+            t(lang, "oil.3_l")
+        } else {
+            t(lang, "oil.3_qt")
+        },
+        t(lang, "oil.overfilled"),
+    ]
+}
+
+fn oil_level_label(lang: Lang, units: UnitSystem, stored: &str) -> String {
+    let n = state::normalize_oil_level(stored);
+    let labels = oil_level_labels(lang, units);
+    match n.as_str() {
+        "Full" => labels[0].clone(),
+        "½ quart low" => labels[1].clone(),
+        "1 quart low" => labels[2].clone(),
+        "2 quarts low" => labels[3].clone(),
+        "3 quarts low" => labels[4].clone(),
+        "Overfilled" => labels[5].clone(),
+        other => other.to_string(),
+    }
+}
+
+fn pattern_label_i18n(lang: Lang, pattern_id: &str) -> String {
+    match pattern_id.trim().to_ascii_lowercase().as_str() {
+        "forward_cross" | "forward" => t(lang, "tires.pat_fwd_full"),
+        "rearward_cross" | "rearward" => t(lang, "tires.pat_rear_full"),
+        "x_pattern" | "x" => t(lang, "tires.pat_x_full"),
+        "side_to_side" | "side" => t(lang, "tires.pat_side_full"),
+        other => other.to_string(),
+    }
+}
+
+fn tire_preview_i18n(state: &AppState, lang: Lang) -> String {
+    let cfg = state.selected_tire_config();
+    let after = state.preview_after_layout();
+    let pat = pattern_label_i18n(lang, &cfg.pattern);
+    let mut s = format!(
+        "{} {}: {} {} / {} {}",
+        t(lang, "tires.after_word"),
+        pat,
+        after.fl,
+        after.fr,
+        after.rl,
+        after.rr
+    );
+    if cfg.include_spare {
+        s.push_str(&format!(" · SP {}", after.spare));
+        s.push_str(&format!(" {}", t(lang, "tires.incl_spare_paren")));
+    }
+    s
+}
+
+fn last_oil_level_summary_i18n(state: &AppState, lang: Lang, u: UnitSystem) -> String {
+    let Some(vid) = state.selected_vehicle_id else {
+        return t(lang, "oil.no_vehicle");
+    };
+    state
+        .oil_level_logs
+        .iter()
+        .rev()
+        .find(|l| l.vehicle_id == vid)
+        .map(|l| {
+            let date = match Utc.timestamp_millis_opt(l.epoch_ms) {
+                chrono::LocalResult::Single(dt) => dt.format("%Y-%m-%d").to_string(),
+                _ => "—".into(),
+            };
+            let mi = l
+                .mileage
+                .map(|m| format!(" · {}", units::format_distance(m, u)))
+                .unwrap_or_default();
+            let level = oil_level_label(lang, u, &l.level);
+            format!("{} {}{} — {}", t(lang, "oil.last_check"), date, mi, level)
+        })
+        .unwrap_or_else(|| t(lang, "oil.none_logged"))
+}
+
+fn component_summary_i18n(state: &AppState, component_type: &str, lang: Lang) -> String {
+    let Some(vid) = state.selected_vehicle_id else {
+        return t(lang, "common.select_vehicle");
+    };
+    let entry = state
+        .components
+        .iter()
+        .find(|c| c.vehicle_id == vid && c.component_type == component_type)
+        .or_else(|| {
+            if component_type == "WIPER_DRIVER" {
+                state.components.iter().find(|c| {
+                    c.vehicle_id == vid && c.component_type == "WIPER_FRONT"
+                })
+            } else {
+                None
+            }
+        });
+    match entry {
+        Some(c) => {
+            let date = c
+                .installed_epoch_ms
+                .map(format_service_date)
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "—".into());
+            let mi = c
+                .installed_mileage
+                .map(|m| units::format_distance(m, state.unit_system()))
+                .unwrap_or_else(|| "—".into());
+            let size = if c.notes.trim().is_empty() {
+                t(lang, "comp.size_not_set")
+            } else {
+                c.notes.trim().to_string()
+            };
+            format!(
+                "{} {date} · {mi}\n{} {size}",
+                t(lang, "comp.installed"),
+                t(lang, "comp.size_notes")
+            )
+        }
+        None => {
+            if component_type.starts_with("WIPER") {
+                t(lang, "comp.no_entry_detail")
+            } else {
+                t(lang, "common.no_entry")
+            }
+        }
+    }
+}
+
+fn part_summary_i18n(state: &AppState, part_type: &str, lang: Lang) -> String {
+    let Some(vid) = state.selected_vehicle_id else {
+        return t(lang, "common.select_vehicle");
+    };
+    match state
+        .parts
+        .iter()
+        .find(|p| p.vehicle_id == vid && p.part_type == part_type)
+    {
+        Some(p) => {
+            let mut s = format!("{} {}", p.brand, p.part_number);
+            if !p.oil_viscosity.is_empty() {
+                s.push_str(&format!(" · {}", p.oil_viscosity));
+            }
+            if !p.notes.is_empty() {
+                s.push_str(&format!("\n{}", p.notes));
+            }
+            s
+        }
+        None => t(lang, "common.no_entry"),
     }
 }
 
@@ -899,8 +1069,12 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_set_oil_level_choice(move |choice| {
             if let Some(ui) = ui_weak.upgrade() {
-                ui.set_oil_level_choice(choice);
-                let _ = state;
+                let choice_s = choice.to_string();
+                ui.set_oil_level_choice(choice_s.clone().into());
+                let s = state.borrow();
+                let lang = resolve_lang(s.language_pref(), &system_locale());
+                let u = s.unit_system();
+                ui.set_oil_level_display(oil_level_label(lang, u, &choice_s).into());
             }
         });
     }
@@ -1993,10 +2167,48 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     ui.set_tr_receipt_send_ocr(t(lang, "receipt.send_ocr").into());
     ui.set_tr_receipt_title_ph(t(lang, "receipt.title_ph").into());
     ui.set_tr_rem_add(t(lang, "rem.add").into());
+    ui.set_tr_rem_add_body(t(lang, "rem.add_body").into());
     ui.set_tr_rem_due_date(t(lang, "rem.due_date").into());
     ui.set_tr_rem_reboot_hint(t(lang, "rem.reboot_hint").into());
     ui.set_tr_rem_save(t(lang, "rem.save").into());
     ui.set_tr_rem_title(t(lang, "rem.title").into());
+    ui.set_tr_rem_mark_done(t(lang, "rem.mark_done").into());
+    ui.set_tr_rem_log_mark_done(t(lang, "rem.log_mark_done").into());
+    ui.set_tr_oil_intro(t(lang, "oil.intro").into());
+    ui.set_tr_oil_dipstick(t(lang, "oil.dipstick").into());
+    ui.set_tr_oil_pick(t(lang, "oil.pick").into());
+    ui.set_tr_oil_selected(t(lang, "oil.selected").into());
+    ui.set_tr_oil_will_log(t(lang, "oil.will_log").into());
+    ui.set_tr_tires_four_only(t(lang, "tires.four_only").into());
+    ui.set_tr_tires_pat_fwd(t(lang, "tires.pat_fwd").into());
+    ui.set_tr_tires_pat_x(t(lang, "tires.pat_x").into());
+    ui.set_tr_tires_pat_rear(t(lang, "tires.pat_rear").into());
+    ui.set_tr_tires_pat_side(t(lang, "tires.pat_side").into());
+    ui.set_tr_tires_patterns_4(t(lang, "tires.patterns_4").into());
+    ui.set_tr_tires_patterns_5(t(lang, "tires.patterns_5").into());
+    ui.set_tr_tires_tread_moves(t(lang, "tires.tread_moves").into());
+    ui.set_tr_tires_spare_id_ph(t(lang, "tires.spare_id_ph").into());
+    ui.set_tr_tires_five_cycle(t(lang, "tires.five_cycle").into());
+    ui.set_tr_wipers_intro(t(lang, "wipers.intro").into());
+    ui.set_tr_wipers_driver(t(lang, "wipers.driver").into());
+    ui.set_tr_wipers_passenger(t(lang, "wipers.passenger").into());
+    ui.set_tr_wipers_rear(t(lang, "wipers.rear").into());
+    ui.set_tr_wipers_update(t(lang, "wipers.update").into());
+    ui.set_tr_wipers_update_body(t(lang, "wipers.update_body").into());
+    ui.set_tr_wipers_driver_btn(t(lang, "wipers.driver_btn").into());
+    ui.set_tr_wipers_passenger_btn(t(lang, "wipers.passenger_btn").into());
+    ui.set_tr_wipers_size_ph(t(lang, "wipers.size_ph").into());
+    ui.set_tr_wipers_install_date_ph(t(lang, "wipers.install_date_ph").into());
+    ui.set_tr_wipers_at_install(t(lang, "wipers.at_install").into());
+    ui.set_tr_wipers_save(t(lang, "wipers.save").into());
+    ui.set_tr_brakes_intro(t(lang, "brakes.intro").into());
+    ui.set_tr_brakes_front_pads(t(lang, "brakes.front_pads").into());
+    ui.set_tr_brakes_rear_pads(t(lang, "brakes.rear_pads").into());
+    ui.set_tr_brakes_fluid(t(lang, "brakes.fluid").into());
+    ui.set_tr_brakes_fr_pads(t(lang, "brakes.fr_pads").into());
+    ui.set_tr_brakes_rr_pads(t(lang, "brakes.rr_pads").into());
+    ui.set_tr_brakes_fluid_btn(t(lang, "brakes.fluid_btn").into());
+    ui.set_tr_brakes_save(t(lang, "brakes.save").into());
     ui.set_tr_settings_about_body(t(lang, "settings.about_body").into());
     ui.set_tr_settings_accessibility(t(lang, "settings.accessibility").into());
     ui.set_tr_settings_accessibility_body(t(lang, "settings.accessibility_body").into());
@@ -2070,14 +2282,14 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     ui.set_tr_wizard_shop_body(t(lang, "wizard.shop_body").into());
     ui.set_tr_wizard_units_note(t(lang, "wizard.units_note").into());
     ui.set_tr_wizard_welcome(t(lang, "wizard.welcome").into());
-    // Oil level choices for current unit system
-    let oil_opts = oil_level_options(u);
-    ui.set_oil_opt_0(oil_opts[0].into());
-    ui.set_oil_opt_1(oil_opts[1].into());
-    ui.set_oil_opt_2(oil_opts[2].into());
-    ui.set_oil_opt_3(oil_opts[3].into());
-    ui.set_oil_opt_4(oil_opts[4].into());
-    ui.set_oil_opt_5(oil_opts[5].into());
+    // Oil level choices for current unit system + language (storage stays English)
+    let oil_opts = oil_level_labels(lang, u);
+    ui.set_oil_opt_0(oil_opts[0].clone().into());
+    ui.set_oil_opt_1(oil_opts[1].clone().into());
+    ui.set_oil_opt_2(oil_opts[2].clone().into());
+    ui.set_oil_opt_3(oil_opts[3].clone().into());
+    ui.set_oil_opt_4(oil_opts[4].clone().into());
+    ui.set_oil_opt_5(oil_opts[5].clone().into());
 
     // Economy line uses translated "select a vehicle" / "avg" / "need fills"
     let economy_unit = u.economy_unit();
@@ -2103,21 +2315,21 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     ui.set_tire_after_rr(after.rr.into());
     ui.set_tire_after_spare(after.spare.into());
     ui.set_tire_pattern(tire_cfg.pattern.clone().into());
-    ui.set_tire_preview(state.tire_preview().into());
+    ui.set_tire_preview(tire_preview_i18n(state, lang).into());
 
-    // Tracker summaries
-    ui.set_part_air(state.part_summary("ENGINE_AIR_FILTER").into());
-    ui.set_part_cabin(state.part_summary("CABIN_FILTER").into());
-    ui.set_part_oil_filter(state.part_summary("OIL_FILTER").into());
-    ui.set_part_oil_type(state.part_summary("OIL_TYPE").into());
-    ui.set_sum_battery(state.component_summary("BATTERY").into());
+    // Tracker summaries (localized empty/labels)
+    ui.set_part_air(part_summary_i18n(state, "ENGINE_AIR_FILTER", lang).into());
+    ui.set_part_cabin(part_summary_i18n(state, "CABIN_FILTER", lang).into());
+    ui.set_part_oil_filter(part_summary_i18n(state, "OIL_FILTER", lang).into());
+    ui.set_part_oil_type(part_summary_i18n(state, "OIL_TYPE", lang).into());
+    ui.set_sum_battery(component_summary_i18n(state, "BATTERY", lang).into());
     // LHD convention: driver = left, passenger = right (most US / GrapheneOS devices)
-    ui.set_sum_wiper_driver(state.component_summary("WIPER_DRIVER").into());
-    ui.set_sum_wiper_passenger(state.component_summary("WIPER_PASSENGER").into());
-    ui.set_sum_wiper_rear(state.component_summary("WIPER_REAR").into());
-    ui.set_sum_brake_f(state.component_summary("BRAKE_PADS_FRONT").into());
-    ui.set_sum_brake_r(state.component_summary("BRAKE_PADS_REAR").into());
-    ui.set_sum_brake_fluid(state.component_summary("BRAKE_FLUID").into());
+    ui.set_sum_wiper_driver(component_summary_i18n(state, "WIPER_DRIVER", lang).into());
+    ui.set_sum_wiper_passenger(component_summary_i18n(state, "WIPER_PASSENGER", lang).into());
+    ui.set_sum_wiper_rear(component_summary_i18n(state, "WIPER_REAR", lang).into());
+    ui.set_sum_brake_f(component_summary_i18n(state, "BRAKE_PADS_FRONT", lang).into());
+    ui.set_sum_brake_r(component_summary_i18n(state, "BRAKE_PADS_REAR", lang).into());
+    ui.set_sum_brake_fluid(component_summary_i18n(state, "BRAKE_FLUID", lang).into());
 
     if let Some(last) = state.last_service() {
         ui.set_last_service_title(last.title.clone().into());
@@ -2244,18 +2456,25 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
             let is_oil = AppState::is_oil_level_reminder(&r.title);
             ReminderRow {
                 id: r.id as i32,
-                title: r.title.clone().into(),
+                title: if is_oil {
+                    t(lang, "home.oil_level").into()
+                } else {
+                    r.title.clone().into()
+                },
                 detail: reminder_status_line_units(r, mileage, u).into(),
                 is_oil_level: is_oil,
             }
         })
         .collect();
     ui.set_reminders(slint::ModelRc::new(slint::VecModel::from(reminders)));
-    ui.set_last_oil_level_summary(state.last_oil_level_summary().into());
-    // Keep a sensible default if empty
+    ui.set_last_oil_level_summary(last_oil_level_summary_i18n(state, lang, u).into());
+    // Keep a sensible default if empty (canonical English for storage)
     if ui.get_oil_level_choice().is_empty() {
         ui.set_oil_level_choice("Full".into());
     }
+    // Localized display of current selection
+    let choice = ui.get_oil_level_choice().to_string();
+    ui.set_oil_level_display(oil_level_label(lang, u, &choice).into());
 
     let photos: Vec<PhotoRow> = state
         .issue_photos
