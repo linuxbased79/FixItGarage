@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.2.31
+- **i18n all tabs**: Vehicles, Home, Tires, Costs, Settings, Wizard, Receipts, Fuel and more follow the selected language (not just chrome)
+
 ## 0.2.30
 - **i18n Service page**: templates, form labels, placeholders, Save/Delete, and MPG line follow the selected language
 

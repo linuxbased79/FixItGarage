@@ -475,6 +475,135 @@ export component MainWindow inherits Window {
     in-out property <string> tr-svc-shop-name-ph: "Shop name";
     in-out property <string> tr-svc-notes-ph: "Notes (optional)";
     in-out property <string> tr-svc-save: "Save service";
+    in-out property <string> tr-common-back-home: "Back home";
+    in-out property <string> tr-common-brand: "Brand";
+    in-out property <string> tr-common-cost: "Cost";
+    in-out property <string> tr-common-dark: "Dark";
+    in-out property <string> tr-common-date-ymd: "Date YYYY-MM-DD";
+    in-out property <string> tr-common-imperial: "Imperial";
+    in-out property <string> tr-common-light: "Light";
+    in-out property <string> tr-common-metric: "Metric";
+    in-out property <string> tr-common-notes: "Notes";
+    in-out property <string> tr-common-notes-opt: "Notes (optional)";
+    in-out property <string> tr-common-save: "Save";
+    in-out property <string> tr-common-title: "Title";
+    in-out property <string> tr-common-update: "Update";
+    in-out property <string> tr-costs-all-time: "All time";
+    in-out property <string> tr-costs-body: "All maintenance for this vehicle: services, fuel, labor, and tire purchases.";
+    in-out property <string> tr-costs-month: "This month";
+    in-out property <string> tr-costs-services: "Services (all time)";
+    in-out property <string> tr-costs-tires: "Tires (all time)";
+    in-out property <string> tr-costs-year: "This year";
+    in-out property <string> tr-fuel-each-fill: "Each fuel fill with gallons logged. Per-fill MPG uses miles since the previous fill (full-tank method).";
+    in-out property <string> tr-fuel-log-in-service: "Log fuel in service";
+    in-out property <string> tr-home-issue-photos: "Issue photos";
+    in-out property <string> tr-home-manage-reminders: "Manage reminders";
+    in-out property <string> tr-home-notes: "Notes";
+    in-out property <string> tr-home-oil-level: "Oil level check";
+    in-out property <string> tr-home-open-battery: "Open battery tracker";
+    in-out property <string> tr-home-open-brakes: "Open brake tracker";
+    in-out property <string> tr-home-open-tires: "Open tires";
+    in-out property <string> tr-home-open-wipers: "Open wiper tracker";
+    in-out property <string> tr-home-parts-log: "Parts log";
+    in-out property <string> tr-home-reminders: "Reminders";
+    in-out property <string> tr-home-scan-receipt: "Scan / log receipt";
+    in-out property <string> tr-notes-body: "Body";
+    in-out property <string> tr-notes-new: "New note";
+    in-out property <string> tr-notes-save: "Save note";
+    in-out property <string> tr-photos-caption-ph: "Caption (e.g. Front right leak)";
+    in-out property <string> tr-photos-new: "New issue";
+    in-out property <string> tr-photos-save: "Save issue log";
+    in-out property <string> tr-photos-take: "Take photo";
+    in-out property <string> tr-receipt-apply-shared: "Apply shared OCR";
+    in-out property <string> tr-receipt-auto-fill: "Auto-fill from text above";
+    in-out property <string> tr-receipt-capture: "Capture for OCR";
+    in-out property <string> tr-receipt-fields: "Receipt fields";
+    in-out property <string> tr-receipt-hint: "On-device OCR (no Google): Capture photo → On-device OCR. Fallback: Send to OCR app / Share text back / Paste & fill.";
+    in-out property <string> tr-receipt-ocr-helper: "OCR helper";
+    in-out property <string> tr-receipt-ondevice-ocr: "On-device OCR";
+    in-out property <string> tr-receipt-parse: "Parse text above";
+    in-out property <string> tr-receipt-paste-ph: "Paste receipt text (OCR share / email / clipboard)";
+    in-out property <string> tr-receipt-save: "Save receipt to history";
+    in-out property <string> tr-receipt-send-ocr: "Send photo to OCR app";
+    in-out property <string> tr-receipt-title-ph: "Title (e.g. Oil change shop)";
+    in-out property <string> tr-rem-add: "Add reminder";
+    in-out property <string> tr-rem-due-date: "Due date YYYY-MM-DD";
+    in-out property <string> tr-rem-reboot-hint: "Date-based alarms are saved on this device. After a phone restart, FixItGarage re-registers them automatically.";
+    in-out property <string> tr-rem-save: "Save reminder";
+    in-out property <string> tr-rem-title: "Reminders";
+    in-out property <string> tr-settings-about-body: "FixItGarage — security hardening: backups, HTTPS WebDAV, no Auto Backup.";
+    in-out property <string> tr-settings-accessibility: "Accessibility · reading";
+    in-out property <string> tr-settings-accessibility-body: "";
+    in-out property <string> tr-settings-backup-path-ph: "Backup file path to restore";
+    in-out property <string> tr-settings-cloud-body: "";
+    in-out property <string> tr-settings-create-backup: "Create JSON backup";
+    in-out property <string> tr-settings-default-font: "Default font";
+    in-out property <string> tr-settings-dropbox: "Dropbox";
+    in-out property <string> tr-settings-export-csv: "Export CSV";
+    in-out property <string> tr-settings-google-drive: "Google Drive";
+    in-out property <string> tr-settings-gpl: "GPL-3.0 · GrapheneOS friendly";
+    in-out property <string> tr-settings-onedrive: "OneDrive";
+    in-out property <string> tr-settings-password-ph: "App password (blank = keep existing)";
+    in-out property <string> tr-settings-proton: "★ Proton Drive (recommended)";
+    in-out property <string> tr-settings-restore: "Restore from path";
+    in-out property <string> tr-settings-save-webdav: "Save WebDAV settings";
+    in-out property <string> tr-settings-share-backup: "Share backup (any app)";
+    in-out property <string> tr-settings-share-csv: "Share CSV";
+    in-out property <string> tr-settings-upload-webdav: "Upload backup via WebDAV";
+    in-out property <string> tr-settings-username: "Username";
+    in-out property <string> tr-settings-webdav-hint: "HTTPS only. Example: https://cloud.example/remote.php/dav/files/USER/FixItGarage/ — password stays on this device, never in shared backups, never re-shown after save. Leave password blank to keep the existing one.";
+    in-out property <string> tr-settings-webdav-url-ph: "WebDAV folder URL (https://…)";
+    in-out property <string> tr-tires-after-preview: "After rotation (preview)";
+    in-out property <string> tr-tires-apply-rotation: "Apply rotation";
+    in-out property <string> tr-tires-camera-coin: "Camera (coin in groove)";
+    in-out property <string> tr-tires-current-before: "Current positions (before)";
+    in-out property <string> tr-tires-distance: "Distance per tire";
+    in-out property <string> tr-tires-front-view: "FRONT · top-down view";
+    in-out property <string> tr-tires-hidden: "Hidden in shop-only mode. Switch feature focus in Settings.";
+    in-out property <string> tr-tires-include-spare: "Include spare";
+    in-out property <string> tr-tires-measure-cv: "Measure tread (CV)";
+    in-out property <string> tr-tires-paste-fill: "Paste & fill";
+    in-out property <string> tr-tires-paste-receipt: "Paste tire receipt text";
+    in-out property <string> tr-tires-positions-hint: "Tire positions are saved per vehicle — switch cars to see each layout.";
+    in-out property <string> tr-tires-purchase: "Tire purchase";
+    in-out property <string> tr-tires-purchase-body: "";
+    in-out property <string> tr-tires-purchase-history: "Purchase history";
+    in-out property <string> tr-tires-rotation-history: "Rotation history";
+    in-out property <string> tr-tires-rotation-pattern: "Rotation pattern";
+    in-out property <string> tr-tires-save-distance: "Save tire distance";
+    in-out property <string> tr-tires-save-purchase: "Save tire purchase";
+    in-out property <string> tr-tires-save-tread: "Save tread depths";
+    in-out property <string> tr-tires-size-ph: "Size (e.g. 225/65R17)";
+    in-out property <string> tr-tires-spare-body: "";
+    in-out property <string> tr-tires-spare-title: "";
+    in-out property <string> tr-tires-tread-depth: "Tread depth";
+    in-out property <string> tr-vehicles-add-body: "";
+    in-out property <string> tr-vehicles-add-title: "";
+    in-out property <string> tr-vehicles-check-recalls: "Check recalls for VIN";
+    in-out property <string> tr-vehicles-delete: "Delete selected vehicle";
+    in-out property <string> tr-vehicles-edit-title: "";
+    in-out property <string> tr-vehicles-hint: "Tap a vehicle to select it for services, costs, and trackers.";
+    in-out property <string> tr-vehicles-make-ph: "Make";
+    in-out property <string> tr-vehicles-model-ph: "Model";
+    in-out property <string> tr-vehicles-name-ph: "Name / nickname";
+    in-out property <string> tr-vehicles-open-nhtsa: "Open NHTSA VIN page";
+    in-out property <string> tr-vehicles-recalls-body: "";
+    in-out property <string> tr-vehicles-recalls-title: "";
+    in-out property <string> tr-vehicles-save: "Save vehicle";
+    in-out property <string> tr-vehicles-save-changes: "Save changes";
+    in-out property <string> tr-vehicles-selected: "SELECTED";
+    in-out property <string> tr-vehicles-update-odo: "Update odometer only";
+    in-out property <string> tr-vehicles-vin-opt-ph: "VIN (17 characters, optional)";
+    in-out property <string> tr-vehicles-vin-ph: "VIN (17 characters)";
+    in-out property <string> tr-vehicles-year-ph: "Year";
+    in-out property <string> tr-wizard-both: "Both DIY and shop";
+    in-out property <string> tr-wizard-diy: "Mostly DIY";
+    in-out property <string> tr-wizard-diy-body: "Parts, oil, tires, DIY logging first.";
+    in-out property <string> tr-wizard-intro: "How do you mostly maintain your vehicles? We'll show the tools that fit you.";
+    in-out property <string> tr-wizard-shop: "Mostly shop";
+    in-out property <string> tr-wizard-shop-body: "Shop history, costs, service focus.";
+    in-out property <string> tr-wizard-units-note: "Units (can change later in Settings)";
+    in-out property <string> tr-wizard-welcome: "Welcome to FixItGarage";
     // Oil level choice labels (swap with unit system)
     in-out property <string> oil-opt-0: "Full";
     in-out property <string> oil-opt-1: "½ quart low";
@@ -568,26 +697,26 @@ export component MainWindow inherits Window {
             padding-bottom: 24px + root.safe-area-bottom;
             spacing: 14px;
             alignment: start;
-            Text { text: "Welcome to FixItGarage"; font-size: 26px; font-weight: 800; color: Theme.title; wrap: word-wrap; }
+            Text { text: root.tr-wizard-welcome; font-size: 26px; font-weight: 800; color: Theme.title; wrap: word-wrap; }
             Text {
-                text: "How do you mostly maintain your vehicles? We'll show the tools that fit you.";
+                text: root.tr-wizard-intro;
                 font-size: 15px; color: Theme.text-muted; wrap: word-wrap;
             }
-            Button { text: "Mostly DIY"; primary: true; clicked => { root.finish-wizard("DIY"); } }
-            Text { text: "Parts, oil, tires, DIY logging first."; font-size: 12px; color: Theme.text-muted; wrap: word-wrap; }
-            Button { text: "Mostly shop"; primary: true; clicked => { root.finish-wizard("SHOP"); } }
-            Text { text: "Shop history, costs, service focus."; font-size: 12px; color: Theme.text-muted; wrap: word-wrap; }
-            ChoiceBtn { label: "Both DIY and shop"; active: false; clicked => { root.finish-wizard("BOTH"); } }
+            Button { text: root.tr-wizard-diy; primary: true; clicked => { root.finish-wizard("DIY"); } }
+            Text { text: root.tr-wizard-diy-body; font-size: 12px; color: Theme.text-muted; wrap: word-wrap; }
+            Button { text: root.tr-wizard-shop; primary: true; clicked => { root.finish-wizard("SHOP"); } }
+            Text { text: root.tr-wizard-shop-body; font-size: 12px; color: Theme.text-muted; wrap: word-wrap; }
+            ChoiceBtn { label: root.tr-wizard-both; active: false; clicked => { root.finish-wizard("BOTH"); } }
             HorizontalBox {
                 spacing: 8px;
-                ChoiceBtn { label: "Dark"; active: root.dark-mode == "DARK"; clicked => { root.set-dark-mode("DARK"); } }
-                ChoiceBtn { label: "Light"; active: root.dark-mode == "LIGHT"; clicked => { root.set-dark-mode("LIGHT"); } }
+                ChoiceBtn { label: root.tr-common-dark; active: root.dark-mode == "DARK"; clicked => { root.set-dark-mode("DARK"); } }
+                ChoiceBtn { label: root.tr-common-light; active: root.dark-mode == "LIGHT"; clicked => { root.set-dark-mode("LIGHT"); } }
             }
-            Text { text: "Units (can change later in Settings)"; font-size: 13px; color: Theme.text-muted; }
+            Text { text: root.tr-wizard-units-note; font-size: 13px; color: Theme.text-muted; }
             HorizontalBox {
                 spacing: 8px;
-                ChoiceBtn { label: "Imperial"; active: root.units == "IMPERIAL"; clicked => { root.set-units("IMPERIAL"); } }
-                ChoiceBtn { label: "Metric"; active: root.units == "METRIC"; clicked => { root.set-units("METRIC"); } }
+                ChoiceBtn { label: root.tr-common-imperial; active: root.units == "IMPERIAL"; clicked => { root.set-units("IMPERIAL"); } }
+                ChoiceBtn { label: root.tr-common-metric; active: root.units == "METRIC"; clicked => { root.set-units("METRIC"); } }
             }
         }
     }
@@ -640,27 +769,27 @@ export component MainWindow inherits Window {
                             text: u.title + " — " + u.detail;
                             font-size: 13px; color: Theme.text; wrap: word-wrap;
                         }
-                        Button { text: "Manage reminders"; clicked => { root.navigate(11); } }
+                        Button { text: root.tr-home-manage-reminders; clicked => { root.navigate(11); } }
                     }
                     if has-low-tread: Card {
                         title: root.tr-home-tread;
                         body: tread-warning;
-                        Button { text: "Open tires"; primary: true; clicked => { root.navigate(3); } }
+                        Button { text: root.tr-home-open-tires; primary: true; clicked => { root.navigate(3); } }
                     }
                     if has-old-battery: Card {
                         title: root.tr-page-battery;
                         body: battery-warning;
-                        Button { text: "Open battery tracker"; primary: true; clicked => { root.navigate(7); } }
+                        Button { text: root.tr-home-open-battery; primary: true; clicked => { root.navigate(7); } }
                     }
                     if has-brakes-due: Card {
                         title: root.tr-page-brakes;
                         body: brake-warning;
-                        Button { text: "Open brake tracker"; primary: true; clicked => { root.navigate(9); } }
+                        Button { text: root.tr-home-open-brakes; primary: true; clicked => { root.navigate(9); } }
                     }
                     if has-old-wipers: Card {
                         title: root.tr-page-wipers;
                         body: wiper-warning;
-                        Button { text: "Open wiper tracker"; primary: true; clicked => { root.navigate(8); } }
+                        Button { text: root.tr-home-open-wipers; primary: true; clicked => { root.navigate(8); } }
                     }
                     Card {
                         title: root.tr-home-last-service; body: "";
@@ -674,14 +803,14 @@ export component MainWindow inherits Window {
                     Card {
                         title: root.tr-home-quick;
                         body: last-oil-level-summary;
-                        Button { text: "Oil level check"; primary: true; clicked => { root.navigate(11); } }
-                        Button { text: "Scan / log receipt"; clicked => { root.navigate(13); } }
+                        Button { text: root.tr-home-oil-level; primary: true; clicked => { root.navigate(11); } }
+                        Button { text: root.tr-home-scan-receipt; clicked => { root.navigate(13); } }
                         Button { text: root.tr-more-photos; clicked => { root.navigate(12); } }
                         Button { text: root.tr-home-log-service; clicked => { root.navigate(2); } }
                         Button { text: root.tr-home-fuel; clicked => { root.navigate(14); } }
                         if show-tires: Button { text: root.tr-home-tire-rotation; clicked => { root.navigate(3); } }
                         if show-parts: Button { text: root.tr-more-parts; clicked => { root.navigate(6); } }
-                        Button { text: "Reminders"; clicked => { root.navigate(11); } }
+                        Button { text: root.tr-home-reminders; clicked => { root.navigate(11); } }
                         Button { text: root.tr-more-notes; clicked => { root.navigate(10); } }
                     }
                     if status-message != "": Text { text: status-message; color: Theme.ok; font-size: 12px; wrap: word-wrap; }
@@ -694,39 +823,39 @@ export component MainWindow inherits Window {
                 VerticalBox {
                     padding: 16px; spacing: 10px;
                     PageTitle { label: root.tr-page-vehicles; }
-                    Text { text: "Tap a vehicle to select it for services, costs, and trackers."; font-size: 13px; color: Theme.text-muted; wrap: word-wrap; }
+                    Text { text: root.tr-vehicles-hint; font-size: 13px; color: Theme.text-muted; wrap: word-wrap; }
                     Card {
-                        title: "Add vehicle"; body: "Optional VIN enables free NHTSA (US) recall checks.";
-                        LineEdit { placeholder-text: "Name / nickname"; text <=> root.form-name; }
-                        LineEdit { placeholder-text: "VIN (17 characters, optional)"; text <=> root.form-vin; }
-                        LineEdit { placeholder-text: "Make"; text <=> root.form-make; }
-                        LineEdit { placeholder-text: "Model"; text <=> root.form-model; }
+                        title: root.tr-vehicles-add-title; body: root.tr-vehicles-add-body;
+                        LineEdit { placeholder-text: root.tr-vehicles-name-ph; text <=> root.form-name; }
+                        LineEdit { placeholder-text: root.tr-vehicles-vin-opt-ph; text <=> root.form-vin; }
+                        LineEdit { placeholder-text: root.tr-vehicles-make-ph; text <=> root.form-make; }
+                        LineEdit { placeholder-text: root.tr-vehicles-model-ph; text <=> root.form-model; }
                         HorizontalBox {
-                            LineEdit { placeholder-text: "Year"; text <=> root.form-year; horizontal-stretch: 1; }
+                            LineEdit { placeholder-text: root.tr-vehicles-year-ph; text <=> root.form-year; horizontal-stretch: 1; }
                             LineEdit { placeholder-text: root.label-distance; text <=> root.form-mileage; horizontal-stretch: 1; }
                         }
-                        Button { text: "Save vehicle"; primary: true; clicked => { root.add-vehicle(); } }
+                        Button { text: root.tr-vehicles-save; primary: true; clicked => { root.add-vehicle(); } }
                     }
                     Card {
-                        title: "Edit selected vehicle";
+                        title: root.tr-vehicles-edit-title;
                         body: selected-vehicle-label;
-                        LineEdit { placeholder-text: "Name / nickname"; text <=> root.form-name; }
-                        LineEdit { placeholder-text: "VIN (17 characters)"; text <=> root.form-vin; }
-                        LineEdit { placeholder-text: "Make"; text <=> root.form-make; }
-                        LineEdit { placeholder-text: "Model"; text <=> root.form-model; }
+                        LineEdit { placeholder-text: root.tr-vehicles-name-ph; text <=> root.form-name; }
+                        LineEdit { placeholder-text: root.tr-vehicles-vin-ph; text <=> root.form-vin; }
+                        LineEdit { placeholder-text: root.tr-vehicles-make-ph; text <=> root.form-make; }
+                        LineEdit { placeholder-text: root.tr-vehicles-model-ph; text <=> root.form-model; }
                         HorizontalBox {
-                            LineEdit { placeholder-text: "Year"; text <=> root.form-year; horizontal-stretch: 1; }
+                            LineEdit { placeholder-text: root.tr-vehicles-year-ph; text <=> root.form-year; horizontal-stretch: 1; }
                             LineEdit { placeholder-text: root.label-distance; text <=> root.form-mileage; horizontal-stretch: 1; }
                         }
-                        Button { text: "Save changes"; primary: true; clicked => { root.update-selected-vehicle(); } }
-                        Button { text: "Update odometer only"; clicked => { root.update-selected-mileage(); } }
-                        Button { text: "Delete selected vehicle"; clicked => { root.delete-selected-vehicle(); } }
+                        Button { text: root.tr-vehicles-save-changes; primary: true; clicked => { root.update-selected-vehicle(); } }
+                        Button { text: root.tr-vehicles-update-odo; clicked => { root.update-selected-mileage(); } }
+                        Button { text: root.tr-vehicles-delete; clicked => { root.delete-selected-vehicle(); } }
                     }
                     Card {
-                        title: "Safety recalls (NHTSA · US)";
-                        body: "Uses free public NHTSA APIs. Decodes VIN → make/model/year, then lists campaigns. Internet required.";
-                        Button { text: "Check recalls for VIN"; primary: true; clicked => { root.check-recalls(); } }
-                        Button { text: "Open NHTSA VIN page"; clicked => { root.open-nhtsa-vin-page(); } }
+                        title: root.tr-vehicles-recalls-title;
+                        body: root.tr-vehicles-recalls-body;
+                        Button { text: root.tr-vehicles-check-recalls; primary: true; clicked => { root.check-recalls(); } }
+                        Button { text: root.tr-vehicles-open-nhtsa; clicked => { root.open-nhtsa-vin-page(); } }
                         if recall-status != "": Text {
                             text: recall-status;
                             font-size: 13px; color: Theme.ok; wrap: word-wrap;
@@ -740,7 +869,7 @@ export component MainWindow inherits Window {
                         clicked => { root.select-vehicle(v.id); }
                         Card {
                             title: v.name;
-                            body: v.subtitle + " · " + v.mileage + (v.id == root.selected-vehicle-id ? " · SELECTED" : "");
+                            body: v.subtitle + " · " + v.mileage + (v.id == root.selected-vehicle-id ? " · " + root.tr-vehicles-selected : "");
                         }
                     }
                 }
@@ -802,14 +931,14 @@ export component MainWindow inherits Window {
                 VerticalBox {
                     padding: 16px; spacing: 12px;
                     PageTitle { label: root.tr-page-tires; }
-                    if !show-tires: Text { text: "Hidden in shop-only mode. Switch feature focus in Settings."; color: Theme.text-muted; wrap: word-wrap; }
+                    if !show-tires: Text { text: root.tr-tires-hidden; color: Theme.text-muted; wrap: word-wrap; }
                     if show-tires: VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     if show-tires: Text {
-                        text: "Tire positions are saved per vehicle — switch cars to see each layout.";
+                        text: root.tr-tires-positions-hint;
                         font-size: 12px; color: Theme.text-muted; wrap: word-wrap;
                     }
                     if show-tires: Card {
-                        title: "Current positions (before)"; body: "FRONT · top-down view";
+                        title: root.tr-tires-current-before; body: root.tr-tires-front-view;
                         Rectangle {
                             height: root.include-spare ? 280px : 220px; background: transparent;
                             Rectangle {
@@ -828,7 +957,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     if show-tires: Card {
-                        title: "After rotation (preview)"; body: tire-preview;
+                        title: root.tr-tires-after-preview; body: tire-preview;
                         Rectangle {
                             height: root.include-spare ? 280px : 220px; background: transparent;
                             Rectangle {
@@ -851,7 +980,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     if show-tires: Card {
-                        title: "Spare tire"; body: "Most people leave a temporary/donut spare out of rotation. Enable only if you have a full-size matching spare.";
+                        title: root.tr-tires-spare-title; body: root.tr-tires-spare-body;
                         HorizontalBox {
                             spacing: 6px;
                             ChoiceBtn {
@@ -860,7 +989,7 @@ export component MainWindow inherits Window {
                                 clicked => { root.set-include-spare(false); }
                             }
                             ChoiceBtn {
-                                label: "Include spare";
+                                label: root.tr-tires-include-spare;
                                 active: root.include-spare;
                                 clicked => { root.set-include-spare(true); }
                             }
@@ -876,7 +1005,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     if show-tires: Card {
-                        title: "Rotation pattern"; body: root.include-spare ? "5-tire patterns (spare included)" : "4-tire patterns (spare stays put)";
+                        title: root.tr-tires-rotation-pattern; body: root.include-spare ? "5-tire patterns (spare included)" : "4-tire patterns (spare stays put)";
                         HorizontalBox {
                             spacing: 6px;
                             ChoiceBtn { label: "Fwd cross"; active: root.tire-pattern == "forward_cross"; clicked => { root.set-pattern("forward_cross"); } }
@@ -887,10 +1016,10 @@ export component MainWindow inherits Window {
                             ChoiceBtn { label: "Rear cross"; active: root.tire-pattern == "rearward_cross"; clicked => { root.set-pattern("rearward_cross"); } }
                             ChoiceBtn { label: "Side"; active: root.tire-pattern == "side_to_side"; clicked => { root.set-pattern("side_to_side"); } }
                         }
-                        Button { text: "Apply rotation"; primary: true; clicked => { root.apply-rotation(); } }
+                        Button { text: root.tr-tires-apply-rotation; primary: true; clicked => { root.apply-rotation(); } }
                     }
                     if show-tires: Card {
-                        title: "Tread depth (" + root.label-tread + ")";
+                        title: root.tr-tires-tread-depth + " (" + root.label-tread + ")";
                         body: tread-summary;
                         Text {
                             text: tread-warning;
@@ -902,8 +1031,8 @@ export component MainWindow inherits Window {
                         }
                         HorizontalBox {
                             spacing: 6px;
-                            Button { text: "Camera (coin in groove)"; clicked => { root.capture-tread-photo(); } }
-                            Button { text: "Measure tread (CV)"; primary: true; clicked => { root.measure-tread-cv(); } }
+                            Button { text: root.tr-tires-camera-coin; clicked => { root.capture-tread-photo(); } }
+                            Button { text: root.tr-tires-measure-cv; primary: true; clicked => { root.measure-tread-cv(); } }
                         }
                         Text {
                             text: tread-photo-path == "" ? "Photo a US penny seated in the tread, then Measure." : ("Photo: " + tread-photo-path);
@@ -921,10 +1050,10 @@ export component MainWindow inherits Window {
                             placeholder-text: "SP " + root.label-tread;
                             text <=> root.tread-spare;
                         }
-                        Button { text: "Save tread depths"; primary: true; clicked => { root.save-tread(); } }
+                        Button { text: root.tr-tires-save-tread; primary: true; clicked => { root.save-tread(); } }
                     }
                     if show-tires: Card {
-                        title: "Distance per tire";
+                        title: root.tr-tires-distance;
                         body: tire-miles-summary;
                         Text {
                             text: "Odometer on this tire for each corner (" + root.unit-distance + ") — helps plan rotations.";
@@ -942,27 +1071,27 @@ export component MainWindow inherits Window {
                             placeholder-text: "SP " + root.unit-distance;
                             text <=> root.mi-spare;
                         }
-                        Button { text: "Save tire distance"; primary: true; clicked => { root.save-tire-miles(); } }
+                        Button { text: root.tr-tires-save-distance; primary: true; clicked => { root.save-tire-miles(); } }
                     }
                     if show-tires: Card {
-                        title: "Tire purchase"; body: "Log a new set. Paste & fill from OCR / email clipboard (one tap).";
-                        LineEdit { placeholder-text: "Paste tire receipt text"; text <=> root.tire-rcp-paste; }
+                        title: root.tr-tires-purchase; body: root.tr-tires-purchase-body;
+                        LineEdit { placeholder-text: root.tr-tires-paste-receipt; text <=> root.tire-rcp-paste; }
                         HorizontalBox {
                             spacing: 6px;
-                            Button { text: "Paste & fill"; primary: true; clicked => { root.paste-tire-clipboard(); } }
-                            Button { text: "OCR helper"; clicked => { root.open-ocr-helper(); } }
+                            Button { text: root.tr-tires-paste-fill; primary: true; clicked => { root.paste-tire-clipboard(); } }
+                            Button { text: root.tr-receipt-ocr-helper; clicked => { root.open-ocr-helper(); } }
                         }
-                        Button { text: "Parse text above"; clicked => { root.parse-tire-receipt(); } }
+                        Button { text: root.tr-receipt-parse; clicked => { root.parse-tire-receipt(); } }
                         LineEdit { placeholder-text: "Brand"; text <=> root.tire-brand; }
-                        LineEdit { placeholder-text: "Model"; text <=> root.tire-model; }
-                        LineEdit { placeholder-text: "Size (e.g. 225/65R17)"; text <=> root.tire-size; }
+                        LineEdit { placeholder-text: root.tr-vehicles-model-ph; text <=> root.tire-model; }
+                        LineEdit { placeholder-text: root.tr-tires-size-ph; text <=> root.tire-size; }
                         LineEdit { placeholder-text: "Cost"; text <=> root.tire-cost; }
                         LineEdit { placeholder-text: root.label-distance + " at purchase"; text <=> root.tire-buy-mileage; }
                         LineEdit { placeholder-text: "Notes"; text <=> root.tire-buy-notes; }
-                        Button { text: "Save tire purchase"; primary: true; clicked => { root.save-tire-purchase(); } }
+                        Button { text: root.tr-tires-save-purchase; primary: true; clicked => { root.save-tire-purchase(); } }
                     }
                     if show-tires: Card {
-                        title: "Purchase history"; body: "";
+                        title: root.tr-tires-purchase-history; body: "";
                         for p in tire-purchases: Card {
                             title: p.title;
                             body: p.detail;
@@ -970,7 +1099,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     if show-tires: Card {
-                        title: "Rotation history"; body: "";
+                        title: root.tr-tires-rotation-history; body: "";
                         for r in tire-rotations: Text {
                             text: r.title + " — " + r.detail;
                             font-size: 13px; color: Theme.text; wrap: word-wrap;
@@ -987,7 +1116,7 @@ export component MainWindow inherits Window {
                     PageTitle { label: root.tr-page-costs; }
                     VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text {
-                        text: "All maintenance for this vehicle: services, fuel, labor, and tire purchases.";
+                        text: root.tr-costs-body;
                         font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
                     }
                     for c in cost-lines: Card { title: c.label; body: c.value; }
@@ -1069,12 +1198,12 @@ export component MainWindow inherits Window {
                         }
                     }
                     Card {
-                        title: "Accessibility · reading";
-                        body: "OpenDyslexic is a free font designed to make reading easier for people with dyslexia. Optional — saved on this device.";
+                        title: root.tr-settings-accessibility;
+                        body: root.tr-settings-accessibility-body;
                         HorizontalBox {
                             spacing: 6px;
                             ChoiceBtn {
-                                label: "Default font";
+                                label: root.tr-settings-default-font;
                                 active: !root.dyslexia-font;
                                 clicked => { root.set-dyslexia-font(false); }
                             }
@@ -1178,32 +1307,32 @@ export component MainWindow inherits Window {
                     }
                     Card {
                         title: root.tr-settings-data; body: root.tr-settings-data-body;
-                        Button { text: "Export CSV"; primary: true; clicked => { root.export-csv(); } }
-                        Button { text: "Share CSV"; clicked => { root.share-csv(); } }
-                        Button { text: "Create JSON backup"; clicked => { root.backup-json(); } }
-                        Button { text: "Share backup (any app)"; clicked => { root.share-backup(); } }
-                        LineEdit { placeholder-text: "Backup file path to restore"; text <=> root.backup-path; }
-                        Button { text: "Restore from path"; clicked => { root.restore-json(); } }
+                        Button { text: root.tr-settings-export-csv; primary: true; clicked => { root.export-csv(); } }
+                        Button { text: root.tr-settings-share-csv; clicked => { root.share-csv(); } }
+                        Button { text: root.tr-settings-create-backup; clicked => { root.backup-json(); } }
+                        Button { text: root.tr-settings-share-backup; clicked => { root.share-backup(); } }
+                        LineEdit { placeholder-text: root.tr-settings-backup-path-ph; text <=> root.backup-path; }
+                        Button { text: root.tr-settings-restore; clicked => { root.restore-json(); } }
                         if csv-preview != "": Text { text: csv-preview; font-size: 11px; color: Theme.mono; wrap: word-wrap; font-family: "monospace"; }
                     }
                     Card {
                         title: root.tr-settings-cloud;
-                        body: "Install the app once. We open it with your backup — no Google Play Services required for Proton. Privacy-friendly pick is Proton Drive.";
+                        body: root.tr-settings-cloud-body;
                         Button {
-                            text: "★ Proton Drive (recommended)";
+                            text: root.tr-settings-proton;
                             primary: true;
                             clicked => { root.share-backup-to("proton"); }
                         }
                         Button {
-                            text: "Google Drive";
+                            text: root.tr-settings-google-drive;
                             clicked => { root.share-backup-to("gdrive"); }
                         }
                         Button {
-                            text: "Dropbox";
+                            text: root.tr-settings-dropbox;
                             clicked => { root.share-backup-to("dropbox"); }
                         }
                         Button {
-                            text: "OneDrive";
+                            text: root.tr-settings-onedrive;
                             clicked => { root.share-backup-to("onedrive"); }
                         }
                         Text {
@@ -1213,12 +1342,12 @@ export component MainWindow inherits Window {
                     }
                     Card {
                         title: root.tr-settings-webdav;
-                        body: "HTTPS only. Example: https://cloud.example/remote.php/dav/files/USER/FixItGarage/ — password stays on this device, never in shared backups, never re-shown after save. Leave password blank to keep the existing one.";
-                        LineEdit { placeholder-text: "WebDAV folder URL (https://…)"; text <=> root.cloud-url; }
-                        LineEdit { placeholder-text: "Username"; text <=> root.cloud-user; }
-                        LineEdit { placeholder-text: "App password (blank = keep existing)"; text <=> root.cloud-pass; }
-                        Button { text: "Save WebDAV settings"; clicked => { root.save-cloud-settings(); } }
-                        Button { text: "Upload backup via WebDAV"; primary: true; clicked => { root.upload-cloud-backup(); } }
+                        body: root.tr-settings-webdav-hint;
+                        LineEdit { placeholder-text: root.tr-settings-webdav-url-ph; text <=> root.cloud-url; }
+                        LineEdit { placeholder-text: root.tr-settings-username; text <=> root.cloud-user; }
+                        LineEdit { placeholder-text: root.tr-settings-password-ph; text <=> root.cloud-pass; }
+                        Button { text: root.tr-settings-save-webdav; clicked => { root.save-cloud-settings(); } }
+                        Button { text: root.tr-settings-upload-webdav; primary: true; clicked => { root.upload-cloud-backup(); } }
                     }
                     Card {
                         title: root.tr-settings-support; body: "GPL-3.0 · GrapheneOS friendly";
@@ -1227,11 +1356,11 @@ export component MainWindow inherits Window {
                     }
                     Card {
                         title: root.tr-settings-about;
-                        body: "FixItGarage 0.2.24 — security hardening: backups, HTTPS WebDAV, no Auto Backup.";
+                        body: root.tr-settings-about-body;
                     }
                     Card {
-                        title: "Reminders after reboot";
-                        body: "Date-based alarms are saved on this device. After a phone restart, FixItGarage re-registers them automatically (no need to open the app first). Mileage-only reminders still need you to open the app or update odometer.";
+                        title: root.tr-rem-title;
+                        body: root.tr-rem-reboot-hint;
                     }
                     if status-message != "": Text { text: status-message; color: Theme.ok; wrap: word-wrap; }
                 }
@@ -1388,7 +1517,7 @@ export component MainWindow inherits Window {
                         title: "New note"; body: "";
                         LineEdit { placeholder-text: "Title"; text <=> root.note-title; }
                         LineEdit { placeholder-text: "Body"; text <=> root.note-body; }
-                        Button { text: "Save note"; primary: true; clicked => { root.add-note(); } }
+                        Button { text: root.tr-notes-save; primary: true; clicked => { root.add-note(); } }
                     }
                     for n in notes: Card {
                         title: n.title; body: n.body;
@@ -1457,9 +1586,9 @@ export component MainWindow inherits Window {
                     Card {
                         title: "Add reminder"; body: "Date YYYY-MM-DD and/or odometer. On Android, date dues schedule a wake alarm so the app can notify when due.";
                         LineEdit { placeholder-text: "Title"; text <=> root.rem-title; }
-                        LineEdit { placeholder-text: "Due date YYYY-MM-DD"; text <=> root.rem-date; }
+                        LineEdit { placeholder-text: root.tr-rem-due-date; text <=> root.rem-date; }
                         LineEdit { placeholder-text: "Due " + root.label-distance; text <=> root.rem-mileage; }
-                        Button { text: "Save reminder"; primary: true; clicked => { root.add-reminder(); } }
+                        Button { text: root.tr-rem-save; primary: true; clicked => { root.add-reminder(); } }
                     }
                     for r in reminders: Card {
                         title: r.title; body: r.detail;
@@ -1492,14 +1621,14 @@ export component MainWindow inherits Window {
                     }
                     Card {
                         title: "New issue"; body: "";
-                        LineEdit { placeholder-text: "Caption (e.g. Front right leak)"; text <=> root.photo-caption; }
+                        LineEdit { placeholder-text: root.tr-photos-caption-ph; text <=> root.photo-caption; }
                         LineEdit { placeholder-text: "Notes / what you see"; text <=> root.photo-notes; }
                         Text {
                             text: photo-path == "" ? "No photo path yet" : ("Photo: " + photo-path);
                             font-size: 12px; color: Theme.text-soft; wrap: word-wrap;
                         }
-                        Button { text: "Take photo"; clicked => { root.capture-photo(); } }
-                        Button { text: "Save issue log"; primary: true; clicked => { root.add-photo(); } }
+                        Button { text: root.tr-photos-take; clicked => { root.capture-photo(); } }
+                        Button { text: root.tr-photos-save; primary: true; clicked => { root.add-photo(); } }
                     }
                     for ph in photos: Card { title: ph.title; body: ph.detail; }
                     Button { text: root.tr-common-back-more; clicked => { root.navigate(5); } }
@@ -1521,17 +1650,17 @@ export component MainWindow inherits Window {
                         title: "Receipt fields"; body: "Saves into maintenance history for this vehicle.";
                         HorizontalBox {
                             spacing: 6px;
-                            Button { text: "Capture for OCR"; primary: true; clicked => { root.capture-receipt-for-ocr(); } }
-                            Button { text: "On-device OCR"; primary: true; clicked => { root.ocr-receipt-on-device(); } }
+                            Button { text: root.tr-receipt-capture; primary: true; clicked => { root.capture-receipt-for-ocr(); } }
+                            Button { text: root.tr-receipt-ondevice-ocr; primary: true; clicked => { root.ocr-receipt-on-device(); } }
                         }
                         HorizontalBox {
                             spacing: 6px;
-                            Button { text: "Send photo to OCR app"; clicked => { root.send-receipt-to-ocr(); } }
-                            Button { text: "Apply shared OCR"; clicked => { root.apply-pending-ocr(); } }
+                            Button { text: root.tr-receipt-send-ocr; clicked => { root.send-receipt-to-ocr(); } }
+                            Button { text: root.tr-receipt-apply-shared; clicked => { root.apply-pending-ocr(); } }
                         }
                         HorizontalBox {
                             spacing: 6px;
-                            Button { text: "Paste & fill"; clicked => { root.paste-receipt-clipboard(); } }
+                            Button { text: root.tr-tires-paste-fill; clicked => { root.paste-receipt-clipboard(); } }
                         }
                         Text {
                             text: rcp-photo-path == "" ? "No photo yet — capture or Share an image to FixItGarage." : ("Photo: " + rcp-photo-path);
@@ -1542,9 +1671,9 @@ export component MainWindow inherits Window {
                             Button { text: "Open OCR app"; clicked => { root.open-ocr-helper(); } }
                             Button { text: "Quick camera"; clicked => { root.capture-receipt-photo(); } }
                         }
-                        LineEdit { placeholder-text: "Paste receipt text (OCR share / email / clipboard)"; text <=> root.rcp-paste; }
-                        Button { text: "Auto-fill from text above"; clicked => { root.parse-receipt-text(); } }
-                        LineEdit { placeholder-text: "Title (e.g. Oil change shop)"; text <=> root.rcp-title; }
+                        LineEdit { placeholder-text: root.tr-receipt-paste-ph; text <=> root.rcp-paste; }
+                        Button { text: root.tr-receipt-auto-fill; clicked => { root.parse-receipt-text(); } }
+                        LineEdit { placeholder-text: root.tr-receipt-title-ph; text <=> root.rcp-title; }
                         LineEdit { placeholder-text: "Date YYYY-MM-DD"; text <=> root.rcp-date; }
                         LineEdit { placeholder-text: root.label-distance; text <=> root.rcp-mileage; }
                         LineEdit { placeholder-text: root.label-fuel + " (fuel)"; text <=> root.rcp-gallons; }
@@ -1552,9 +1681,9 @@ export component MainWindow inherits Window {
                         LineEdit { placeholder-text: "Labor cost"; text <=> root.rcp-labor; }
                         LineEdit { placeholder-text: "Fuel cost (optional)"; text <=> root.rcp-fuel; }
                         LineEdit { placeholder-text: "Shop name"; text <=> root.rcp-shop; }
-                        Button { text: "Save receipt to history"; primary: true; clicked => { root.save-receipt(); } }
+                        Button { text: root.tr-receipt-save; primary: true; clicked => { root.save-receipt(); } }
                     }
-                    Button { text: "Back to service"; clicked => { root.navigate(2); } }
+                    Button { text: root.tr-common-back-more; clicked => { root.navigate(2); } }
                 }
             }
 
@@ -1568,12 +1697,12 @@ export component MainWindow inherits Window {
                     VehicleBar { prefix: root.tr-common-vehicle; switch-label: root.tr-common-switch; label: selected-vehicle-label; open-vehicles => { root.navigate(1); } }
                     Text { text: mpg-label; font-size: 15px; font-weight: 700; color: Theme.title; }
                     Text {
-                        text: "Each fuel fill with gallons logged. Per-fill MPG uses miles since the previous fill (full-tank method).";
+                        text: root.tr-fuel-each-fill;
                         font-size: 13px; color: Theme.text-muted; wrap: word-wrap;
                     }
                     for f in fuel-history: Card { title: f.title; body: f.detail; }
-                    Button { text: "Log fuel in service"; primary: true; clicked => { root.navigate(2); } }
-                    Button { text: "Back home"; clicked => { root.navigate(0); } }
+                    Button { text: root.tr-fuel-log-in-service; primary: true; clicked => { root.navigate(2); } }
+                    Button { text: root.tr-common-back-home; clicked => { root.navigate(0); } }
                 }
             }
 
