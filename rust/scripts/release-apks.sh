@@ -53,5 +53,28 @@ build_one() {
 build_one x64 x86_64
 build_one arm64 arm64
 
-echo "Done."
+echo "Done building."
 ls -lh dist/FixItGarage-${VERSION_NAME}-*.apk
+
+# Always push + publish GitHub release after a full APK build (unless disabled).
+# FIG_SKIP_GITHUB=1  → skip both push and release
+# FIG_SKIP_PUSH=1    → release only
+# FIG_SKIP_RELEASE=1 → push only
+if [[ "${FIG_SKIP_GITHUB:-0}" != "1" ]]; then
+  echo
+  echo "=== Push + GitHub release ==="
+  # Copy arm64 to Downloads for convenience
+  if [[ -f "dist/FixItGarage-${VERSION_NAME}-arm64.apk" ]]; then
+    cp -f "dist/FixItGarage-${VERSION_NAME}-arm64.apk" \
+      "${HOME}/Downloads/FixItGarage-${VERSION_NAME}-arm64.apk" 2>/dev/null || true
+  fi
+  PUBLISH="$ROOT/scripts/publish-github-release.sh"
+  chmod +x "$PUBLISH" || true
+  # Repo root may have uncommitted packaging-only noise; script pushes commits only.
+  if ! "$PUBLISH" "$VERSION_NAME"; then
+    echo "Warning: GitHub publish failed. APKs are still in dist/." >&2
+    echo "Retry: $PUBLISH $VERSION_NAME" >&2
+  fi
+else
+  echo "Skipped GitHub publish (FIG_SKIP_GITHUB=1)"
+fi
