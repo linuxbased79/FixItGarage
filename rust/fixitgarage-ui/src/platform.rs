@@ -1109,8 +1109,8 @@ pub fn app_data_dir_candidates() -> Vec<std::path::PathBuf> {
         out.push(android_files_fallback_path());
         if let Ok(home) = std::env::var("HOME") {
             if !home.is_empty() {
-                out.push(std::path::PathBuf::from(home).join("files"));
-                out.push(std::path::PathBuf::from(home).join(".local/share/fixitgarage"));
+                out.push(std::path::PathBuf::from(&home).join("files"));
+                out.push(std::path::PathBuf::from(&home).join(".local/share/fixitgarage"));
             }
         }
         // Dedup while preserving order
