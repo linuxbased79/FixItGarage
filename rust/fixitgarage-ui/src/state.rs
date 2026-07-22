@@ -409,16 +409,21 @@ impl AppState {
     }
 
     pub fn load() -> Self {
-        let try_load = |p: &std::path::Path| -> Option<(AppState, std::fs::Metadata)> {
+        let try_load_bytes = |bytes: &[u8]| -> Option<AppState> {
+            serde_json::from_slice::<AppState>(bytes).ok()
+        };
+        let try_load = |p: &std::path::Path| -> Option<(AppState, std::time::SystemTime, u64)> {
             let meta = std::fs::metadata(p).ok()?;
             let bytes = std::fs::read(p).ok()?;
-            let state = serde_json::from_slice::<AppState>(&bytes).ok()?;
-            Some((state, meta))
+            let state = try_load_bytes(&bytes)?;
+            let modified = meta.modified().unwrap_or(std::time::UNIX_EPOCH);
+            let n = state.vehicles.len() as u64;
+            Some((state, modified, n))
         };
 
         // Scan every candidate path and pick the richest / newest state file.
         // This recovers data written to the wrong place by older builds.
-        let mut best: Option<(AppState, u64, std::time::SystemTime)> = None;
+        let mut best: Option<(AppState, u64, std::time::SystemTime, String)> = None;
         let mut paths: Vec<PathBuf> = crate::platform::app_data_dir_candidates()
             .into_iter()
             .map(|d| d.join("state.json"))
@@ -429,12 +434,10 @@ impl AppState {
         paths.retain(|p| seen.insert(p.clone()));
 
         for p in &paths {
-            if let Some((state, meta)) = try_load(p) {
-                let n = state.vehicles.len() as u64;
-                let modified = meta.modified().unwrap_or(std::time::UNIX_EPOCH);
+            if let Some((state, modified, n)) = try_load(p) {
                 let replace = match &best {
                     None => true,
-                    Some((_, bn, bm)) => n > *bn || (n == *bn && modified > *bm),
+                    Some((_, bn, bm, _)) => n > *bn || (n == *bn && modified > *bm),
                 };
                 if replace {
                     eprintln!(
@@ -442,18 +445,42 @@ impl AppState {
                         p.display(),
                         n
                     );
-                    best = Some((state, n, modified));
+                    best = Some((state, n, modified, p.display().to_string()));
                 }
             }
         }
 
-        if let Some((mut state, n, _)) = best {
+        // Nuclear backup: Android SharedPreferences (survives many path mistakes).
+        if let Some(json) = crate::platform::android_prefs_load_state() {
+            if let Some(state) = try_load_bytes(json.as_bytes()) {
+                let n = state.vehicles.len() as u64;
+                let replace = match &best {
+                    None => true,
+                    Some((_, bn, _, _)) => n > *bn,
+                };
+                if replace {
+                    eprintln!(
+                        "FixItGarage: recovered state from SharedPreferences ({} vehicles)",
+                        n
+                    );
+                    best = Some((
+                        state,
+                        n,
+                        std::time::SystemTime::now(),
+                        "SharedPreferences".into(),
+                    ));
+                }
+            }
+        }
+
+        if let Some((mut state, n, _, src)) = best {
+            eprintln!("FixItGarage: loading garage from {src} ({n} vehicles)");
             state.ensure_selection();
             state.migrate_tire_configs();
             state.ensure_oil_reminders();
-            // Re-save into the canonical durable path.
+            // Re-save into every durable path so all layers stay in sync.
             if n > 0 || state.wizard_done {
-                state.save();
+                let _ = state.save();
             }
             return state;
         }
@@ -464,7 +491,16 @@ impl AppState {
         Self::default()
     }
 
-    /// Write `json` to `path` with fsync + re-parse verify. Returns true on success.
+    fn verify_state_file(path: &std::path::Path) -> bool {
+        match std::fs::read(path) {
+            Ok(bytes) if !bytes.is_empty() => {
+                matches!(serde_json::from_slice::<serde_json::Value>(&bytes), Ok(_))
+            }
+            _ => false,
+        }
+    }
+
+    /// Write `json` to `path`. On Android prefers Java atomic write; falls back to Rust.
     fn write_state_bytes(path: &std::path::Path, json: &[u8]) -> bool {
         if let Some(parent) = path.parent() {
             if let Err(e) = std::fs::create_dir_all(parent) {
@@ -475,7 +511,38 @@ impl AppState {
                 return false;
             }
         }
-        // Direct write + fsync is more reliable on Android than rename across layers.
+
+        // Android: Java tmp+fsync+rename when StorageHelper is present.
+        #[cfg(target_os = "android")]
+        {
+            let path_s = path.display().to_string();
+            if crate::platform::android_write_file_atomic(&path_s, json)
+                && Self::verify_state_file(path)
+            {
+                return true;
+            }
+        }
+
+        // Rust: write to .tmp then rename, then direct overwrite fallback.
+        let tmp = path.with_extension("json.tmp");
+        match std::fs::File::create(&tmp) {
+            Ok(mut f) => {
+                use std::io::Write;
+                if f.write_all(json).is_err() {
+                    let _ = std::fs::remove_file(&tmp);
+                    // Fall through to direct write
+                } else {
+                    let _ = f.sync_all();
+                    drop(f);
+                    if std::fs::rename(&tmp, path).is_ok() && Self::verify_state_file(path) {
+                        return true;
+                    }
+                    let _ = std::fs::remove_file(&tmp);
+                }
+            }
+            Err(_) => {}
+        }
+
         match std::fs::File::create(path) {
             Ok(mut f) => {
                 use std::io::Write;
@@ -483,42 +550,8 @@ impl AppState {
                     eprintln!("FixItGarage: write state failed: {e} ({})", path.display());
                     return false;
                 }
-                if let Err(e) = f.sync_all() {
-                    eprintln!("FixItGarage: fsync state failed: {e} ({})", path.display());
-                }
-                // Verify by re-parsing (byte-length alone fails under concurrent writers
-                // and is a weak check). Accept if file is readable JSON with vehicles array.
-                match std::fs::read(path) {
-                    Ok(bytes) => {
-                        if bytes.is_empty() {
-                            eprintln!("FixItGarage: save verify empty file ({})", path.display());
-                            return false;
-                        }
-                        match serde_json::from_slice::<serde_json::Value>(&bytes) {
-                            Ok(v) if v.get("vehicles").map(|x| x.is_array()).unwrap_or(false) => {
-                                true
-                            }
-                            Ok(_) => {
-                                // Still durable JSON; accept (schema may evolve).
-                                true
-                            }
-                            Err(e) => {
-                                eprintln!(
-                                    "FixItGarage: save verify JSON failed: {e} ({})",
-                                    path.display()
-                                );
-                                false
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!(
-                            "FixItGarage: save verify read failed: {e} ({})",
-                            path.display()
-                        );
-                        false
-                    }
-                }
+                let _ = f.sync_all();
+                Self::verify_state_file(path)
             }
             Err(e) => {
                 eprintln!(
@@ -530,8 +563,8 @@ impl AppState {
         }
     }
 
-    /// Returns true if the primary file was written successfully.
-    /// Also mirrors to every other writable candidate path (Android recovery).
+    /// Returns true if at least one durable location accepted the write.
+    /// Writes: primary path, all mirrors, Android SharedPreferences backup.
     pub fn save(&self) -> bool {
         let json = match serde_json::to_vec_pretty(self) {
             Ok(j) => j,
@@ -540,25 +573,31 @@ impl AppState {
                 return false;
             }
         };
+        let json_str = String::from_utf8_lossy(&json);
 
         let primary = Self::data_path();
-        let ok = Self::write_state_bytes(&primary, &json);
-        if ok {
+        let mut any_ok = Self::write_state_bytes(&primary, &json);
+        if any_ok {
             eprintln!(
                 "FixItGarage: saved {} bytes → {} ({} vehicles)",
                 json.len(),
                 primary.display(),
                 self.vehicles.len()
             );
+        } else {
+            eprintln!(
+                "FixItGarage: PRIMARY save FAILED at {} — trying mirrors",
+                primary.display()
+            );
         }
 
         // Mirror so a wrong path on next launch can still recover the data.
+        // If primary failed, first successful mirror becomes the recovery source.
         for dir in crate::platform::app_data_dir_candidates() {
             let p = dir.join("state.json");
             if p == primary {
                 continue;
             }
-            // Only mirror into dirs we can actually write.
             if let Some(parent) = p.parent() {
                 if std::fs::create_dir_all(parent).is_err() {
                     continue;
@@ -569,9 +608,43 @@ impl AppState {
                 }
                 let _ = std::fs::remove_file(&probe);
             }
-            let _ = Self::write_state_bytes(&p, &json);
+            if Self::write_state_bytes(&p, &json) {
+                any_ok = true;
+                eprintln!(
+                    "FixItGarage: mirror OK → {} ({} vehicles)",
+                    p.display(),
+                    self.vehicles.len()
+                );
+            }
         }
-        ok
+
+        // SharedPreferences nuclear backup (Android only; no-op elsewhere).
+        let prefs_ok = crate::platform::android_prefs_save_state(
+            &json_str,
+            self.vehicles.len() as u32,
+            &primary.display().to_string(),
+        );
+        if prefs_ok {
+            any_ok = true;
+            eprintln!(
+                "FixItGarage: SharedPreferences backup OK ({} vehicles)",
+                self.vehicles.len()
+            );
+        }
+
+        any_ok
+    }
+
+    /// Human-readable where data lives (for status line after save).
+    pub fn persistence_status_line(&self) -> String {
+        let path = Self::data_path();
+        let n = self.vehicles.len();
+        let exists = path.is_file();
+        format!(
+            "{n} vehicle(s) · {} · {}",
+            path.display(),
+            if exists { "file OK" } else { "file missing" }
+        )
     }
 
     pub fn ensure_selection(&mut self) {

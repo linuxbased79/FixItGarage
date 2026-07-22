@@ -1070,6 +1070,12 @@ fn extract_asset_to_file_android(asset_path: &str, dest: &std::path::Path) -> Re
 
 #[cfg(target_os = "android")]
 fn android_files_dir() -> Result<std::path::PathBuf, String> {
+    // Prefer Java StorageHelper (packaged in classes.dex) then raw Context.
+    if let Ok(p) = android_storage_helper_path("filesDir") {
+        if !p.as_os_str().is_empty() {
+            return Ok(p);
+        }
+    }
     use jni::objects::JObject;
     use jni::JavaVM;
 
@@ -1095,6 +1101,220 @@ fn android_files_dir() -> Result<std::path::PathBuf, String> {
         .get_string(&jstr)
         .map_err(|e| format!("get_string: {e}"))?;
     Ok(std::path::PathBuf::from(Into::<String>::into(s)))
+}
+
+/// App-specific external files dir (survives reinstall less often than internal,
+/// but is a reliable second write target when internal path probes fail).
+#[cfg(target_os = "android")]
+pub fn android_external_files_dir() -> Result<std::path::PathBuf, String> {
+    if let Ok(p) = android_storage_helper_path("externalFilesDir") {
+        if !p.as_os_str().is_empty() {
+            return Ok(p);
+        }
+    }
+    use jni::objects::{JObject, JValue};
+    use jni::JavaVM;
+    let ctx = ndk_context::android_context();
+    let vm =
+        unsafe { JavaVM::from_raw(ctx.vm().cast()) }.map_err(|e| format!("JavaVM: {e}"))?;
+    let mut env = vm
+        .attach_current_thread()
+        .map_err(|e| format!("attach: {e}"))?;
+    let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+    let null_str: JObject = JObject::null();
+    let dir = env
+        .call_method(
+            &context,
+            "getExternalFilesDir",
+            "(Ljava/lang/String;)Ljava/io/File;",
+            &[JValue::Object(&null_str)],
+        )
+        .map_err(|e| format!("getExternalFilesDir: {e}"))?
+        .l()
+        .map_err(|e| format!("ext dir: {e}"))?;
+    if dir.is_null() {
+        return Err("getExternalFilesDir null".into());
+    }
+    let path_j = env
+        .call_method(&dir, "getAbsolutePath", "()Ljava/lang/String;", &[])
+        .map_err(|e| format!("getAbsolutePath: {e}"))?
+        .l()
+        .map_err(|e| format!("path obj: {e}"))?;
+    let jstr: jni::objects::JString = path_j.into();
+    let s = env
+        .get_string(&jstr)
+        .map_err(|e| format!("get_string: {e}"))?;
+    Ok(std::path::PathBuf::from(Into::<String>::into(s)))
+}
+
+#[cfg(target_os = "android")]
+fn android_storage_helper_path(method: &str) -> Result<std::path::PathBuf, String> {
+    use jni::objects::{JObject, JValue};
+    use jni::JavaVM;
+    let ctx = ndk_context::android_context();
+    let vm =
+        unsafe { JavaVM::from_raw(ctx.vm().cast()) }.map_err(|e| format!("JavaVM: {e}"))?;
+    let mut env = vm
+        .attach_current_thread()
+        .map_err(|e| format!("attach: {e}"))?;
+    let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+    let class = env
+        .find_class("org/fixitgarage/app/StorageHelper")
+        .map_err(|e| format!("StorageHelper class: {e}"))?;
+    let path_j = env
+        .call_static_method(
+            class,
+            method,
+            "(Landroid/content/Context;)Ljava/lang/String;",
+            &[JValue::Object(&context)],
+        )
+        .map_err(|e| format!("StorageHelper.{method}: {e}"))?
+        .l()
+        .map_err(|e| format!("path: {e}"))?;
+    if path_j.is_null() {
+        return Err("null path".into());
+    }
+    let jstr: jni::objects::JString = path_j.into();
+    let s: String = env
+        .get_string(&jstr)
+        .map_err(|e| format!("get_string: {e}"))?
+        .into();
+    Ok(std::path::PathBuf::from(s))
+}
+
+/// Persist full state JSON in SharedPreferences (sync commit) as nuclear backup.
+#[cfg(target_os = "android")]
+pub fn android_prefs_save_state(json: &str, vehicle_count: u32, path: &str) -> bool {
+    use jni::objects::{JObject, JValue};
+    use jni::JavaVM;
+    let ctx = ndk_context::android_context();
+    let vm = match unsafe { JavaVM::from_raw(ctx.vm().cast()) } {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    let mut env = match vm.attach_current_thread() {
+        Ok(e) => e,
+        Err(_) => return false,
+    };
+    let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+    let class = match env.find_class("org/fixitgarage/app/StorageHelper") {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("StorageHelper: {e}");
+            return false;
+        }
+    };
+    let j_json = match env.new_string(json) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    let j_path = match env.new_string(path) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    match env.call_static_method(
+        class,
+        "savePrefsBackup",
+        "(Landroid/content/Context;Ljava/lang/String;ILjava/lang/String;)Z",
+        &[
+            JValue::Object(&context),
+            JValue::Object(&j_json),
+            JValue::Int(vehicle_count as i32),
+            JValue::Object(&j_path),
+        ],
+    ) {
+        Ok(v) => v.z().unwrap_or(false),
+        Err(e) => {
+            eprintln!("savePrefsBackup: {e}");
+            false
+        }
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+pub fn android_prefs_save_state(_json: &str, _vehicle_count: u32, _path: &str) -> bool {
+    false
+}
+
+#[cfg(target_os = "android")]
+pub fn android_prefs_load_state() -> Option<String> {
+    use jni::objects::{JObject, JValue};
+    use jni::JavaVM;
+    let ctx = ndk_context::android_context();
+    let vm = unsafe { JavaVM::from_raw(ctx.vm().cast()) }.ok()?;
+    let mut env = vm.attach_current_thread().ok()?;
+    let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+    let class = env.find_class("org/fixitgarage/app/StorageHelper").ok()?;
+    let path_j = env
+        .call_static_method(
+            class,
+            "loadPrefsBackup",
+            "(Landroid/content/Context;)Ljava/lang/String;",
+            &[JValue::Object(&context)],
+        )
+        .ok()?
+        .l()
+        .ok()?;
+    if path_j.is_null() {
+        return None;
+    }
+    let jstr: jni::objects::JString = path_j.into();
+    let s: String = env.get_string(&jstr).ok()?.into();
+    if s.trim().is_empty() {
+        None
+    } else {
+        Some(s)
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+pub fn android_prefs_load_state() -> Option<String> {
+    None
+}
+
+/// Atomic file write via Java (tmp + fsync + rename) when available.
+#[cfg(target_os = "android")]
+pub fn android_write_file_atomic(path: &str, data: &[u8]) -> bool {
+    use jni::objects::{JObject, JValue};
+    use jni::JavaVM;
+    let ctx = ndk_context::android_context();
+    let vm = match unsafe { JavaVM::from_raw(ctx.vm().cast()) } {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    let mut env = match vm.attach_current_thread() {
+        Ok(e) => e,
+        Err(_) => return false,
+    };
+    let class = match env.find_class("org/fixitgarage/app/StorageHelper") {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+    let j_path = match env.new_string(path) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    let arr = match env.byte_array_from_slice(data) {
+        Ok(a) => a,
+        Err(_) => return false,
+    };
+    match env.call_static_method(
+        class,
+        "writeFileAtomic",
+        "(Ljava/lang/String;[B)Z",
+        &[JValue::Object(&j_path), JValue::Object(&arr)],
+    ) {
+        Ok(v) => v.z().unwrap_or(false),
+        Err(e) => {
+            eprintln!("writeFileAtomic: {e}");
+            false
+        }
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+pub fn android_write_file_atomic(_path: &str, _data: &[u8]) -> bool {
+    false
 }
 
 /// App-private data directory for `state.json` and other durable files.
@@ -1134,6 +1354,11 @@ pub fn app_data_dir_candidates() -> Vec<std::path::PathBuf> {
         if let Ok(p) = android_files_dir() {
             out.push(p);
         }
+        // Second durable target (app-specific external storage).
+        if let Ok(p) = android_external_files_dir() {
+            out.push(p.clone());
+            out.push(p.join("fixitgarage"));
+        }
         // Discover live package files dir via /proc or env when possible.
         if let Ok(home) = std::env::var("HOME") {
             if !home.is_empty() {
@@ -1144,6 +1369,9 @@ pub fn app_data_dir_candidates() -> Vec<std::path::PathBuf> {
         for user in [0u32, 10, 11, 12] {
             out.push(std::path::PathBuf::from(format!(
                 "/data/user/{user}/org.fixitgarage.app/files"
+            )));
+            out.push(std::path::PathBuf::from(format!(
+                "/storage/emulated/{user}/Android/data/org.fixitgarage.app/files"
             )));
         }
         out.push(std::path::PathBuf::from(
@@ -1411,13 +1639,63 @@ fn capture_for_ocr_android() -> Result<String, String> {
     )
     .map_err(|e| format!("addFlags: {e}"))?;
 
-    // Grant URI perms to camera packages (best-effort)
-    let _ = env.call_method(
-        &intent,
-        "addFlags",
-        "(I)Landroid/content/Intent;",
-        &[JValue::Int(0x0000_0040)], // FLAG_GRANT_PERSISTABLE? skip
-    );
+    // Critical: grant the MediaStore URI to every package that can handle the camera.
+    // Without this, many OEMs open the camera but never write EXTRA_OUTPUT.
+    let grant_flags = 0x0000_0001i32 | 0x0000_0002; // READ | WRITE
+    if let Ok(pm) = env
+        .call_method(
+            &context,
+            "getPackageManager",
+            "()Landroid/content/pm/PackageManager;",
+            &[],
+        )
+        .and_then(|v| v.l())
+    {
+        // MATCH_DEFAULT_ONLY = 0x00010000
+        if let Ok(list) = env
+            .call_method(
+                &pm,
+                "queryIntentActivities",
+                "(Landroid/content/Intent;I)Ljava/util/List;",
+                &[JValue::Object(&intent), JValue::Int(0x0001_0000)],
+            )
+            .and_then(|v| v.l())
+        {
+            if let Ok(size) = env
+                .call_method(&list, "size", "()I", &[])
+                .and_then(|v| v.i())
+            {
+                for i in 0..size {
+                    if let Ok(ri) = env
+                        .call_method(&list, "get", "(I)Ljava/lang/Object;", &[JValue::Int(i)])
+                        .and_then(|v| v.l())
+                    {
+                        // ResolveInfo.activityInfo.packageName
+                        if let Ok(ai) = env
+                            .get_field(&ri, "activityInfo", "Landroid/content/pm/ActivityInfo;")
+                            .and_then(|v| v.l())
+                        {
+                            if let Ok(pkg_j) = env
+                                .get_field(&ai, "packageName", "Ljava/lang/String;")
+                                .and_then(|v| v.l())
+                            {
+                                let _ = env.call_method(
+                                    &context,
+                                    "grantUriPermission",
+                                    "(Ljava/lang/String;Landroid/net/Uri;I)V",
+                                    &[
+                                        JValue::Object(&pkg_j),
+                                        JValue::Object(&inserted),
+                                        JValue::Int(grant_flags),
+                                    ],
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     env.call_method(
         &context,
@@ -1428,6 +1706,102 @@ fn capture_for_ocr_android() -> Result<String, String> {
     .map_err(|e| format!("startActivity: {e}"))?;
 
     Ok(uri_string)
+}
+
+/// Open gallery / document picker so the user can choose a title photo without relying on camera EXTRA_OUTPUT.
+#[cfg(target_os = "android")]
+pub fn pick_image_for_ocr_android() -> Result<(), String> {
+    use jni::objects::{JObject, JValue};
+    use jni::JavaVM;
+    set_ocr_target("title");
+    let ctx = ndk_context::android_context();
+    let vm =
+        unsafe { JavaVM::from_raw(ctx.vm().cast()) }.map_err(|e| format!("JavaVM: {e}"))?;
+    let mut env = vm
+        .attach_current_thread()
+        .map_err(|e| format!("attach: {e}"))?;
+    let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+
+    let intent_class = env
+        .find_class("android/content/Intent")
+        .map_err(|e| format!("Intent: {e}"))?;
+    // ACTION_GET_CONTENT
+    let action = env
+        .new_string("android.intent.action.GET_CONTENT")
+        .map_err(|e| format!("action: {e}"))?;
+    let intent = env
+        .new_object(
+            &intent_class,
+            "(Ljava/lang/String;)V",
+            &[JValue::Object(&action)],
+        )
+        .map_err(|e| format!("new Intent: {e}"))?;
+    let mime = env
+        .new_string("image/*")
+        .map_err(|e| format!("mime: {e}"))?;
+    env.call_method(
+        &intent,
+        "setType",
+        "(Ljava/lang/String;)Landroid/content/Intent;",
+        &[JValue::Object(&mime)],
+    )
+    .map_err(|e| format!("setType: {e}"))?;
+    // CATEGORY_OPENABLE
+    let cat = env
+        .new_string("android.intent.category.OPENABLE")
+        .map_err(|e| format!("cat: {e}"))?;
+    env.call_method(
+        &intent,
+        "addCategory",
+        "(Ljava/lang/String;)Landroid/content/Intent;",
+        &[JValue::Object(&cat)],
+    )
+    .map_err(|e| format!("addCategory: {e}"))?;
+    // NEW_TASK
+    env.call_method(
+        &intent,
+        "addFlags",
+        "(I)Landroid/content/Intent;",
+        &[JValue::Int(0x1000_0000)],
+    )
+    .map_err(|e| format!("addFlags: {e}"))?;
+
+    // Note: without startActivityForResult we cannot get the picked URI back into
+    // NativeActivity easily. Users should Share the image to FixItGarage instead,
+    // OR we rely on camera MediaStore path. Keep this as best-effort open of picker
+    // that may still write via share target.
+    let chooser_action = env
+        .new_string("android.intent.action.CHOOSER")
+        .map_err(|e| format!("chooser: {e}"))?;
+    let title = env
+        .new_string("Pick title / VIN photo")
+        .map_err(|e| format!("title: {e}"))?;
+    let chooser = env
+        .call_static_method(
+            &intent_class,
+            "createChooser",
+            "(Landroid/content/Intent;Ljava/lang/CharSequence;)Landroid/content/Intent;",
+            &[JValue::Object(&intent), JValue::Object(&title)],
+        )
+        .map_err(|e| format!("createChooser: {e}"))?
+        .l()
+        .map_err(|e| format!("chooser obj: {e}"))?;
+    let _ = chooser_action;
+    env.call_method(
+        &chooser,
+        "addFlags",
+        "(I)Landroid/content/Intent;",
+        &[JValue::Int(0x1000_0000)],
+    )
+    .map_err(|e| format!("chooser flags: {e}"))?;
+    env.call_method(
+        &context,
+        "startActivity",
+        "(Landroid/content/Intent;)V",
+        &[JValue::Object(&chooser)],
+    )
+    .map_err(|e| format!("startActivity: {e}"))?;
+    Ok(())
 }
 
 /// If a pending MediaStore URI has content, copy into fig_ocr_image.jpg.
@@ -1453,6 +1827,8 @@ fn finalize_pending_camera_uri() -> Result<Option<String>, String> {
     }
     copy_content_uri_to_file_android(&uri, &out.display().to_string())?;
     if out.is_file() {
+        // Clear stale URI so next capture is not reused.
+        let _ = std::fs::remove_file(&uri_file);
         Ok(Some(out.display().to_string()))
     } else {
         Ok(None)

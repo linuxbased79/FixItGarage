@@ -1,12 +1,16 @@
 # Changelog
 
+## 0.2.39
+- **Vehicle save (actual device fix):** Android `StorageHelper` — SharedPreferences nuclear backup + Java atomic file write; primary-fail tries all mirrors; load recovers from prefs; form **always** refilled from selected car; status shows path + vehicle count
+- **Title camera:** grant MediaStore URI write permission to **all** camera packages (OEM bug that left empty photos); clear URI after finalize
+- **Recalls:** log if UI event-loop marshal fails (silent drop fixed)
+- Lumo medium items: primary→mirror fallback, prefs backup
+
 ## 0.2.38
-- **Vehicle save (real fix):** keep form filled after Save/restart (was empty so cars looked “gone”); auto-name from VIN/YMM; mirror state.json to every writable Android path; fsync + verify
-- **NHTSA recalls:** clearer offline/timeout errors; User-Agent; empty/400 still = zero campaigns (not a crash)
-- **Title / VIN scanner:** camera now writes via MediaStore (same as receipts); Read photo retries while camera finishes; OCR fills VIN + year + make + model and saves
+- Form fill after save; multi-path mirror; NHTSA empty/400; MediaStore title OCR (still reported broken on device → 0.2.39)
 
 ## 0.2.37
-- Vehicle save path hardening + NHTSA empty-list handling + title OCR scaffolding (camera path incomplete — fixed in 0.2.38)
+- Vehicle save path hardening + NHTSA empty-list handling + title OCR scaffolding
 
 ## 0.2.36
 - **Hard fix vehicle save:** resolve Android storage via getFilesDir + package files paths; scan all candidates on load; fsync after write; confirm save in status

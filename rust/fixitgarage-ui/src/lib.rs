@@ -531,16 +531,13 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     );
                     let ok = s.save();
                     fill_form_from_selected(&ui, &s);
+                    let status = s.persistence_status_line();
                     refresh_ui(&ui, &s);
                     ui.set_status_message(
                         if ok {
-                            format!(
-                                "Vehicle updated and saved ({} on this device).",
-                                s.vehicles.len()
-                            )
-                            .into()
+                            format!("Updated & saved. {status}").into()
                         } else {
-                            "WARNING: update may not have been written. Tap Save again.".into()
+                            format!("SAVE FAILED — try again. {status}").into()
                         },
                     );
                     return;
@@ -550,25 +547,20 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                 let after = s.vehicles.len();
                 // Force another durable write (add_vehicle already saves; verify path works).
                 let ok = s.save();
-                // Keep the saved vehicle visible in the form (do NOT clear — that looked like
-                // "save failed" and left empty fields after restart until user re-tapped).
+                // Keep the saved vehicle visible in the form (do NOT clear).
                 fill_form_from_selected(&ui, &s);
+                let status = s.persistence_status_line();
                 if after <= before {
                     ui.set_status_message(
                         "Could not add vehicle — enter a Name, VIN, or Make first.".into(),
                     );
                 } else if ok {
                     ui.set_status_message(
-                        format!(
-                            "Vehicle saved ({} total). Still here after restart.",
-                            after
-                        )
-                        .into(),
+                        format!("SAVED. Force-close and reopen to verify. {status}").into(),
                     );
                 } else {
                     ui.set_status_message(
-                        "WARNING: vehicle may not have been written to storage. Try Save again."
-                            .into(),
+                        format!("SAVE FAILED — try again. {status}").into(),
                     );
                 }
                 refresh_ui(&ui, &s);
@@ -670,11 +662,13 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                             result: recalls::check_recalls_for_vin(&vin),
                         }
                     };
-                    let _ = slint::invoke_from_event_loop(move || {
+                    if let Err(e) = slint::invoke_from_event_loop(move || {
                         if let Some(ui) = ui_weak.upgrade() {
                             apply_recall_outcome(&ui, &state, outcome);
                         }
-                    });
+                    }) {
+                        eprintln!("FixItGarage: recall UI update failed: {e}");
+                    }
                 });
             }
         });
@@ -706,12 +700,15 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let ui_weak = ui.as_weak();
         ui.on_scan_vehicle_title(move || {
             if let Some(ui) = ui_weak.upgrade() {
-                // MediaStore EXTRA_OUTPUT capture — same path as receipt OCR (writes a real photo).
+                // MediaStore EXTRA_OUTPUT + grant URI to all camera apps.
                 let path = capture_title_for_ocr();
-                ui.set_title_photo_path(path.into());
+                ui.set_title_photo_path(path.clone().into());
                 ui.set_status_message(
-                    "Camera opened — photograph the full title (or VIN plate), return here, wait a second, then tap Read photo (OCR)."
-                        .into(),
+                    format!(
+                        "Camera opened (output {}). Photograph title/VIN plate, return, wait 2s, tap Read photo. Or Share a gallery photo to FixItGarage, then Read photo.",
+                        if path.is_empty() { "pending" } else { &path }
+                    )
+                    .into(),
                 );
             }
         });
@@ -2331,18 +2328,10 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     ui.set_selected_vehicle_label(sel_name.into());
     ui.set_selected_vehicle_id(state.selected_vehicle_id.unwrap_or(0) as i32);
 
-    // Keep form fields in sync with the selected vehicle so a restart doesn't look
-    // like "vehicle disappeared" (list had it, edit fields were empty).
+    // Always re-fill form from selected vehicle so a restart never looks empty.
+    // (0.2.35–0.2.38 still failed for users when form stayed blank after save.)
     if state.selected_vehicle_id.is_some() {
-        // Only auto-fill when form is empty OR already matches selection by name/vin
-        // — avoid stomping mid-edit of a brand-new car the user is typing.
-        let form_empty = ui.get_form_name().is_empty()
-            && ui.get_form_vin().is_empty()
-            && ui.get_form_make().is_empty()
-            && ui.get_form_model().is_empty();
-        if form_empty {
-            fill_form_from_selected(ui, state);
-        }
+        fill_form_from_selected(ui, state);
     }
 
     let u = state.unit_system();
