@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.38
+- **Vehicle save (real fix):** keep form filled after Save/restart (was empty so cars looked “gone”); auto-name from VIN/YMM; mirror state.json to every writable Android path; fsync + verify
+- **NHTSA recalls:** clearer offline/timeout errors; User-Agent; empty/400 still = zero campaigns (not a crash)
+- **Title / VIN scanner:** camera now writes via MediaStore (same as receipts); Read photo retries while camera finishes; OCR fills VIN + year + make + model and saves
+
+## 0.2.37
+- Vehicle save path hardening + NHTSA empty-list handling + title OCR scaffolding (camera path incomplete — fixed in 0.2.38)
+
 ## 0.2.36
 - **Hard fix vehicle save:** resolve Android storage via getFilesDir + package files paths; scan all candidates on load; fsync after write; confirm save in status
 - **NHTSA recalls:** HTTP 400 with empty results = zero campaigns (not a hard error) for years like 2024 Forte

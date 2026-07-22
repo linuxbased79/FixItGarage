@@ -669,6 +669,10 @@ export component MainWindow inherits Window {
     in-out property <string> tr-vehicles-vin-opt-ph: "VIN (17 characters, optional)";
     in-out property <string> tr-vehicles-vin-ph: "VIN (17 characters)";
     in-out property <string> tr-vehicles-year-ph: "Year";
+    in-out property <string> tr-vehicles-scan-title: "Photo title / VIN";
+    in-out property <string> tr-vehicles-ocr-title: "Read photo (OCR)";
+    in-out property <string> tr-vehicles-scan-hint: "Photograph the vehicle title (or VIN plate), then Read photo to fill VIN / year / make / model. Always tap Save vehicle.";
+    in-out property <string> title-photo-path: "";
     in-out property <string> tr-wizard-both: "Both DIY and shop";
     in-out property <string> tr-wizard-diy: "Mostly DIY";
     in-out property <string> tr-wizard-diy-body: "Parts, oil, tires, DIY logging first.";
@@ -750,6 +754,10 @@ export component MainWindow inherits Window {
     callback check-recalls();
     /// Open NHTSA.gov VIN recall page in browser.
     callback open-nhtsa-vin-page();
+    /// Capture a photo of the vehicle title / VIN plate.
+    callback scan-vehicle-title();
+    /// Run on-device OCR on the title photo and fill form fields.
+    callback ocr-vehicle-title();
     callback set-service-search(string);
     callback open-feedback();
     callback open-donate();
@@ -899,6 +907,15 @@ export component MainWindow inherits Window {
                     Text { text: root.tr-vehicles-hint; font-size: 13px; color: Theme.text-muted; wrap: word-wrap; }
                     Card {
                         title: root.tr-vehicles-add-title; body: root.tr-vehicles-add-body;
+                        Text {
+                            text: root.tr-vehicles-scan-hint;
+                            font-size: 12px; color: Theme.text-muted; wrap: word-wrap;
+                        }
+                        HorizontalBox {
+                            spacing: 6px;
+                            Button { text: root.tr-vehicles-scan-title; primary: true; clicked => { root.scan-vehicle-title(); } horizontal-stretch: 1; }
+                            Button { text: root.tr-vehicles-ocr-title; clicked => { root.ocr-vehicle-title(); } horizontal-stretch: 1; }
+                        }
                         LineEdit { placeholder-text: root.tr-vehicles-name-ph; text <=> root.form-name; }
                         LineEdit { placeholder-text: root.tr-vehicles-vin-opt-ph; text <=> root.form-vin; }
                         LineEdit { placeholder-text: root.tr-vehicles-make-ph; text <=> root.form-make; }
@@ -912,6 +929,11 @@ export component MainWindow inherits Window {
                     Card {
                         title: root.tr-vehicles-edit-title;
                         body: selected-vehicle-label;
+                        HorizontalBox {
+                            spacing: 6px;
+                            Button { text: root.tr-vehicles-scan-title; clicked => { root.scan-vehicle-title(); } horizontal-stretch: 1; }
+                            Button { text: root.tr-vehicles-ocr-title; clicked => { root.ocr-vehicle-title(); } horizontal-stretch: 1; }
+                        }
                         LineEdit { placeholder-text: root.tr-vehicles-name-ph; text <=> root.form-name; }
                         LineEdit { placeholder-text: root.tr-vehicles-vin-ph; text <=> root.form-vin; }
                         LineEdit { placeholder-text: root.tr-vehicles-make-ph; text <=> root.form-make; }

@@ -7,6 +7,7 @@ mod receipt_parse;
 mod recalls;
 mod seller_packet;
 mod state;
+mod title_parse;
 mod tread_cv;
 mod units;
 mod webdav;
@@ -14,11 +15,12 @@ mod webdav;
 use chrono::{TimeZone, Utc};
 use i18n::{resolve_lang, t, Lang, LanguagePref};
 use platform::{
-    cancel_app_wake, capture_issue_photo_path, capture_receipt_for_ocr, notify, notify_with_id,
-    ocr_target, open_ocr_helper, open_ocr_helper_for_tire, open_url, pending_ocr_image_path,
-    read_clipboard, schedule_app_wake, send_pending_image_to_ocr, set_ocr_target, share_file,
-    share_text, share_text_to_cloud, system_locale, system_safe_area_dp, take_pending_ocr_text,
-    write_alarm_schedule, PKG_DROPBOX, PKG_GOOGLE_DRIVE, PKG_ONEDRIVE, PKG_PROTON_DRIVE,
+    cancel_app_wake, capture_issue_photo_path, capture_receipt_for_ocr, capture_title_for_ocr,
+    notify, notify_with_id, ocr_target, open_ocr_helper, open_ocr_helper_for_tire, open_url,
+    pending_ocr_image_path, read_clipboard, schedule_app_wake, send_pending_image_to_ocr,
+    set_ocr_target, share_file, share_text, share_text_to_cloud, system_locale,
+    system_safe_area_dp, take_pending_ocr_text, write_alarm_schedule, PKG_DROPBOX,
+    PKG_GOOGLE_DRIVE, PKG_ONEDRIVE, PKG_PROTON_DRIVE,
 };
 use receipt_parse::{parse_receipt_text, parse_tire_receipt_text};
 use state::{reminder_status_line_units, AppState};
@@ -207,6 +209,20 @@ fn part_summary_i18n(state: &AppState, part_type: &str, lang: Lang) -> String {
     }
 }
 
+/// Push selected vehicle fields into the form (after save / load / select).
+fn fill_form_from_selected(ui: &MainWindow, state: &AppState) {
+    let Some(v) = state.selected_vehicle() else {
+        return;
+    };
+    ui.set_form_name(v.name.clone().into());
+    ui.set_form_make(v.make.clone().into());
+    ui.set_form_model(v.model.clone().into());
+    ui.set_form_vin(v.vin.clone().into());
+    ui.set_form_year(v.year.map(|y| y.to_string()).unwrap_or_default().into());
+    let u = state.unit_system();
+    ui.set_form_mileage(miles_to_display(v.current_mileage, u).to_string().into());
+}
+
 /// If the user typed vehicle details but never tapped Save, persist them before
 /// network work so a crash cannot wipe the form.
 fn ensure_vehicle_from_form(ui: &MainWindow, state: &Arc<Mutex<AppState>>) {
@@ -241,26 +257,16 @@ fn ensure_vehicle_from_form(ui: &MainWindow, state: &Arc<Mutex<AppState>>) {
         return;
     }
 
-    // No vehicle yet — create one from the form if we have enough to identify it.
-    let name = if name.trim().is_empty() {
-        let hint = format!(
-            "{} {}",
-            year.map(|y| y.to_string()).unwrap_or_default(),
-            make
-        )
-        .trim()
-        .to_string();
-        if hint.is_empty() {
-            if vin.trim().is_empty() {
-                return;
-            }
-            "My vehicle".into()
-        } else {
-            hint
-        }
-    } else {
-        name
-    };
+    // No vehicle yet — create one if we have any identifying field.
+    if name.trim().is_empty()
+        && make.trim().is_empty()
+        && model.trim().is_empty()
+        && vin.trim().is_empty()
+        && year.is_none()
+    {
+        return;
+    }
+    // add_vehicle auto-names from YMM/VIN when name is empty.
     s.add_vehicle(name, make, model, year, mileage, vin);
 }
 
@@ -494,25 +500,67 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     ui.get_form_mileage().parse().unwrap_or(0),
                     u,
                 );
+                // If the form still matches the selected vehicle (same name or same VIN),
+                // treat Save as an update so users don't create accidental duplicates.
+                // Otherwise add a new car (second vehicle, OCR of a different title, etc.).
+                let same_as_selected = s.selected_vehicle().map(|v| {
+                    let same_vin = !vin.trim().is_empty()
+                        && !v.vin.is_empty()
+                        && v.vin.eq_ignore_ascii_case(vin.trim());
+                    let same_name = !name.trim().is_empty()
+                        && v.name.eq_ignore_ascii_case(name.trim());
+                    same_vin || same_name
+                }).unwrap_or(false);
+                if same_as_selected {
+                    let existing_name = s
+                        .selected_vehicle()
+                        .map(|v| v.name.clone())
+                        .unwrap_or_else(|| "My vehicle".into());
+                    let save_name = if name.trim().is_empty() {
+                        existing_name
+                    } else {
+                        name.clone()
+                    };
+                    s.update_selected_vehicle_details(
+                        save_name,
+                        make.clone(),
+                        model.clone(),
+                        year,
+                        Some(mileage).filter(|&m| m > 0),
+                        Some(vin.clone()),
+                    );
+                    let ok = s.save();
+                    fill_form_from_selected(&ui, &s);
+                    refresh_ui(&ui, &s);
+                    ui.set_status_message(
+                        if ok {
+                            format!(
+                                "Vehicle updated and saved ({} on this device).",
+                                s.vehicles.len()
+                            )
+                            .into()
+                        } else {
+                            "WARNING: update may not have been written. Tap Save again.".into()
+                        },
+                    );
+                    return;
+                }
                 let before = s.vehicles.len();
                 s.add_vehicle(name, make, model, year, mileage, vin);
                 let after = s.vehicles.len();
                 // Force another durable write (add_vehicle already saves; verify path works).
                 let ok = s.save();
-                ui.set_form_name("".into());
-                ui.set_form_make("".into());
-                ui.set_form_model("".into());
-                ui.set_form_year("".into());
-                ui.set_form_mileage("".into());
-                ui.set_form_vin("".into());
+                // Keep the saved vehicle visible in the form (do NOT clear — that looked like
+                // "save failed" and left empty fields after restart until user re-tapped).
+                fill_form_from_selected(&ui, &s);
                 if after <= before {
                     ui.set_status_message(
-                        "Could not add vehicle — enter a Name / nickname first.".into(),
+                        "Could not add vehicle — enter a Name, VIN, or Make first.".into(),
                     );
                 } else if ok {
                     ui.set_status_message(
                         format!(
-                            "Vehicle saved ({} total). Data stored on this device.",
+                            "Vehicle saved ({} total). Still here after restart.",
                             after
                         )
                         .into(),
@@ -650,6 +698,81 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                     }
                     Err(e) => ui.set_status_message(format!("VIN: {e}").into()),
                 }
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        ui.on_scan_vehicle_title(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                // MediaStore EXTRA_OUTPUT capture — same path as receipt OCR (writes a real photo).
+                let path = capture_title_for_ocr();
+                ui.set_title_photo_path(path.into());
+                ui.set_status_message(
+                    "Camera opened — photograph the full title (or VIN plate), return here, wait a second, then tap Read photo (OCR)."
+                        .into(),
+                );
+            }
+        });
+    }
+
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_ocr_vehicle_title(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                ui.set_status_message("Reading title photo (on-device OCR)…".into());
+                let ui_weak = ui_weak.clone();
+                let state = state.clone();
+                let hinted = ui.get_title_photo_path().to_string();
+                std::thread::spawn(move || {
+                    // Camera may still be writing MediaStore — retry briefly.
+                    let mut path: Option<String> = None;
+                    for attempt in 0..8 {
+                        if let Some(img) = pending_ocr_image_path() {
+                            path = Some(img);
+                            break;
+                        }
+                        if !hinted.trim().is_empty()
+                            && !hinted.starts_with("content:")
+                            && std::path::Path::new(&hinted).exists()
+                        {
+                            if let Ok(meta) = std::fs::metadata(&hinted) {
+                                if meta.len() > 32 {
+                                    path = Some(hinted.clone());
+                                    break;
+                                }
+                            }
+                        }
+                        if attempt + 1 < 8 {
+                            std::thread::sleep(std::time::Duration::from_millis(400));
+                        }
+                    }
+                    let ocr_result = match path {
+                        Some(ref p) => ondevice_ocr::ocr_image_path(p).map(|t| (p.clone(), t)),
+                        None => Err(
+                            "No title photo yet — tap Photo title / VIN, take the picture, return, then Read photo."
+                                .into(),
+                        ),
+                    };
+                    let _ = slint::invoke_from_event_loop(move || {
+                        if let Some(ui) = ui_weak.upgrade() {
+                            match ocr_result {
+                                Ok((p, text)) => {
+                                    ui.set_title_photo_path(p.into());
+                                    apply_title_ocr_text(&ui, &state, &text);
+                                }
+                                Err(e) => ui.set_status_message(
+                                    format!(
+                                        "Title OCR: {e}"
+                                    )
+                                    .into(),
+                                ),
+                            }
+                        }
+                    });
+                });
             }
         });
     }
@@ -2073,6 +2196,61 @@ fn apply_receipt_ocr_text(ui: &MainWindow, state: &AppState, text: &str) {
     );
 }
 
+fn apply_title_ocr_text(ui: &MainWindow, state: &Arc<Mutex<AppState>>, text: &str) {
+    let fields = title_parse::parse_title_text(text);
+    let mut filled = Vec::new();
+    if let Some(vin) = fields.vin {
+        ui.set_form_vin(vin.into());
+        filled.push("VIN");
+    }
+    if let Some(year) = fields.year {
+        ui.set_form_year(year.to_string().into());
+        filled.push("year");
+    }
+    if let Some(make) = fields.make {
+        ui.set_form_make(make.into());
+        filled.push("make");
+    }
+    if let Some(model) = fields.model {
+        ui.set_form_model(model.into());
+        filled.push("model");
+    }
+    if let Some(name) = fields.name_hint {
+        if ui.get_form_name().is_empty() {
+            ui.set_form_name(name.into());
+            filled.push("name");
+        }
+    }
+    // Persist immediately so fields are not lost if the user leaves the screen.
+    ensure_vehicle_from_form(ui, state);
+    let s = state.lock().unwrap();
+    let ok = s.save();
+    fill_form_from_selected(ui, &s);
+    refresh_ui(ui, &s);
+    if filled.is_empty() {
+        ui.set_status_message(
+            "OCR finished but no VIN/year/make/model found. Try a clearer photo of the full title (good light, flat)."
+                .into(),
+        );
+    } else if ok {
+        ui.set_status_message(
+            format!(
+                "Filled from title: {}. Saved on this device — review fields, tap Save if you edit more.",
+                filled.join(", ")
+            )
+            .into(),
+        );
+    } else {
+        ui.set_status_message(
+            format!(
+                "Filled from title: {}. WARNING: save may have failed — tap Save vehicle.",
+                filled.join(", ")
+            )
+            .into(),
+        );
+    }
+}
+
 fn apply_tire_ocr_text(ui: &MainWindow, state: &AppState, text: &str) {
     ui.set_tire_rcp_paste(text.into());
     let p = parse_tire_receipt_text(text);
@@ -2152,6 +2330,20 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
         .unwrap_or_else(|| t(lang, "vehicle.none"));
     ui.set_selected_vehicle_label(sel_name.into());
     ui.set_selected_vehicle_id(state.selected_vehicle_id.unwrap_or(0) as i32);
+
+    // Keep form fields in sync with the selected vehicle so a restart doesn't look
+    // like "vehicle disappeared" (list had it, edit fields were empty).
+    if state.selected_vehicle_id.is_some() {
+        // Only auto-fill when form is empty OR already matches selection by name/vin
+        // — avoid stomping mid-edit of a brand-new car the user is typing.
+        let form_empty = ui.get_form_name().is_empty()
+            && ui.get_form_vin().is_empty()
+            && ui.get_form_make().is_empty()
+            && ui.get_form_model().is_empty();
+        if form_empty {
+            fill_form_from_selected(ui, state);
+        }
+    }
 
     let u = state.unit_system();
     ui.set_units(u.as_str().into());
@@ -2449,6 +2641,9 @@ fn refresh_ui(ui: &MainWindow, state: &AppState) {
     ui.set_tr_vehicles_model_ph(t(lang, "vehicles.model_ph").into());
     ui.set_tr_vehicles_name_ph(t(lang, "vehicles.name_ph").into());
     ui.set_tr_vehicles_open_nhtsa(t(lang, "vehicles.open_nhtsa").into());
+    ui.set_tr_vehicles_scan_title(t(lang, "vehicles.scan_title").into());
+    ui.set_tr_vehicles_ocr_title(t(lang, "vehicles.ocr_title").into());
+    ui.set_tr_vehicles_scan_hint(t(lang, "vehicles.scan_hint").into());
     ui.set_tr_vehicles_recalls_body(t(lang, "vehicles.recalls_body").into());
     ui.set_tr_vehicles_recalls_title(t(lang, "vehicles.recalls_title").into());
     ui.set_tr_vehicles_save(t(lang, "vehicles.save").into());

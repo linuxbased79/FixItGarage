@@ -119,7 +119,7 @@ fi
   --manifest "$WORK/AndroidManifest.xml" \
   -I "$ANDROID_JAR" \
   --min-sdk-version 26 \
-  --target-sdk-version 34 \
+  --target-sdk-version 35 \
   --version-code "$VERSION_CODE" \
   --version-name "$VERSION_NAME" \
   "${LINK_EXTRAS[@]+"${LINK_EXTRAS[@]}"}"

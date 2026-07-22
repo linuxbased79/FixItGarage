@@ -6,6 +6,7 @@
 //! 3. Optionally open NHTSA consumer VIN page for open-recall status on that VIN
 
 use serde::Deserialize;
+use std::io::Read;
 use std::time::Duration;
 
 const VIN_DECODE: &str = "https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues";
@@ -78,13 +79,21 @@ pub fn check_recalls_for_vin(vin_raw: &str) -> Result<RecallCheckResult, String>
     let year = decoded
         .year
         .ok_or_else(|| "Could not decode model year from VIN.".to_string())?;
-    let recalls = fetch_recalls(&decoded.make, &decoded.model, year)?;
+    // Never fail the whole check if the campaigns list is empty or the API returns 400.
+    let (recalls, list_note) = match fetch_recalls(&decoded.make, &decoded.model, year) {
+        Ok(r) => (r, String::new()),
+        Err(e) => (
+            Vec::new(),
+            format!(" Campaign list unavailable ({e}). Use Open NHTSA VIN page for official status."),
+        ),
+    };
     let note = format!(
-        "NHTSA data for {} {} {} (from VIN). {} campaign(s). Open-recall status for this exact VIN: nhtsa.gov/recalls.",
+        "NHTSA data for {} {} {} (from VIN). {} campaign(s). Open-recall status for this exact VIN: nhtsa.gov/recalls.{}",
         year,
         decoded.make,
         decoded.model,
-        recalls.len()
+        recalls.len(),
+        list_note
     );
     Ok(RecallCheckResult {
         decoded,
@@ -103,8 +112,9 @@ pub fn check_recalls_ymm(make: &str, model: &str, year: u16) -> Result<Vec<Recal
 
 fn agent() -> ureq::Agent {
     ureq::AgentBuilder::new()
-        .timeout_connect(Duration::from_secs(12))
-        .timeout_read(Duration::from_secs(25))
+        .timeout_connect(Duration::from_secs(15))
+        .timeout_read(Duration::from_secs(30))
+        .user_agent("FixItGarage/0.2.38 (Android; NHTSA recall check)")
         .build()
 }
 
@@ -112,8 +122,23 @@ fn decode_vin(vin: &str) -> Result<DecodedVin, String> {
     let url = format!("{VIN_DECODE}/{vin}?format=json");
     let resp = agent()
         .get(&url)
+        .set("Accept", "application/json")
         .call()
-        .map_err(|e| format!("VIN decode network: {e}"))?;
+        .map_err(|e| {
+            // Surface common Android / offline failures clearly.
+            let s = e.to_string();
+            if s.contains("timed out") || s.contains("Timeout") {
+                format!("VIN decode timed out — check Wi‑Fi/mobile data and try again.")
+            } else if s.contains("failed to lookup")
+                || s.contains("Dns")
+                || s.contains("Name or service")
+                || s.contains("Network is unreachable")
+            {
+                format!("No network for VIN decode — enable internet and try again. ({s})")
+            } else {
+                format!("VIN decode network: {s}")
+            }
+        })?;
     let body: VinDecodeResponse = serde_json::from_reader(resp.into_reader())
         .map_err(|e| format!("VIN decode JSON: {e}"))?;
     let row = body
@@ -152,24 +177,33 @@ fn decode_vin(vin: &str) -> Result<DecodedVin, String> {
 fn fetch_recalls(make: &str, model: &str, year: u16) -> Result<Vec<RecallItem>, String> {
     // NHTSA is picky about encoding; try a few make/model casings.
     let make_u = make.trim().to_ascii_uppercase();
-    let model_variants = [
-        model.trim().to_string(),
-        model.trim().to_ascii_uppercase(),
-        model
-            .trim()
+    let model_trim = model.trim();
+    let mut model_variants = vec![
+        model_trim.to_string(),
+        model_trim.to_ascii_uppercase(),
+        model_trim.to_ascii_lowercase(),
+        model_trim
             .split_whitespace()
             .map(|w| {
                 let mut c = w.chars();
                 match c.next() {
                     None => String::new(),
-                    Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+                    Some(f) => f.to_uppercase().collect::<String>() + c.as_str().to_ascii_lowercase().as_str(),
                 }
             })
             .collect::<Vec<_>>()
             .join(" "),
     ];
+    // First word only (e.g. "Forte GT" → "Forte")
+    if let Some(first) = model_trim.split_whitespace().next() {
+        model_variants.push(first.to_string());
+        model_variants.push(first.to_ascii_uppercase());
+    }
+    model_variants.sort();
+    model_variants.dedup();
 
     let mut last_err = String::new();
+    let mut saw_empty_ok = false;
     for model_try in &model_variants {
         if model_try.is_empty() {
             continue;
@@ -181,34 +215,57 @@ fn fetch_recalls(make: &str, model: &str, year: u16) -> Result<Vec<RecallItem>, 
             year
         );
         match fetch_recalls_url(&url) {
-            Ok(out) => return Ok(out),
+            Ok(out) if !out.is_empty() => return Ok(out),
+            Ok(_empty) => {
+                saw_empty_ok = true;
+            }
             Err(e) => last_err = e,
         }
     }
-    Err(if last_err.is_empty() {
-        "Need make, model, and year.".into()
-    } else {
-        last_err
-    })
+    // Empty list is success (no campaigns on file for this YMM).
+    if saw_empty_ok || last_err.is_empty() {
+        return Ok(Vec::new());
+    }
+    Err(last_err)
 }
 
 fn fetch_recalls_url(url: &str) -> Result<Vec<RecallItem>, String> {
-    // Use raw response so HTTP 400 with empty success JSON is not treated as a hard failure.
-    // NHTSA often returns status 400 + {"Count":0,"Message":"Results returned successfully","results":[]}
-    // when there are simply no campaigns for that YMM.
-    let resp = agent()
-        .get(url)
-        .call()
-        .or_else(|e| match e {
-            ureq::Error::Status(code, resp) if code == 400 || code == 404 => Ok(resp),
-            ureq::Error::Status(code, _) => {
-                Err(format!("Recalls network: {url}: status code {code}"))
+    // NHTSA often returns HTTP 400 + {"Count":0,"Message":"Results returned successfully","results":[]}
+    // when there are simply no campaigns for that year/make/model.
+    let resp = match agent().get(url).set("Accept", "application/json").call() {
+        Ok(r) => r,
+        Err(ureq::Error::Status(code, resp)) if (400..500).contains(&code) => resp,
+        Err(ureq::Error::Status(code, _)) => {
+            return Err(format!("Recalls network: status code {code}"));
+        }
+        Err(other) => {
+            let s = other.to_string();
+            if s.contains("timed out") || s.contains("Timeout") {
+                return Err("Recalls timed out — check internet and try again.".into());
             }
-            other => Err(format!("Recalls network: {other}")),
-        })?;
+            return Err(format!("Recalls network: {s}"));
+        }
+    };
 
-    let body: RecallsResponse = serde_json::from_reader(resp.into_reader())
-        .map_err(|e| format!("Recalls JSON: {e}"))?;
+    let mut body_bytes = Vec::new();
+    resp.into_reader()
+        .read_to_end(&mut body_bytes)
+        .map_err(|e| format!("Recalls read: {e}"))?;
+    // Empty or non-JSON on 4xx → treat as no campaigns
+    if body_bytes.is_empty() {
+        return Ok(Vec::new());
+    }
+    let body: RecallsResponse = match serde_json::from_slice(&body_bytes) {
+        Ok(b) => b,
+        Err(_) => {
+            // If message looks like success with no results, OK empty
+            let s = String::from_utf8_lossy(&body_bytes);
+            if s.contains("Results returned successfully") || s.contains("\"Count\":0") {
+                return Ok(Vec::new());
+            }
+            return Err(format!("Recalls JSON parse failed"));
+        }
+    };
 
     let mut out = Vec::new();
     for r in body.results.unwrap_or_default() {

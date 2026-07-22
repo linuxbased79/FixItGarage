@@ -844,7 +844,23 @@ pub fn pending_ocr_image_path() -> Option<String> {
 /// Capture a receipt photo into MediaStore (Android) and remember URI for OCR share.
 /// Returns a display path / URI string.
 pub fn capture_receipt_for_ocr() -> String {
-    set_ocr_target("receipt");
+    capture_photo_for_ocr("receipt")
+}
+
+/// Capture a vehicle title / VIN plate photo for on-device OCR field fill.
+pub fn capture_title_for_ocr() -> String {
+    capture_photo_for_ocr("title")
+}
+
+/// Shared camera capture for OCR flows (`receipt`, `title`, `tire`, …).
+/// On Android uses MediaStore EXTRA_OUTPUT so the photo is actually written.
+fn capture_photo_for_ocr(target: &str) -> String {
+    set_ocr_target(target);
+    // Drop any stale image so OCR waits for the new capture.
+    if let Some(dir) = ocr_files_dir() {
+        let _ = std::fs::remove_file(dir.join(OCR_IMAGE_FILE));
+        let _ = std::fs::remove_file(dir.join(OCR_URI_FILE));
+    }
     #[cfg(target_os = "android")]
     {
         match capture_for_ocr_android() {
@@ -855,7 +871,7 @@ pub fn capture_receipt_for_ocr() -> String {
                 return uri;
             }
             Err(e) => {
-                eprintln!("capture for OCR: {e}");
+                eprintln!("capture for OCR ({target}): {e}");
                 // Fall back to generic camera path
             }
         }
@@ -1082,12 +1098,32 @@ fn android_files_dir() -> Result<std::path::PathBuf, String> {
 }
 
 /// App-private data directory for `state.json` and other durable files.
-/// On Android this prefers `Context.getFilesDir()` (survives restarts).
-/// The resolved path is cached so load and save never diverge.
+/// On Android this **always prefers** `Context.getFilesDir()` when JNI works.
+/// Only caches a path that came from getFilesDir (never a bad hardcoded fallback forever).
 pub fn app_data_dir() -> std::path::PathBuf {
-    use std::sync::OnceLock;
-    static DIR: OnceLock<std::path::PathBuf> = OnceLock::new();
-    DIR.get_or_init(resolve_app_data_dir).clone()
+    use std::sync::Mutex;
+    static CACHED: Mutex<Option<std::path::PathBuf>> = Mutex::new(None);
+
+    // Re-probe JNI every time until we get a verified getFilesDir path.
+    #[cfg(target_os = "android")]
+    {
+        if let Ok(p) = android_files_dir() {
+            if probe_writable(&p) {
+                if let Ok(mut g) = CACHED.lock() {
+                    *g = Some(p.clone());
+                }
+                return p;
+            }
+        }
+        // Use previously good getFilesDir if JNI momentarily fails mid-session.
+        if let Ok(g) = CACHED.lock() {
+            if let Some(ref p) = *g {
+                return p.clone();
+            }
+        }
+    }
+
+    resolve_app_data_dir_uncached()
 }
 
 /// All places we might have written state (for migration / recovery).
@@ -1098,22 +1134,27 @@ pub fn app_data_dir_candidates() -> Vec<std::path::PathBuf> {
         if let Ok(p) = android_files_dir() {
             out.push(p);
         }
-        // Standard package private storage (works even if JNI probe fails).
-        out.push(std::path::PathBuf::from(
-            "/data/user/0/org.fixitgarage.app/files",
-        ));
-        out.push(std::path::PathBuf::from(
-            "/data/data/org.fixitgarage.app/files",
-        ));
-        // Legacy dirs crate / XDG-style (often wrong on Android, but may hold old data).
-        out.push(android_files_fallback_path());
+        // Discover live package files dir via /proc or env when possible.
         if let Ok(home) = std::env::var("HOME") {
             if !home.is_empty() {
                 out.push(std::path::PathBuf::from(&home).join("files"));
+            }
+        }
+        // Common install paths (user 0 and multi-user 10+). getFilesDir is preferred above.
+        for user in [0u32, 10, 11, 12] {
+            out.push(std::path::PathBuf::from(format!(
+                "/data/user/{user}/org.fixitgarage.app/files"
+            )));
+        }
+        out.push(std::path::PathBuf::from(
+            "/data/data/org.fixitgarage.app/files",
+        ));
+        out.push(android_files_fallback_path());
+        if let Ok(home) = std::env::var("HOME") {
+            if !home.is_empty() {
                 out.push(std::path::PathBuf::from(&home).join(".local/share/fixitgarage"));
             }
         }
-        // Dedup while preserving order
         let mut seen = std::collections::HashSet::new();
         out.retain(|p| seen.insert(p.clone()));
         out
@@ -1140,17 +1181,17 @@ fn probe_writable(dir: &std::path::Path) -> bool {
     }
 }
 
-fn resolve_app_data_dir() -> std::path::PathBuf {
+fn resolve_app_data_dir_uncached() -> std::path::PathBuf {
     for c in app_data_dir_candidates() {
         if probe_writable(&c) {
             eprintln!("FixItGarage: app data dir = {}", c.display());
             return c;
         }
     }
-    // Last resort — still try package files dir even if probe failed.
     #[cfg(target_os = "android")]
     {
-        let p = std::path::PathBuf::from("/data/user/0/org.fixitgarage.app/files");
+        // Last resort — still try package files dir even if probe failed.
+        let p = std::path::PathBuf::from("/data/data/org.fixitgarage.app/files");
         let _ = std::fs::create_dir_all(&p);
         eprintln!("FixItGarage: app data dir fallback = {}", p.display());
         return p;
@@ -1284,7 +1325,13 @@ fn capture_for_ocr_android() -> Result<String, String> {
 
     let stamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
     // MediaStore.Images.Media.DISPLAY_NAME / MIME_TYPE / RELATIVE_PATH
-    put_string(&mut env, &cv, "_display_name", &format!("fixitgarage_receipt_{stamp}.jpg"))?;
+    let target = ocr_target();
+    let name = if target == "title" {
+        format!("fixitgarage_title_{stamp}.jpg")
+    } else {
+        format!("fixitgarage_receipt_{stamp}.jpg")
+    };
+    put_string(&mut env, &cv, "_display_name", &name)?;
     put_string(&mut env, &cv, "mime_type", "image/jpeg")?;
     put_string(&mut env, &cv, "relative_path", "Pictures/FixItGarage")?;
 

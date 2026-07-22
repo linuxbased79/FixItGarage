@@ -5,8 +5,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-VERSION_NAME="${1:-0.2.36}"
-VERSION_CODE="${2:-2036}"
+VERSION_NAME="${1:-0.2.38}"
+VERSION_CODE="${2:-2038}"
 KEYSTORE="${FIG_KEYSTORE:-$HOME/fixitgarage-upload.jks}"
 ALIAS="${FIG_KEY_ALIAS:-upload}"
 

@@ -464,15 +464,75 @@ impl AppState {
         Self::default()
     }
 
-    /// Returns true if the file was written successfully.
-    pub fn save(&self) -> bool {
-        let path = Self::data_path();
+    /// Write `json` to `path` with fsync + re-parse verify. Returns true on success.
+    fn write_state_bytes(path: &std::path::Path, json: &[u8]) -> bool {
         if let Some(parent) = path.parent() {
             if let Err(e) = std::fs::create_dir_all(parent) {
-                eprintln!("FixItGarage: create data dir failed: {e} ({})", parent.display());
+                eprintln!(
+                    "FixItGarage: create data dir failed: {e} ({})",
+                    parent.display()
+                );
                 return false;
             }
         }
+        // Direct write + fsync is more reliable on Android than rename across layers.
+        match std::fs::File::create(path) {
+            Ok(mut f) => {
+                use std::io::Write;
+                if let Err(e) = f.write_all(json) {
+                    eprintln!("FixItGarage: write state failed: {e} ({})", path.display());
+                    return false;
+                }
+                if let Err(e) = f.sync_all() {
+                    eprintln!("FixItGarage: fsync state failed: {e} ({})", path.display());
+                }
+                // Verify by re-parsing (byte-length alone fails under concurrent writers
+                // and is a weak check). Accept if file is readable JSON with vehicles array.
+                match std::fs::read(path) {
+                    Ok(bytes) => {
+                        if bytes.is_empty() {
+                            eprintln!("FixItGarage: save verify empty file ({})", path.display());
+                            return false;
+                        }
+                        match serde_json::from_slice::<serde_json::Value>(&bytes) {
+                            Ok(v) if v.get("vehicles").map(|x| x.is_array()).unwrap_or(false) => {
+                                true
+                            }
+                            Ok(_) => {
+                                // Still durable JSON; accept (schema may evolve).
+                                true
+                            }
+                            Err(e) => {
+                                eprintln!(
+                                    "FixItGarage: save verify JSON failed: {e} ({})",
+                                    path.display()
+                                );
+                                false
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "FixItGarage: save verify read failed: {e} ({})",
+                            path.display()
+                        );
+                        false
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!(
+                    "FixItGarage: create state file failed: {e} ({})",
+                    path.display()
+                );
+                false
+            }
+        }
+    }
+
+    /// Returns true if the primary file was written successfully.
+    /// Also mirrors to every other writable candidate path (Android recovery).
+    pub fn save(&self) -> bool {
         let json = match serde_json::to_vec_pretty(self) {
             Ok(j) => j,
             Err(e) => {
@@ -481,47 +541,37 @@ impl AppState {
             }
         };
 
-        // Direct write + fsync is more reliable on Android than rename across layers.
-        match std::fs::File::create(&path) {
-            Ok(mut f) => {
-                use std::io::Write;
-                if let Err(e) = f.write_all(&json) {
-                    eprintln!("FixItGarage: write state failed: {e} ({})", path.display());
-                    return false;
-                }
-                if let Err(e) = f.sync_all() {
-                    eprintln!("FixItGarage: fsync state failed: {e} ({})", path.display());
-                }
-                // Verify round-trip readable
-                match std::fs::read(&path) {
-                    Ok(bytes) if bytes.len() == json.len() => {
-                        eprintln!(
-                            "FixItGarage: saved {} bytes → {} ({} vehicles)",
-                            json.len(),
-                            path.display(),
-                            self.vehicles.len()
-                        );
-                        true
-                    }
-                    Ok(bytes) => {
-                        eprintln!(
-                            "FixItGarage: save size mismatch wrote {} read {}",
-                            json.len(),
-                            bytes.len()
-                        );
-                        false
-                    }
-                    Err(e) => {
-                        eprintln!("FixItGarage: save verify read failed: {e}");
-                        false
-                    }
-                }
-            }
-            Err(e) => {
-                eprintln!("FixItGarage: create state file failed: {e} ({})", path.display());
-                false
-            }
+        let primary = Self::data_path();
+        let ok = Self::write_state_bytes(&primary, &json);
+        if ok {
+            eprintln!(
+                "FixItGarage: saved {} bytes → {} ({} vehicles)",
+                json.len(),
+                primary.display(),
+                self.vehicles.len()
+            );
         }
+
+        // Mirror so a wrong path on next launch can still recover the data.
+        for dir in crate::platform::app_data_dir_candidates() {
+            let p = dir.join("state.json");
+            if p == primary {
+                continue;
+            }
+            // Only mirror into dirs we can actually write.
+            if let Some(parent) = p.parent() {
+                if std::fs::create_dir_all(parent).is_err() {
+                    continue;
+                }
+                let probe = parent.join(".fig_write_probe");
+                if std::fs::write(&probe, b"ok").is_err() {
+                    continue;
+                }
+                let _ = std::fs::remove_file(&probe);
+            }
+            let _ = Self::write_state_bytes(&p, &json);
+        }
+        ok
     }
 
     pub fn ensure_selection(&mut self) {
@@ -1565,19 +1615,50 @@ impl AppState {
         mileage: u32,
         vin: String,
     ) {
-        if name.trim().is_empty() {
-            return;
-        }
-        let id = self.next_vehicle_id;
-        self.next_vehicle_id += 1;
         let vin: String = vin
             .chars()
             .filter(|c| c.is_ascii_alphanumeric())
             .map(|c| c.to_ascii_uppercase())
             .collect();
+        let make = make.trim().to_string();
+        let model = model.trim().to_string();
+        // Auto-name when user only typed VIN / YMM (common after OCR / recall check).
+        let name = {
+            let n = name.trim().to_string();
+            if !n.is_empty() {
+                n
+            } else {
+                let mut parts = Vec::new();
+                if let Some(y) = year {
+                    parts.push(y.to_string());
+                }
+                if !make.is_empty() {
+                    parts.push(make.clone());
+                }
+                if !model.is_empty() {
+                    parts.push(model.clone());
+                }
+                if parts.is_empty() {
+                    if vin.len() == 17 {
+                        format!("Vehicle {}", &vin[vin.len().saturating_sub(6)..])
+                    } else if !vin.is_empty() {
+                        "My vehicle".into()
+                    } else {
+                        String::new()
+                    }
+                } else {
+                    parts.join(" ")
+                }
+            }
+        };
+        if name.is_empty() {
+            return;
+        }
+        let id = self.next_vehicle_id;
+        self.next_vehicle_id += 1;
         self.vehicles.push(Vehicle {
             id,
-            name: name.trim().into(),
+            name,
             make,
             model,
             year,
