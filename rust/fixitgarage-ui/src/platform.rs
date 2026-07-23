@@ -1147,6 +1147,17 @@ pub fn android_external_files_dir() -> Result<std::path::PathBuf, String> {
     Ok(std::path::PathBuf::from(Into::<String>::into(s)))
 }
 
+/// Clear a pending Java exception so a failed find_class cannot abort the process
+/// on the next JNI call (common NativeActivity crash when StorageHelper is missing
+/// from the Play AAB dex).
+#[cfg(target_os = "android")]
+fn jni_clear_ex(env: &mut jni::JNIEnv) {
+    if env.exception_check().unwrap_or(false) {
+        let _ = env.exception_describe();
+        let _ = env.exception_clear();
+    }
+}
+
 #[cfg(target_os = "android")]
 fn android_storage_helper_path(method: &str) -> Result<std::path::PathBuf, String> {
     use jni::objects::{JObject, JValue};
@@ -1158,27 +1169,42 @@ fn android_storage_helper_path(method: &str) -> Result<std::path::PathBuf, Strin
         .attach_current_thread()
         .map_err(|e| format!("attach: {e}"))?;
     let context = unsafe { JObject::from_raw(ctx.context().cast()) };
-    let class = env
-        .find_class("org/fixitgarage/app/StorageHelper")
-        .map_err(|e| format!("StorageHelper class: {e}"))?;
-    let path_j = env
-        .call_static_method(
-            class,
-            method,
-            "(Landroid/content/Context;)Ljava/lang/String;",
-            &[JValue::Object(&context)],
-        )
-        .map_err(|e| format!("StorageHelper.{method}: {e}"))?
-        .l()
-        .map_err(|e| format!("path: {e}"))?;
+    let class = match env.find_class("org/fixitgarage/app/StorageHelper") {
+        Ok(c) => c,
+        Err(e) => {
+            jni_clear_ex(&mut env);
+            return Err(format!("StorageHelper class: {e}"));
+        }
+    };
+    let path_j = match env.call_static_method(
+        class,
+        method,
+        "(Landroid/content/Context;)Ljava/lang/String;",
+        &[JValue::Object(&context)],
+    ) {
+        Ok(v) => match v.l() {
+            Ok(o) => o,
+            Err(e) => {
+                jni_clear_ex(&mut env);
+                return Err(format!("path: {e}"));
+            }
+        },
+        Err(e) => {
+            jni_clear_ex(&mut env);
+            return Err(format!("StorageHelper.{method}: {e}"));
+        }
+    };
     if path_j.is_null() {
         return Err("null path".into());
     }
     let jstr: jni::objects::JString = path_j.into();
-    let s: String = env
-        .get_string(&jstr)
-        .map_err(|e| format!("get_string: {e}"))?
-        .into();
+    let s: String = match env.get_string(&jstr) {
+        Ok(s) => s.into(),
+        Err(e) => {
+            jni_clear_ex(&mut env);
+            return Err(format!("get_string: {e}"));
+        }
+    };
     Ok(std::path::PathBuf::from(s))
 }
 
@@ -1200,17 +1226,24 @@ pub fn android_prefs_save_state(json: &str, vehicle_count: u32, path: &str) -> b
     let class = match env.find_class("org/fixitgarage/app/StorageHelper") {
         Ok(c) => c,
         Err(e) => {
+            jni_clear_ex(&mut env);
             eprintln!("StorageHelper: {e}");
             return false;
         }
     };
     let j_json = match env.new_string(json) {
         Ok(s) => s,
-        Err(_) => return false,
+        Err(_) => {
+            jni_clear_ex(&mut env);
+            return false;
+        }
     };
     let j_path = match env.new_string(path) {
         Ok(s) => s,
-        Err(_) => return false,
+        Err(_) => {
+            jni_clear_ex(&mut env);
+            return false;
+        }
     };
     match env.call_static_method(
         class,
@@ -1225,6 +1258,7 @@ pub fn android_prefs_save_state(json: &str, vehicle_count: u32, path: &str) -> b
     ) {
         Ok(v) => v.z().unwrap_or(false),
         Err(e) => {
+            jni_clear_ex(&mut env);
             eprintln!("savePrefsBackup: {e}");
             false
         }
@@ -1244,22 +1278,42 @@ pub fn android_prefs_load_state() -> Option<String> {
     let vm = unsafe { JavaVM::from_raw(ctx.vm().cast()) }.ok()?;
     let mut env = vm.attach_current_thread().ok()?;
     let context = unsafe { JObject::from_raw(ctx.context().cast()) };
-    let class = env.find_class("org/fixitgarage/app/StorageHelper").ok()?;
-    let path_j = env
-        .call_static_method(
-            class,
-            "loadPrefsBackup",
-            "(Landroid/content/Context;)Ljava/lang/String;",
-            &[JValue::Object(&context)],
-        )
-        .ok()?
-        .l()
-        .ok()?;
+    let class = match env.find_class("org/fixitgarage/app/StorageHelper") {
+        Ok(c) => c,
+        Err(_) => {
+            jni_clear_ex(&mut env);
+            return None;
+        }
+    };
+    let path_j = match env.call_static_method(
+        class,
+        "loadPrefsBackup",
+        "(Landroid/content/Context;)Ljava/lang/String;",
+        &[JValue::Object(&context)],
+    ) {
+        Ok(v) => match v.l() {
+            Ok(o) => o,
+            Err(_) => {
+                jni_clear_ex(&mut env);
+                return None;
+            }
+        },
+        Err(_) => {
+            jni_clear_ex(&mut env);
+            return None;
+        }
+    };
     if path_j.is_null() {
         return None;
     }
     let jstr: jni::objects::JString = path_j.into();
-    let s: String = env.get_string(&jstr).ok()?.into();
+    let s: String = match env.get_string(&jstr) {
+        Ok(s) => s.into(),
+        Err(_) => {
+            jni_clear_ex(&mut env);
+            return None;
+        }
+    };
     if s.trim().is_empty() {
         None
     } else {
@@ -1288,15 +1342,24 @@ pub fn android_write_file_atomic(path: &str, data: &[u8]) -> bool {
     };
     let class = match env.find_class("org/fixitgarage/app/StorageHelper") {
         Ok(c) => c,
-        Err(_) => return false,
+        Err(_) => {
+            jni_clear_ex(&mut env);
+            return false;
+        }
     };
     let j_path = match env.new_string(path) {
         Ok(s) => s,
-        Err(_) => return false,
+        Err(_) => {
+            jni_clear_ex(&mut env);
+            return false;
+        }
     };
     let arr = match env.byte_array_from_slice(data) {
         Ok(a) => a,
-        Err(_) => return false,
+        Err(_) => {
+            jni_clear_ex(&mut env);
+            return false;
+        }
     };
     match env.call_static_method(
         class,
@@ -1306,6 +1369,7 @@ pub fn android_write_file_atomic(path: &str, data: &[u8]) -> bool {
     ) {
         Ok(v) => v.z().unwrap_or(false),
         Err(e) => {
+            jni_clear_ex(&mut env);
             eprintln!("writeFileAtomic: {e}");
             false
         }

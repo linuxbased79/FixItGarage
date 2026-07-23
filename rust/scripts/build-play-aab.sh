@@ -5,8 +5,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-VERSION_NAME="${1:-0.2.39}"
-VERSION_CODE="${2:-2039}"
+VERSION_NAME="${1:-0.2.40}"
+VERSION_CODE="${2:-2040}"
 KEYSTORE="${FIG_KEYSTORE:-$HOME/fixitgarage-upload.jks}"
 ALIAS="${FIG_KEY_ALIAS:-upload}"
 
@@ -112,6 +112,7 @@ echo "Native lib: $SO ($(du -h "$SO" | cut -f1))"
 
 echo "=== 2/3 Assemble Gradle project for bundle (AGP 8.5 / SDK 35) ==="
 GDIR="$ROOT/target/x/release/android/play-bundle"
+# Must remove root-owned leftovers or copy fails
 rm -rf "$GDIR"
 mkdir -p "$GDIR/app/src/main/jniLibs/arm64-v8a"
 cp -f "$SO" "$GDIR/app/src/main/jniLibs/arm64-v8a/libfixitgarage_ui.so"
@@ -136,7 +137,33 @@ if [[ ! -f "$GDIR/app/src/main/res/values/strings.xml" ]]; then
 STR
 fi
 
-# Manifest with brand launcher icons
+# CRITICAL: include Java bridges (StorageHelper / BootReceiver / ShareReceive).
+# 0.2.39 Play AAB only had empty R classes.dex → missing StorageHelper → JNI
+# ClassNotFound + uncleared exception → crash on open; no real code for save.
+JAVA_SRC="$ROOT/fixitgarage-ui/android/java"
+if [[ -d "$JAVA_SRC" ]]; then
+  mkdir -p "$GDIR/app/src/main/java"
+  cp -a "$JAVA_SRC/." "$GDIR/app/src/main/java/"
+  echo "Copied Java bridges from $JAVA_SRC"
+  find "$GDIR/app/src/main/java" -name '*.java' | sed 's/^/  /'
+else
+  echo "ERROR: missing $JAVA_SRC — AAB would crash without StorageHelper" >&2
+  exit 1
+fi
+
+# OCR models (same as package-apk-with-boot)
+MODELS_DIR="$ROOT/fixitgarage-ui/models"
+if [[ -f "$MODELS_DIR/text-detection.rten" && -f "$MODELS_DIR/text-recognition.rten" ]]; then
+  mkdir -p "$GDIR/app/src/main/assets/models"
+  cp -f "$MODELS_DIR/text-detection.rten" "$MODELS_DIR/text-recognition.rten" \
+    "$GDIR/app/src/main/assets/models/"
+  echo "Bundled OCR models into AAB assets"
+else
+  echo "WARNING: OCR models missing under $MODELS_DIR" >&2
+fi
+
+# Full manifest (NativeActivity + share + boot) — matches package-apk-with-boot
+# Use legacy PNG icons as primary for max OEM compatibility; adaptive still in res.
 cat > "$GDIR/app/src/main/AndroidManifest.xml" << 'MANI'
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -149,8 +176,8 @@ cat > "$GDIR/app/src/main/AndroidManifest.xml" << 'MANI'
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <application
         android:label="@string/app_name"
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:icon="@drawable/ic_launcher_legacy"
+        android:roundIcon="@drawable/ic_launcher_legacy"
         android:hasCode="true"
         android:allowBackup="false"
         android:extractNativeLibs="true">
@@ -167,6 +194,34 @@ cat > "$GDIR/app/src/main/AndroidManifest.xml" << 'MANI'
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name="org.fixitgarage.app.ShareReceiveActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity="">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+        </activity>
+        <receiver
+            android:name="org.fixitgarage.app.BootReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:directBootAware="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>
 MANI

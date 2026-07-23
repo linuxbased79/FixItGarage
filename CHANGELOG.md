@@ -1,10 +1,16 @@
 # Changelog
 
+## 0.2.40
+- **CRITICAL Play AAB crash fix:** 0.2.39 Play bundle shipped nearly empty `classes.dex` (R only) — missing `StorageHelper` / Java bridges → ClassNotFound + uncleared JNI exception → **crash on open**. AAB now includes StorageHelper, BootReceiver, ShareReceiveActivity, OCR models, full manifest
+- **JNI harden:** clear Java exceptions after failed StorageHelper lookups so missing class cannot kill NativeActivity
+- **Icons:** ensure launcher mipmaps are packaged in Play AAB (same res as sideload)
+
 ## 0.2.39
 - **Vehicle save (actual device fix):** Android `StorageHelper` — SharedPreferences nuclear backup + Java atomic file write; primary-fail tries all mirrors; load recovers from prefs; form **always** refilled from selected car; status shows path + vehicle count
 - **Title camera:** grant MediaStore URI write permission to **all** camera packages (OEM bug that left empty photos); clear URI after finalize
 - **Recalls:** log if UI event-loop marshal fails (silent drop fixed)
 - Lumo medium items: primary→mirror fallback, prefs backup
+- **REGRESSION (Play only):** AAB packaging omitted Java bridges → crash/open + icon issues on Play install
 
 ## 0.2.38
 - Form fill after save; multi-path mirror; NHTSA empty/400; MediaStore title OCR (still reported broken on device → 0.2.39)
