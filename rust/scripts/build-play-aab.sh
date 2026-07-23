@@ -298,6 +298,24 @@ echo "=== 3/3 bundleRelease + sign with upload key ==="
 RAW="$(find "$GDIR/app/build/outputs/bundle" -name '*.aab' | head -1)"
 [[ -n "$RAW" && -f "$RAW" ]] || { echo "No AAB produced" >&2; exit 1; }
 
+# Lumo gate: refuse to ship AAB without Java bridges (0.2.39 crash regression)
+VERIFY="$ROOT/scripts/verify-aab-parity.sh"
+if [[ -x "$VERIFY" ]] || [[ -f "$VERIFY" ]]; then
+  chmod +x "$VERIFY" || true
+  SIDELOAD_APK=""
+  if [[ -f "dist/FixItGarage-${VERSION_NAME}-arm64.apk" ]]; then
+    SIDELOAD_APK="dist/FixItGarage-${VERSION_NAME}-arm64.apk"
+  fi
+  echo "=== AAB parity gate (StorageHelper / Boot / Share / arm64 .so) ==="
+  if [[ -n "$SIDELOAD_APK" ]]; then
+    "$VERIFY" "$RAW" "$SIDELOAD_APK"
+  else
+    "$VERIFY" "$RAW"
+  fi
+else
+  echo "WARNING: verify-aab-parity.sh missing — skipping gate" >&2
+fi
+
 mkdir -p dist
 OUT="dist/FixItGarage-${VERSION_NAME}-play.aab"
 cp -f "$RAW" "$OUT"
