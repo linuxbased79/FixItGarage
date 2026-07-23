@@ -70,24 +70,43 @@ if [[ ! -f "$ANDROID_HOME/platforms/android-35/android.jar" ]]; then
 fi
 
 echo "=== 1/3 Build native library (xbuild APK) ==="
+# Drop a truncated/corrupt APK from a previous "failed to fill whole buffer" crash.
+APK_OUT="$ROOT/target/x/release/android/fixitgarage-ui.apk"
+rm -f "$APK_OUT"
+
+set +e
 x build -p fixitgarage-ui --platform android --arch arm64 --format apk --release
+X_RC=$?
+set -e
+if [[ $X_RC -ne 0 ]]; then
+  echo "WARNING: xbuild exited $X_RC (often APK zip: 'failed to fill whole buffer')." >&2
+  echo "Continuing if a release .so was produced by cargo…" >&2
+fi
 
 SO_CANDIDATES=(
+  # xbuild cargo output (primary — exists even when Create apk step fails)
+  "$ROOT/target/x/release/android/arm64/cargo/aarch64-linux-android/release/libfixitgarage_ui.so"
+  "$ROOT/target/x/release/android/arm64/cargo/aarch64-linux-android/release/deps/libfixitgarage_ui.so"
   "$ROOT/target/x/release/android/gradle/app/src/main/jniLibs/arm64-v8a/libfixitgarage_ui.so"
   "$ROOT/target/x/release/android/arm64/libfixitgarage_ui.so"
 )
 SO=""
 for c in "${SO_CANDIDATES[@]}"; do
-  if [[ -f "$c" ]]; then SO="$c"; break; fi
+  if [[ -f "$c" && -s "$c" ]]; then SO="$c"; break; fi
 done
 # Extract from APK if needed
 if [[ -z "$SO" ]]; then
-  APK="$ROOT/target/x/release/android/fixitgarage-ui.apk"
-  [[ -f "$APK" ]] || { echo "APK not found after xbuild" >&2; exit 1; }
-  TMP="$(mktemp -d)"
-  unzip -q -o "$APK" "lib/arm64-v8a/libfixitgarage_ui.so" -d "$TMP"
-  SO="$TMP/lib/arm64-v8a/libfixitgarage_ui.so"
-  [[ -f "$SO" ]] || { echo "Native .so not in APK" >&2; exit 1; }
+  APK="$APK_OUT"
+  if [[ -f "$APK" ]]; then
+    TMP="$(mktemp -d)"
+    if unzip -q -o "$APK" "lib/arm64-v8a/libfixitgarage_ui.so" -d "$TMP" 2>/dev/null; then
+      SO="$TMP/lib/arm64-v8a/libfixitgarage_ui.so"
+    fi
+  fi
+fi
+if [[ -z "$SO" || ! -f "$SO" ]]; then
+  echo "Native .so not found after xbuild. Re-run after: chown -R \"\$USER\" target/" >&2
+  exit 1
 fi
 echo "Native lib: $SO ($(du -h "$SO" | cut -f1))"
 
