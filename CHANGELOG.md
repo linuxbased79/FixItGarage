@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.41
+- Play Console release rebuild of the 0.2.40 crash/icon fix (new versionName/versionCode for store rollout)
+- Same packaging: Java bridges in AAB, StorageHelper, brand icon, OCR models, AAB parity gate
+
 ## 0.2.40
 - **CRITICAL Play AAB crash fix:** 0.2.39 Play bundle shipped nearly empty `classes.dex` (R only) — missing `StorageHelper` / Java bridges → ClassNotFound + uncleared JNI exception → **crash on open**. AAB now includes StorageHelper, BootReceiver, ShareReceiveActivity, OCR models, full manifest
 - **JNI harden:** clear Java exceptions after failed StorageHelper lookups so missing class cannot kill NativeActivity
