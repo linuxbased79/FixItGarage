@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.2.42
+- Play Console release rebuild (versionCode 2042) — same packaging fix as 0.2.40/0.2.41 for store rollout
+
 ## 0.2.41
 - Play Console release rebuild of the 0.2.40 crash/icon fix (new versionName/versionCode for store rollout)
 - Same packaging: Java bridges in AAB, StorageHelper, brand icon, OCR models, AAB parity gate
