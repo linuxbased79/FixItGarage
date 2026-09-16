@@ -4,7 +4,8 @@ android:
     package: org.fixitgarage.app
     sdk:
       min_sdk_version: 26
-      target_sdk_version: 35
+      # xbuild's bundled NDK sysroot check; the packaged APK still targets 35.
+      target_sdk_version: 33
     uses_permission:
       - name: android.permission.INTERNET
       - name: android.permission.CAMERA
