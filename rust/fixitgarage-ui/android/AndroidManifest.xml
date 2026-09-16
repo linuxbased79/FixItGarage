@@ -11,7 +11,6 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- MediaStore capture / share on API 28 and below; ignored/scoped on 29+ -->
@@ -23,12 +22,13 @@
         android:maxSdkVersion="32" />
 
     <application
-        android:label="FixItGarage"
+        android:label="Motor Noter"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:hasCode="true"
         android:debuggable="false"
         android:allowBackup="false"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:dataExtractionRules="@xml/data_extraction_rules">
 
         <activity
@@ -47,7 +47,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Share target: OCR apps / other apps → text or image into FixItGarage -->
+        <!-- Share target: OCR apps / other apps → text or image into Motor Noter -->
         <activity
             android:name="org.fixitgarage.app.ShareReceiveActivity"
             android:exported="true"
@@ -72,6 +72,15 @@
             </intent-filter>
             <!-- VIEW/BROWSABLE removed: share via SEND only (narrower attack surface). -->
         </activity>
+
+        <!-- Internal SAF picker for JSON restore (not exported). -->
+        <activity
+            android:name="org.fixitgarage.app.RestorePickActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity="" />
 
         <!-- Re-register AlarmManager date reminders after reboot / update -->
         <receiver

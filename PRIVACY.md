@@ -1,10 +1,10 @@
-# Privacy Policy — FixItGarage
+# Privacy Policy — Motor Noter
 
-**Last updated:** 2026-07-17  
+**Last updated:** 2026-09-15  
 **App ID:** `org.fixitgarage.app`  
 **Contact:** [GitHub Issues](https://github.com/linuxbased79/FixItGarage/issues)
 
-FixItGarage is **local-first** open-source software (GPL-3.0). Core features work without an account and without Google Play Services (including on GrapheneOS).
+Motor Noter (package `org.fixitgarage.app`) is **local-first** open-source software (GPL-3.0). Core features work without an account and without Google Play Services (including on GrapheneOS).
 
 ## Data stored on your device
 
@@ -15,7 +15,7 @@ FixItGarage is **local-first** open-source software (GPL-3.0). Core features wor
 - Optional WebDAV credentials you enter for backup (stored only on this device; **not** included in shared JSON backups)  
 - Local alarm schedule for date reminders (`fig_alarms.json`)
 
-Data is stored in the app’s private storage on your phone. Android Auto Backup of app data is **disabled**. We do **not** operate a FixItGarage cloud account or analytics backend.
+Data is stored in the app’s private storage on your phone. Android Auto Backup of app data is **disabled**. We do **not** operate a Motor Noter cloud account or analytics backend.
 
 ## Network activity
 
@@ -27,7 +27,7 @@ Network use is **optional and user-initiated**:
 | Donate | Opens the project donate page (linuxbased79.github.io/FixItGarage/donate.html) |
 | Share backup / CSV | System share sheet — destination app you choose (Proton Drive, Drive, Dropbox, OneDrive, etc.) |
 | WebDAV / Nextcloud / ownCloud upload | Only when you configure an **https://** URL and tap upload (HTTP cleartext blocked) |
-| On-device OCR model fallback download | Only if models are missing from the install and you run OCR (models are normally bundled offline) |
+| On-device OCR model fallback download | Only if bundled models are missing; downloads are HTTPS, no redirects, SHA-256 pinned |
 | NHTSA recall check | VIN/make/model/year sent to public US NHTSA APIs (user-initiated) |
 | Open OCR helper / F-Droid / market links | Opens external apps or sites you choose |
 
@@ -35,7 +35,7 @@ We do **not** sell personal data. We do **not** include advertising or third-par
 
 ## Camera & notifications
 
-- **Camera** is optional (issue photos, receipt OCR, tread assist). Photos stay on device unless you share them.  
+- **Camera** is optional (issue photos, receipt OCR, title/VIN, tread assist). Captures are copied into app-private storage; the temporary public MediaStore row is deleted. Photos leave the device only if you share them.  
 - **Notifications / exact alarms / boot completed** are used only for **local** maintenance reminders (re-registered after reboot). No remote push service.
 
 ## On-device OCR & computer vision

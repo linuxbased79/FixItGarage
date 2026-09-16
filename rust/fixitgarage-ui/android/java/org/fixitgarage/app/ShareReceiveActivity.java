@@ -48,8 +48,7 @@ public class ShareReceiveActivity extends Activity {
             return;
         }
         boolean isSend = Intent.ACTION_SEND.equals(action)
-                || Intent.ACTION_SEND_MULTIPLE.equals(action)
-                || Intent.ACTION_VIEW.equals(action);
+                || Intent.ACTION_SEND_MULTIPLE.equals(action);
         if (!isSend) {
             return;
         }
@@ -57,8 +56,12 @@ public class ShareReceiveActivity extends Activity {
         String type = intent.getType();
         String text = intent.getStringExtra(Intent.EXTRA_TEXT);
         if (text != null && !text.trim().isEmpty()) {
-            writeText(text.trim());
-            Log.i(TAG, "Saved shared text (" + text.length() + " chars)");
+            String clipped = text.trim();
+            if (clipped.length() > 256 * 1024) {
+                clipped = clipped.substring(0, 256 * 1024);
+            }
+            writeText(clipped);
+            Log.i(TAG, "Saved shared text (" + clipped.length() + " chars)");
         }
 
         Uri stream = null;
@@ -79,7 +82,7 @@ public class ShareReceiveActivity extends Activity {
             // Prefer copying images; skip if we already have text-only share of a non-image
             if (type == null || type.startsWith("image/") || text == null || text.isEmpty()) {
                 if (copyUriToImageFile(stream)) {
-                    Log.i(TAG, "Saved shared image from " + stream);
+                    Log.i(TAG, "Saved shared image");
                 }
             }
         }
@@ -114,7 +117,7 @@ public class ShareReceiveActivity extends Activity {
             fos.flush();
             return total > 0;
         } catch (Exception e) {
-            Log.e(TAG, "copy image failed: " + uri, e);
+            Log.e(TAG, "copy image failed", e);
             return false;
         }
     }

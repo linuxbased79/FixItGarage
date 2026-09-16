@@ -1,4 +1,4 @@
-// FixItGarage — touch-friendly mobile UI (Slint)
+// Motor Noter — touch-friendly mobile UI (Slint)
 // GPL-3.0. Multi-vehicle, trackers, reminders, notes, mode filtering.
 
 import { Button, LineEdit, ScrollView, VerticalBox, HorizontalBox } from "std-widgets.slint";
@@ -181,7 +181,7 @@ component VehicleBar inherits HorizontalBox {
 }
 
 export component MainWindow inherits Window {
-    title: "FixItGarage";
+    title: "Motor Noter";
     preferred-width: 390px; preferred-height: 780px; min-width: 320px; min-height: 560px;
     background: Theme.bg;
     // Empty = system/default UI font; "OpenDyslexic" when accessibility option is on
@@ -381,7 +381,7 @@ export component MainWindow inherits Window {
     in-out property <string> nav-costs: "Costs";
     in-out property <string> nav-more: "More";
     in-out property <string> nav-settings: "Settings";
-    in-out property <string> tr-app-title: "FixItGarage";
+    in-out property <string> tr-app-title: "Motor Noter";
     in-out property <string> tr-settings-title: "⚙ Settings";
     in-out property <string> tr-settings-intro: "App preferences.";
     in-out property <string> tr-settings-appearance: "Appearance";
@@ -529,7 +529,7 @@ export component MainWindow inherits Window {
     in-out property <string> tr-rem-add: "Add reminder";
     in-out property <string> tr-rem-add-body: "Date YYYY-MM-DD and/or odometer. On Android, date dues schedule a wake alarm so the app can notify when due.";
     in-out property <string> tr-rem-due-date: "Due date YYYY-MM-DD";
-    in-out property <string> tr-rem-reboot-hint: "Date-based alarms are saved on this device. After a phone restart, FixItGarage re-registers them automatically.";
+    in-out property <string> tr-rem-reboot-hint: "Date-based alarms are saved on this device. After a phone restart, Motor Noter re-registers them automatically.";
     in-out property <string> tr-rem-save: "Save reminder";
     in-out property <string> tr-rem-title: "Reminders";
     in-out property <string> tr-rem-mark-done: "Mark done";
@@ -599,12 +599,12 @@ export component MainWindow inherits Window {
     in-out property <string> tr-photos-photo-prefix: "Photo:";
     // Receipt extras still English
     in-out property <string> tr-receipt-fields-body: "Saves into maintenance history for this vehicle.";
-    in-out property <string> tr-receipt-no-photo: "No photo yet — capture or Share an image to FixItGarage.";
+    in-out property <string> tr-receipt-no-photo: "No photo yet — capture or Share an image to Motor Noter.";
     in-out property <string> tr-receipt-open-ocr: "Open OCR app";
     in-out property <string> tr-receipt-quick-camera: "Quick camera";
     in-out property <string> tr-receipt-fuel-suffix: "(fuel)";
     in-out property <string> tr-receipt-shop-ph: "Shop name";
-    in-out property <string> tr-settings-about-body: "FixItGarage — security hardening: backups, HTTPS WebDAV, no Auto Backup.";
+    in-out property <string> tr-settings-about-body: "Motor Noter — security hardening: backups, HTTPS WebDAV, no Auto Backup.";
     in-out property <string> tr-settings-accessibility: "Accessibility · reading";
     in-out property <string> tr-settings-accessibility-body: "";
     in-out property <string> tr-settings-backup-path-ph: "Backup file path to restore";
@@ -618,13 +618,13 @@ export component MainWindow inherits Window {
     in-out property <string> tr-settings-onedrive: "OneDrive";
     in-out property <string> tr-settings-password-ph: "App password (blank = keep existing)";
     in-out property <string> tr-settings-proton: "★ Proton Drive (recommended)";
-    in-out property <string> tr-settings-restore: "Restore from path";
+    in-out property <string> tr-settings-restore: "Restore backup";
     in-out property <string> tr-settings-save-webdav: "Save WebDAV settings";
     in-out property <string> tr-settings-share-backup: "Share backup (any app)";
     in-out property <string> tr-settings-share-csv: "Share CSV";
     in-out property <string> tr-settings-upload-webdav: "Upload backup via WebDAV";
     in-out property <string> tr-settings-username: "Username";
-    in-out property <string> tr-settings-webdav-hint: "HTTPS only. Example: https://cloud.example/remote.php/dav/files/USER/FixItGarage/ — password stays on this device, never in shared backups, never re-shown after save. Leave password blank to keep the existing one.";
+    in-out property <string> tr-settings-webdav-hint: "HTTPS only. Example: https://cloud.example/remote.php/dav/files/USER/MotorNoter/ — password stays on this device, never in shared backups, never re-shown after save. Leave password blank to keep the existing one.";
     in-out property <string> tr-settings-webdav-url-ph: "WebDAV folder URL (https://…)";
     in-out property <string> tr-tires-after-preview: "After rotation (preview)";
     in-out property <string> tr-tires-apply-rotation: "Apply rotation";
@@ -680,7 +680,7 @@ export component MainWindow inherits Window {
     in-out property <string> tr-wizard-shop: "Mostly shop";
     in-out property <string> tr-wizard-shop-body: "Shop history, costs, service focus.";
     in-out property <string> tr-wizard-units-note: "Units (can change later in Settings)";
-    in-out property <string> tr-wizard-welcome: "Welcome to FixItGarage";
+    in-out property <string> tr-wizard-welcome: "Welcome to Motor Noter";
     // Oil level choice labels (swap with unit system)
     in-out property <string> oil-opt-0: "Full";
     in-out property <string> oil-opt-1: "½ quart low";
@@ -741,7 +741,7 @@ export component MainWindow inherits Window {
     callback capture-receipt-for-ocr();
     /// ACTION_SEND image to Text Fairy / Lens / chooser.
     callback send-receipt-to-ocr();
-    /// Consume shared OCR text (Share → FixItGarage) and auto-fill.
+    /// Consume shared OCR text (Share → Motor Noter) and auto-fill.
     callback apply-pending-ocr();
     /// Pure-Rust on-device OCR (ocrs) — no GMS.
     callback ocr-receipt-on-device();

@@ -10,6 +10,8 @@ const DET_NAME: &str = "text-detection.rten";
 const REC_NAME: &str = "text-recognition.rten";
 const DET_URL: &str = "https://ocrs-models.s3-accelerate.amazonaws.com/text-detection.rten";
 const REC_URL: &str = "https://ocrs-models.s3-accelerate.amazonaws.com/text-recognition.rten";
+const DET_SHA256: &str = "f15cfb56bd02c4bf478a20343986504a1f01e1665c2b3a0ad66340f054b1b5ca";
+const REC_SHA256: &str = "e484866d4cce403175bd8d00b128feb08ab42e208de30e42cd9889d8f1735a6e";
 
 static ENGINE: Mutex<Option<OcrEngine>> = Mutex::new(None);
 
@@ -33,12 +35,12 @@ pub fn ensure_models() -> Result<PathBuf, String> {
     std::fs::create_dir_all(&dir).map_err(|e| format!("models dir: {e}"))?;
     let det = dir.join(DET_NAME);
     let rec = dir.join(REC_NAME);
-    if det.is_file() && rec.is_file() && file_ok(&det, 100_000) && file_ok(&rec, 100_000) {
+    if hash_ok(&det, DET_SHA256) && hash_ok(&rec, REC_SHA256) {
         return Ok(dir);
     }
     // Prefer bundled copy next to source / release assets
     try_copy_bundled(&dir)?;
-    if det.is_file() && rec.is_file() {
+    if hash_ok(&det, DET_SHA256) && hash_ok(&rec, REC_SHA256) {
         return Ok(dir);
     }
     // Last resort: download once (Graphene/stock with network)
@@ -47,10 +49,21 @@ pub fn ensure_models() -> Result<PathBuf, String> {
     Ok(dir)
 }
 
-fn file_ok(path: &Path, min: u64) -> bool {
-    std::fs::metadata(path)
-        .map(|m| m.len() >= min)
-        .unwrap_or(false)
+fn sha256_hex(data: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    h.update(data);
+    format!("{:x}", h.finalize())
+}
+
+fn hash_ok(path: &Path, expected: &str) -> bool {
+    let Ok(bytes) = std::fs::read(path) else {
+        return false;
+    };
+    if bytes.len() < 100_000 {
+        return false;
+    }
+    sha256_hex(&bytes) == expected
 }
 
 fn try_copy_bundled(dest_dir: &Path) -> Result<(), String> {
@@ -74,7 +87,7 @@ fn try_copy_bundled(dest_dir: &Path) -> Result<(), String> {
             if srec != drec {
                 let _ = std::fs::copy(&srec, &drec);
             }
-            if file_ok(&ddet, 100_000) && file_ok(&drec, 100_000) {
+            if hash_ok(&ddet, DET_SHA256) && hash_ok(&drec, REC_SHA256) {
                 return Ok(());
             }
         }
@@ -98,12 +111,25 @@ fn try_copy_bundled(dest_dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
+fn expected_hash(dest: &Path) -> &'static str {
+    if dest.file_name().and_then(|n| n.to_str()) == Some(DET_NAME) {
+        DET_SHA256
+    } else {
+        REC_SHA256
+    }
+}
+
 fn download_model(url: &str, dest: &Path) -> Result<(), String> {
-    if file_ok(dest, 100_000) {
+    let expected = expected_hash(dest);
+    if hash_ok(dest, expected) {
         return Ok(());
     }
-    let resp = ureq::get(url)
+    let agent = ureq::AgentBuilder::new()
+        .redirects(0)
         .timeout(std::time::Duration::from_secs(120))
+        .build();
+    let resp = agent
+        .get(url)
         .call()
         .map_err(|e| format!("download {url}: {e}"))?;
     let mut reader = resp.into_reader();
@@ -111,6 +137,13 @@ fn download_model(url: &str, dest: &Path) -> Result<(), String> {
     std::io::Read::read_to_end(&mut reader, &mut buf).map_err(|e| format!("read model: {e}"))?;
     if buf.len() < 100_000 {
         return Err(format!("model too small ({} bytes) from {url}", buf.len()));
+    }
+    let got = sha256_hex(&buf);
+    if got != expected {
+        return Err(format!(
+            "OCR model hash mismatch for {} (got {got}, expected {expected})",
+            dest.display()
+        ));
     }
     if let Some(parent) = dest.parent() {
         let _ = std::fs::create_dir_all(parent);

@@ -1542,9 +1542,35 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
         let state = state.clone();
         ui.on_restore_json(move || {
             if let Some(ui) = ui_weak.upgrade() {
-                let path = ui.get_backup_path().to_string();
+                let typed = ui.get_backup_path().to_string();
+                let pending = crate::platform::pending_restore_path();
+                let path = if !typed.trim().is_empty() {
+                    typed
+                } else if let Some(p) = pending {
+                    p.display().to_string()
+                } else {
+                    #[cfg(target_os = "android")]
+                    {
+                        crate::platform::android_pick_backup();
+                        ui.set_status_message(
+                            "Pick a Motor Noter backup JSON, then tap Restore again.".into(),
+                        );
+                        return;
+                    }
+                    #[cfg(not(target_os = "android"))]
+                    {
+                        ui.set_status_message(
+                            "Enter the path to a Motor Noter backup JSON.".into(),
+                        );
+                        return;
+                    }
+                };
                 match AppState::restore_from_file(&path) {
                     Ok(new_state) => {
+                        if let Some(p) = crate::platform::pending_restore_path() {
+                            let _ = std::fs::remove_file(p);
+                        }
+                        new_state.save();
                         *state.lock().unwrap() = new_state;
                         ui.set_status_message("Backup restored.".into());
                         refresh_ui(&ui, &state.lock().unwrap());
@@ -1565,7 +1591,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
             match s.write_backup_file() {
                 Ok(path) => {
                     if let Ok(json) = std::fs::read_to_string(&path) {
-                        share_text("FixItGarage backup", &json);
+                        share_text("Motor Noter backup", &json);
                     }
                     if let Some(ui) = ui_weak.upgrade() {
                         ui.set_backup_path(path.display().to_string().into());
@@ -1590,7 +1616,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
             match s.write_backup_file() {
                 Ok(path) => {
                     let json = std::fs::read_to_string(&path).unwrap_or_default();
-                    let subject = "FixItGarage backup";
+                    let subject = "Motor Noter backup";
                     let (pkg, label) = match target.as_str() {
                         "proton" => (PKG_PROTON_DRIVE, "Proton Drive"),
                         "gdrive" => (PKG_GOOGLE_DRIVE, "Google Drive"),
@@ -2003,7 +2029,7 @@ pub fn run_app() -> Result<(), slint::PlatformError> {
                             let name = path
                                 .file_name()
                                 .and_then(|n| n.to_str())
-                                .unwrap_or("fixitgarage-backup.json");
+                                .unwrap_or("motor-noter-backup.json");
                             match webdav::upload_backup(
                                 &s.cloud_webdav_url,
                                 &s.cloud_username,

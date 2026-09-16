@@ -132,7 +132,7 @@ if [[ ! -f "$GDIR/app/src/main/res/values/strings.xml" ]]; then
   cat > "$GDIR/app/src/main/res/values/strings.xml" << 'STR'
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">FixItGarage</string>
+    <string name="app_name">Motor Noter</string>
 </resources>
 STR
 fi
@@ -171,7 +171,6 @@ cat > "$GDIR/app/src/main/AndroidManifest.xml" << 'MANI'
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <application
@@ -180,6 +179,7 @@ cat > "$GDIR/app/src/main/AndroidManifest.xml" << 'MANI'
         android:roundIcon="@drawable/ic_launcher_legacy"
         android:hasCode="true"
         android:allowBackup="false"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:extractNativeLibs="true">
         <activity
             android:name="android.app.NativeActivity"
@@ -211,7 +211,19 @@ cat > "$GDIR/app/src/main/AndroidManifest.xml" << 'MANI'
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
         </activity>
+        <activity
+            android:name="org.fixitgarage.app.RestorePickActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity="" />
         <receiver
             android:name="org.fixitgarage.app.BootReceiver"
             android:enabled="true"

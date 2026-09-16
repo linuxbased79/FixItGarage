@@ -1,0 +1,6 @@
+0.2.43 — Motor Noter
+• App name is now Motor Noter (same package)
+• Security: WebDAV password stays in private files only; backups omit cloud fields
+• Camera shots copied private then removed from the gallery
+• OCR models hash-pinned; HTTPS with no redirects
+• Restore via file picker, size cap, and backup check

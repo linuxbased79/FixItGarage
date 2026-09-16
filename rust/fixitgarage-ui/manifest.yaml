@@ -1,19 +1,18 @@
-# xbuild packaging config for FixItGarage (Slint / NativeActivity)
+# xbuild packaging config for Motor Noter (Slint / NativeActivity)
 android:
   manifest:
     package: org.fixitgarage.app
     sdk:
       min_sdk_version: 26
-      target_sdk_version: 33
+      target_sdk_version: 35
     uses_permission:
       - name: android.permission.INTERNET
       - name: android.permission.CAMERA
       - name: android.permission.POST_NOTIFICATIONS
       - name: android.permission.SCHEDULE_EXACT_ALARM
-      - name: android.permission.USE_EXACT_ALARM
       - name: android.permission.RECEIVE_BOOT_COMPLETED
       - name: android.permission.WAKE_LOCK
     application:
-      label: FixItGarage
+      label: Motor Noter
       # true once package-apk-with-boot.sh injects BootReceiver classes.dex
       has_code: true

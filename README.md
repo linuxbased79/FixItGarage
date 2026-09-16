@@ -1,16 +1,16 @@
-# FixItGarage
+# Motor Noter
 
 **Open-source vehicle maintenance tracker for Android**
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-FixItGarage helps you track **unlimited vehicles**, service history (DIY + shop), tires and rotations, filters/oil part numbers, brakes, battery, wipers, costs, reminders, photos, and notes — local-first, with optional cloud backup via share sheet or WebDAV.
+**Motor Noter** (package `org.fixitgarage.app`) helps you keep notes on **unlimited vehicles**: service history (DIY + shop), tires and rotations, filters/oil part numbers, brakes, battery, wipers, costs, reminders, photos — local-first, with optional cloud backup via share sheet or WebDAV.
 
 Planned distribution: **F-Droid** and **Google Play**. Designed for **GrapheneOS** (no Google Play Services required for core features).
 
 ## Status
 
-**0.2.33** — primary product is the **Rust + Slint** APK (`org.fixitgarage.app`).
+**0.2.43** — primary product is the **Rust + Slint** APK (`org.fixitgarage.app`), display name **Motor Noter**.
 
 | Area | Status |
 |------|--------|

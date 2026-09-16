@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "FixItGarage mobile/desktop UI in Rust (Slint) — GrapheneOS & F-Droid oriented"
+description = "Motor Noter mobile/desktop UI in Rust (Slint) — GrapheneOS & F-Droid oriented"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -34,6 +34,7 @@ dirs = "6"
 regex = "1"
 # Blocking HTTP for WebDAV/Nextcloud backup (TLS via rustls, no OpenSSL)
 ureq = { version = "2", default-features = false, features = ["tls"] }
+sha2 = "0.10"
 # On-device OCR (pure Rust, no GMS) + image/tread CV
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 imageproc = "0.25"
@@ -60,7 +61,7 @@ min_sdk_version = 26
 target_sdk_version = 35
 
 [package.metadata.android.application]
-label = "FixItGarage"
+label = "Motor Noter"
 theme = "@android:style/Theme.DeviceDefault.NoActionBar"
 
 [[package.metadata.android.uses_permission]]
@@ -76,5 +77,8 @@ name = "android.permission.POST_NOTIFICATIONS"
 name = "android.permission.SCHEDULE_EXACT_ALARM"
 
 [[package.metadata.android.uses_permission]]
-name = "android.permission.USE_EXACT_ALARM"
+name = "android.permission.RECEIVE_BOOT_COMPLETED"
+
+[[package.metadata.android.uses_permission]]
+name = "android.permission.WAKE_LOCK"
 

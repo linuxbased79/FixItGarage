@@ -86,12 +86,31 @@ public final class StorageHelper {
         }
     }
 
+    /** True if path is inside the app-private files directory (canonical). */
+    public static boolean isUnderFilesDir(Context ctx, String path) {
+        if (ctx == null || path == null || path.isEmpty()) {
+            return false;
+        }
+        try {
+            File files = ctx.getFilesDir().getCanonicalFile();
+            File target = new File(path).getCanonicalFile();
+            String root = files.getPath();
+            String want = target.getPath();
+            return want.equals(root) || want.startsWith(root + File.separator);
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     /**
      * Atomic write: data → path.tmp → fsync → rename to path.
-     * Returns true only if the final file exists and size matches.
+     * Refuses paths outside {@link Context#getFilesDir()}.
      */
-    public static boolean writeFileAtomic(String path, byte[] data) {
-        if (path == null || data == null) {
+    public static boolean writeFileAtomic(Context ctx, String path, byte[] data) {
+        if (ctx == null || path == null || data == null) {
+            return false;
+        }
+        if (!isUnderFilesDir(ctx, path)) {
             return false;
         }
         File out = new File(path);
@@ -143,10 +162,35 @@ public final class StorageHelper {
         }
     }
 
-    public static boolean writeFileAtomicUtf8(String path, String text) {
+    public static boolean writeFileAtomicUtf8(Context ctx, String path, String text) {
         if (text == null) {
             return false;
         }
-        return writeFileAtomic(path, text.getBytes(StandardCharsets.UTF_8));
+        return writeFileAtomic(ctx, path, text.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * After copying a camera capture into app-private storage: delete the
+     * public MediaStore row and revoke grants so VIN/title photos do not stay
+     * in the gallery.
+     */
+    public static void revokeAndDeleteUri(Context ctx, String uriStr) {
+        if (ctx == null || uriStr == null || uriStr.isEmpty()) {
+            return;
+        }
+        try {
+            android.net.Uri uri = android.net.Uri.parse(uriStr);
+            try {
+                ctx.getContentResolver().delete(uri, null, null);
+            } catch (Throwable ignored) {
+            }
+            int flags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    | android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+            try {
+                ctx.revokeUriPermission(uri, flags);
+            } catch (Throwable ignored) {
+            }
+        } catch (Throwable ignored) {
+        }
     }
 }

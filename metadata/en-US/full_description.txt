@@ -1,4 +1,4 @@
-FixItGarage is a free (GPL-3.0) local-first vehicle maintenance tracker designed for privacy and GrapheneOS.
+Motor Noter is a free (GPL-3.0) local-first notes app for vehicles you own, designed for privacy and GrapheneOS.
 
 Track unlimited vehicles. Setup wizard for DIY, shop, or both. Log shop and DIY services (quick templates, notes), fuel economy (MPG or L/100km), oil level checks every 3 months, tires (rotation diagrams, optional spare, purchases, tread depth), filters and oil part numbers with smart reminders, brakes, battery, wipers, costs, notes, and issue photos.
 

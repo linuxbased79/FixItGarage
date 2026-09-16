@@ -1,4 +1,4 @@
-# F-Droid metadata for FixItGarage (Rust / Slint primary binary)
+# F-Droid metadata for Motor Noter (Rust / Slint primary binary)
 # Copy into an fdroiddata repo as metadata/org.fixitgarage.app.yml
 # Docs: https://f-droid.org/docs/Build_Metadata_Reference/
 
@@ -13,7 +13,7 @@ AuthorName: linuxbased79
 SourceCode: https://github.com/linuxbased79/FixItGarage
 IssueTracker: https://github.com/linuxbased79/FixItGarage/issues
 
-AutoName: FixItGarage
+AutoName: Motor Noter
 
 RepoType: git
 Repo: https://github.com/linuxbased79/FixItGarage.git

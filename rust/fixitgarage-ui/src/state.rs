@@ -91,6 +91,9 @@ pub struct AppState {
     /// **Never** included in shared JSON backups (`write_backup_file` clears it).
     #[serde(default)]
     pub cloud_password: String,
+    /// Marker written into shared backup files. Empty in live on-device state.
+    #[serde(default)]
+    pub backup_app: String,
     /// Throttle system notifications (ms since epoch). Re-notify after 12 hours.
     #[serde(default)]
     pub last_notified_epoch_ms: i64,
@@ -389,6 +392,7 @@ impl Default for AppState {
             cloud_webdav_url: String::new(),
             cloud_username: String::new(),
             cloud_password: String::new(),
+            backup_app: String::new(),
             last_notified_epoch_ms: 0,
         }
     }
@@ -563,36 +567,50 @@ impl AppState {
         }
     }
 
+    /// JSON with WebDAV password removed (mirrors, prefs, shared backups).
+    fn serialize_without_secrets(&self) -> Result<Vec<u8>, String> {
+        let mut export = self.clone();
+        export.cloud_password.clear();
+        serde_json::to_vec_pretty(&export).map_err(|e| e.to_string())
+    }
+
     /// Returns true if at least one durable location accepted the write.
-    /// Writes: primary path, all mirrors, Android SharedPreferences backup.
+    /// Primary `getFilesDir()` keeps the WebDAV password; mirrors and prefs do not.
     pub fn save(&self) -> bool {
         let json = match serde_json::to_vec_pretty(self) {
             Ok(j) => j,
             Err(e) => {
-                eprintln!("FixItGarage: serialize state failed: {e}");
+                eprintln!("Motor Noter: serialize state failed: {e}");
                 return false;
             }
         };
-        let json_str = String::from_utf8_lossy(&json);
+        let stripped = match self.serialize_without_secrets() {
+            Ok(j) => j,
+            Err(e) => {
+                eprintln!("Motor Noter: serialize stripped state failed: {e}");
+                return false;
+            }
+        };
+        let stripped_str = String::from_utf8_lossy(&stripped);
 
         let primary = Self::data_path();
         let mut any_ok = Self::write_state_bytes(&primary, &json);
         if any_ok {
             eprintln!(
-                "FixItGarage: saved {} bytes → {} ({} vehicles)",
+                "Motor Noter: saved {} bytes → {} ({} vehicles)",
                 json.len(),
                 primary.display(),
                 self.vehicles.len()
             );
         } else {
             eprintln!(
-                "FixItGarage: PRIMARY save FAILED at {} — trying mirrors",
+                "Motor Noter: PRIMARY save FAILED at {} — trying mirrors",
                 primary.display()
             );
         }
 
         // Mirror so a wrong path on next launch can still recover the data.
-        // If primary failed, first successful mirror becomes the recovery source.
+        // Mirrors never include the WebDAV password (USB/MTP-visible on some devices).
         for dir in crate::platform::app_data_dir_candidates() {
             let p = dir.join("state.json");
             if p == primary {
@@ -608,10 +626,10 @@ impl AppState {
                 }
                 let _ = std::fs::remove_file(&probe);
             }
-            if Self::write_state_bytes(&p, &json) {
+            if Self::write_state_bytes(&p, &stripped) {
                 any_ok = true;
                 eprintln!(
-                    "FixItGarage: mirror OK → {} ({} vehicles)",
+                    "Motor Noter: mirror OK → {} ({} vehicles)",
                     p.display(),
                     self.vehicles.len()
                 );
@@ -620,14 +638,14 @@ impl AppState {
 
         // SharedPreferences nuclear backup (Android only; no-op elsewhere).
         let prefs_ok = crate::platform::android_prefs_save_state(
-            &json_str,
+            &stripped_str,
             self.vehicles.len() as u32,
             &primary.display().to_string(),
         );
         if prefs_ok {
             any_ok = true;
             eprintln!(
-                "FixItGarage: SharedPreferences backup OK ({} vehicles)",
+                "Motor Noter: SharedPreferences backup OK ({} vehicles)",
                 self.vehicles.len()
             );
         }
@@ -1321,11 +1339,18 @@ impl AppState {
     pub fn set_cloud_settings(&mut self, url: String, user: String, pass: String) -> Result<(), String> {
         let url = url.trim().to_string();
         if !url.is_empty() {
+            if url.chars().any(|c| c.is_control()) {
+                return Err("WebDAV URL contains invalid characters.".into());
+            }
             let lower = url.to_ascii_lowercase();
             if !lower.starts_with("https://") {
                 return Err(
                     "WebDAV URL must start with https:// (cleartext HTTP is blocked).".into(),
                 );
+            }
+            let host = lower.trim_start_matches("https://").split('/').next().unwrap_or("");
+            if host.contains('@') {
+                return Err("WebDAV URL must not include credentials in the URL.".into());
             }
         }
         self.cloud_webdav_url = url;
@@ -1630,7 +1655,7 @@ impl AppState {
     }
 
     /// Write app state JSON backup for share/export.
-    /// **Security:** WebDAV password is always stripped from the file.
+    /// **Security:** all WebDAV fields are stripped; `backup_app` marks the file.
     pub fn write_backup_file(&self) -> Result<PathBuf, String> {
         let dir = Self::data_path()
             .parent()
@@ -1638,24 +1663,59 @@ impl AppState {
             .unwrap_or_else(|| PathBuf::from("."));
         let _ = std::fs::create_dir_all(&dir);
         let stamp = Utc::now().format("%Y%m%d-%H%M%S");
-        let path = dir.join(format!("fixitgarage-backup-{stamp}.json"));
+        let path = dir.join(format!("motor-noter-backup-{stamp}.json"));
         let mut export = self.clone();
         export.cloud_password.clear();
+        export.cloud_webdav_url.clear();
+        export.cloud_username.clear();
+        export.backup_app = "org.fixitgarage.app".into();
         let json = serde_json::to_vec_pretty(&export).map_err(|e| e.to_string())?;
         std::fs::write(&path, json).map_err(|e| e.to_string())?;
         Ok(path)
     }
 
+    pub const RESTORE_MAX_BYTES: u64 = 2 * 1024 * 1024;
+
     /// Restore state from a backup JSON file path.
-    /// **Security:** any password present in the file is discarded (re-enter WebDAV password).
+    /// Rejects oversized / non-garage files. Ignores all `cloud_*` from the file.
     pub fn restore_from_file(path: &str) -> Result<Self, String> {
-        let bytes = std::fs::read(path.trim()).map_err(|e| format!("read: {e}"))?;
-        let mut state: AppState =
+        let path = path.trim();
+        if path.is_empty() {
+            return Err("No backup path.".into());
+        }
+        let meta = std::fs::metadata(path).map_err(|e| format!("read: {e}"))?;
+        if meta.len() > Self::RESTORE_MAX_BYTES {
+            return Err("Backup file is too large (2 MB max).".into());
+        }
+        let bytes = std::fs::read(path).map_err(|e| format!("read: {e}"))?;
+        if bytes.len() as u64 > Self::RESTORE_MAX_BYTES {
+            return Err("Backup file is too large (2 MB max).".into());
+        }
+        let value: serde_json::Value =
             serde_json::from_slice(&bytes).map_err(|e| format!("parse: {e}"))?;
+        let obj = value
+            .as_object()
+            .ok_or_else(|| "Not a Motor Noter backup (expected a JSON object).".to_string())?;
+        if !obj.get("vehicles").map(|v| v.is_array()).unwrap_or(false) {
+            return Err("Not a Motor Noter backup (missing vehicles list).".into());
+        }
+        if let Some(app) = obj.get("backup_app").and_then(|v| v.as_str()) {
+            if !app.is_empty()
+                && app != "org.fixitgarage.app"
+                && !app.eq_ignore_ascii_case("motor-noter")
+                && !app.eq_ignore_ascii_case("fixitgarage")
+            {
+                return Err("This file is not a Motor Noter backup.".into());
+            }
+        }
+        let mut state: AppState =
+            serde_json::from_value(value).map_err(|e| format!("parse: {e}"))?;
         state.cloud_password.clear();
+        state.cloud_webdav_url.clear();
+        state.cloud_username.clear();
+        state.backup_app.clear();
         state.ensure_selection();
         state.ensure_oil_reminders();
-        state.save();
         Ok(state)
     }
 
@@ -2684,9 +2744,48 @@ mod tests {
         let path = s.write_backup_file().expect("backup");
         let raw = std::fs::read_to_string(&path).expect("read");
         assert!(!raw.contains("super-secret"), "password leaked into backup");
-        assert!(raw.contains("cloud.example") || raw.contains("https://"));
+        assert!(!raw.contains("cloud.example"), "WebDAV URL leaked into backup");
+        assert!(raw.contains("org.fixitgarage.app"), "backup_app marker missing");
         // In-memory password still present for local upload
         assert_eq!(s.cloud_password, "super-secret");
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn restore_rejects_non_backup_json() {
+        let dir = std::env::temp_dir();
+        let path = dir.join("motor-noter-restore-test.json");
+        std::fs::write(&path, br#"{"hello":"world"}"#).unwrap();
+        let err = AppState::restore_from_file(path.to_str().unwrap()).unwrap_err();
+        assert!(err.to_ascii_lowercase().contains("vehicles"), "{err}");
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn restore_strips_cloud_and_accepts_legacy() {
+        let mut s = AppState::default();
+        s.vehicles.push(fixitgarage_core::models::Vehicle {
+            id: 1,
+            name: "Daily".into(),
+            make: String::new(),
+            model: String::new(),
+            year: None,
+            current_mileage: 1000,
+            vin: String::new(),
+        });
+        s.next_vehicle_id = 2;
+        s.selected_vehicle_id = Some(1);
+        s.cloud_webdav_url = "https://evil.example/dav/".into();
+        s.cloud_username = "u".into();
+        s.cloud_password = "secret".into();
+        let json = serde_json::to_vec_pretty(&s).unwrap();
+        let path = std::env::temp_dir().join("motor-noter-restore-legacy.json");
+        std::fs::write(&path, json).unwrap();
+        let restored = AppState::restore_from_file(path.to_str().unwrap()).unwrap();
+        assert_eq!(restored.vehicles.len(), 1);
+        assert!(restored.cloud_password.is_empty());
+        assert!(restored.cloud_webdav_url.is_empty());
+        assert!(restored.cloud_username.is_empty());
         let _ = std::fs::remove_file(path);
     }
 
@@ -2695,6 +2794,9 @@ mod tests {
         let mut s = AppState::default();
         assert!(s
             .set_cloud_settings("http://insecure.example/".into(), "u".into(), "p".into())
+            .is_err());
+        assert!(s
+            .set_cloud_settings("https://user:pass@secure.example/dav/".into(), "u".into(), "p".into())
             .is_err());
         s.set_cloud_settings("https://secure.example/dav/".into(), "u".into(), "p1".into())
             .unwrap();

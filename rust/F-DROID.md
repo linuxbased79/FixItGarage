@@ -38,7 +38,7 @@ cp target/x/release/android/fixitgarage-ui.apk dist/FixItGarage-VER-arm64-raw.ap
 ## AntiFeatures
 - `NonFreeNet` only if the user enables optional WebDAV upload to a third-party host (opt-in).
 - Camera permission for optional issue/receipt/tread assist photos.
-- `SCHEDULE_EXACT_ALARM` / `USE_EXACT_ALARM` for local date-based reminder wakes.
+- `SCHEDULE_EXACT_ALARM` for local date-based reminder wakes.
 - `RECEIVE_BOOT_COMPLETED` so BootReceiver can re-register **local** date alarms after reboot (no network).
 - OCR helper may open an external browser/Lens URL; core receipt parse is on-device from pasted text.
 

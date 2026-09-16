@@ -25,15 +25,45 @@ pub fn upload_backup(
     if password.is_empty() {
         return Err("Password is empty — save WebDAV password in Settings first".into());
     }
+    if base.chars().any(|c| c.is_control()) {
+        return Err("WebDAV URL contains invalid characters".into());
+    }
+    let lower = base.to_ascii_lowercase();
+    let host = lower
+        .trim_start_matches("https://")
+        .split('/')
+        .next()
+        .unwrap_or("");
+    if host.contains('@') {
+        return Err("WebDAV URL must not include credentials in the URL".into());
+    }
+    let filename = filename
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+    if filename.is_empty() {
+        return Err("Backup filename is empty".into());
+    }
     let url = format!("{base}/{filename}");
-    // Basic auth over TLS only (checked above)
+    // Basic auth over TLS only (checked above). Do not follow redirects —
+    // a 302 to http:// or another host would leak Authorization.
     let token = base64_encode(&format!("{}:{}", username.trim(), password));
     let auth = format!("Basic {token}");
 
-    let resp = ureq::put(&url)
+    let agent = ureq::AgentBuilder::new()
+        .redirects(0)
+        .timeout(std::time::Duration::from_secs(60))
+        .build();
+    let resp = agent
+        .put(&url)
         .set("Content-Type", "application/json")
         .set("Authorization", &auth)
-        .timeout(std::time::Duration::from_secs(60))
         .send_bytes(body)
         .map_err(|e| format!("upload: {e}"))?;
 

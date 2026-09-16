@@ -1340,6 +1340,7 @@ pub fn android_write_file_atomic(path: &str, data: &[u8]) -> bool {
         Ok(e) => e,
         Err(_) => return false,
     };
+    let context = unsafe { JObject::from_raw(ctx.context().cast()) };
     let class = match env.find_class("org/fixitgarage/app/StorageHelper") {
         Ok(c) => c,
         Err(_) => {
@@ -1347,6 +1348,12 @@ pub fn android_write_file_atomic(path: &str, data: &[u8]) -> bool {
             return false;
         }
     };
+    if let Ok(files) = android_files_dir() {
+        let want = std::path::Path::new(path);
+        if !want.starts_with(&files) {
+            return false;
+        }
+    }
     let j_path = match env.new_string(path) {
         Ok(s) => s,
         Err(_) => {
@@ -1364,8 +1371,12 @@ pub fn android_write_file_atomic(path: &str, data: &[u8]) -> bool {
     match env.call_static_method(
         class,
         "writeFileAtomic",
-        "(Ljava/lang/String;[B)Z",
-        &[JValue::Object(&j_path), JValue::Object(&arr)],
+        "(Landroid/content/Context;Ljava/lang/String;[B)Z",
+        &[
+            JValue::Object(&context),
+            JValue::Object(&j_path),
+            JValue::Object(&arr),
+        ],
     ) {
         Ok(v) => v.z().unwrap_or(false),
         Err(e) => {
@@ -1619,13 +1630,13 @@ fn capture_for_ocr_android() -> Result<String, String> {
     // MediaStore.Images.Media.DISPLAY_NAME / MIME_TYPE / RELATIVE_PATH
     let target = ocr_target();
     let name = if target == "title" {
-        format!("fixitgarage_title_{stamp}.jpg")
+        format!("motor_noter_title_{stamp}.jpg")
     } else {
-        format!("fixitgarage_receipt_{stamp}.jpg")
+        format!("motor_noter_receipt_{stamp}.jpg")
     };
     put_string(&mut env, &cv, "_display_name", &name)?;
     put_string(&mut env, &cv, "mime_type", "image/jpeg")?;
-    put_string(&mut env, &cv, "relative_path", "Pictures/FixItGarage")?;
+    // Temporary MediaStore row for OEM camera EXTRA_OUTPUT; deleted after copy.
 
     // MediaStore.Images.Media.EXTERNAL_CONTENT_URI
     let media_class = env
@@ -1891,11 +1902,94 @@ fn finalize_pending_camera_uri() -> Result<Option<String>, String> {
     }
     copy_content_uri_to_file_android(&uri, &out.display().to_string())?;
     if out.is_file() {
+        revoke_and_delete_uri_android(&uri);
         // Clear stale URI so next capture is not reused.
         let _ = std::fs::remove_file(&uri_file);
         Ok(Some(out.display().to_string()))
     } else {
         Ok(None)
+    }
+}
+
+#[cfg(target_os = "android")]
+fn revoke_and_delete_uri_android(uri: &str) {
+    use jni::objects::{JObject, JValue};
+    use jni::JavaVM;
+    let ctx = ndk_context::android_context();
+    let Ok(vm) = (unsafe { JavaVM::from_raw(ctx.vm().cast()) }) else {
+        return;
+    };
+    let Ok(mut env) = vm.attach_current_thread() else {
+        return;
+    };
+    let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+    let Ok(class) = env.find_class("org/fixitgarage/app/StorageHelper") else {
+        jni_clear_ex(&mut env);
+        return;
+    };
+    let Ok(j_uri) = env.new_string(uri) else {
+        return;
+    };
+    let _ = env.call_static_method(
+        class,
+        "revokeAndDeleteUri",
+        "(Landroid/content/Context;Ljava/lang/String;)V",
+        &[JValue::Object(&context), JValue::Object(&j_uri)],
+    );
+}
+
+/// Launch the SAF picker. The chosen JSON is copied to `fig_restore.json`.
+#[cfg(target_os = "android")]
+pub fn android_pick_backup() {
+    use jni::objects::{JObject, JValue};
+    use jni::JavaVM;
+    let ctx = ndk_context::android_context();
+    let Ok(vm) = (unsafe { JavaVM::from_raw(ctx.vm().cast()) }) else {
+        return;
+    };
+    let Ok(mut env) = vm.attach_current_thread() else {
+        return;
+    };
+    let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+    let Ok(intent_class) = env.find_class("android/content/Intent") else {
+        jni_clear_ex(&mut env);
+        return;
+    };
+    let Ok(act) = env.find_class("org/fixitgarage/app/RestorePickActivity") else {
+        jni_clear_ex(&mut env);
+        return;
+    };
+    let Ok(intent) = env.new_object(
+        &intent_class,
+        "(Landroid/content/Context;Ljava/lang/Class;)V",
+        &[JValue::Object(&context), JValue::Object(act.as_ref())],
+    ) else {
+        jni_clear_ex(&mut env);
+        return;
+    };
+    let _ = env.call_method(
+        &intent,
+        "addFlags",
+        "(I)Landroid/content/Intent;",
+        &[JValue::Int(0x1000_0000)], // NEW_TASK
+    );
+    let _ = env.call_method(
+        &context,
+        "startActivity",
+        "(Landroid/content/Intent;)V",
+        &[JValue::Object(&intent)],
+    );
+}
+
+#[cfg(not(target_os = "android"))]
+pub fn android_pick_backup() {}
+
+pub fn pending_restore_path() -> Option<std::path::PathBuf> {
+    let p = app_data_dir().join("fig_restore.json");
+    if p.is_file() {
+        Some(p)
+    } else {
+        None
     }
 }
 
@@ -2032,7 +2126,7 @@ fn publish_file_to_mediastore_android(path: &str) -> Result<String, String> {
     for (k, v) in [
         ("_display_name", name.as_str()),
         ("mime_type", "image/jpeg"),
-        ("relative_path", "Pictures/FixItGarage"),
+        ("relative_path", "Pictures/MotorNoter"),
     ] {
         let kj = env.new_string(k).map_err(|e| format!("k: {e}"))?;
         let vj = env.new_string(v).map_err(|e| format!("v: {e}"))?;

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.43
+- **Rename:** display and store name is **Motor Noter** (package id stays `org.fixitgarage.app`)
+- **Security:** strip WebDAV password from SharedPreferences and external state mirrors; shared JSON backups omit all cloud fields
+- **Security:** WebDAV and OCR downloads do not follow HTTP redirects; OCR models SHA-256 pinned
+- **Security:** camera captures are copied into app-private storage then the public MediaStore row is deleted and URI grants revoked
+- **Security:** `writeFileAtomic` refuses paths outside `getFilesDir()`; restore has a 2 MB cap, vehicles-list check, and SAF picker
+- **Security:** share target no longer handles `ACTION_VIEW`; shared text capped at 256 KiB
+- Drop `USE_EXACT_ALARM` (keep `SCHEDULE_EXACT_ALARM`); cleartext blocked via network security config
+
 ## 0.2.42
 - Play Console release rebuild (versionCode 2042) — same packaging fix as 0.2.40/0.2.41 for store rollout
 

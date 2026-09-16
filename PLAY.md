@@ -1,4 +1,4 @@
-# Google Play — submit FixItGarage
+# Google Play — submit Motor Noter
 
 Primary binary: **Rust / Slint** APK `org.fixitgarage.app` (not the legacy Kotlin `app/` shell).
 
@@ -9,8 +9,8 @@ Primary binary: **Rust / Slint** APK `org.fixitgarage.app` (not the legacy Kotli
 | Application ID | `org.fixitgarage.app` |
 | License | GPL-3.0-only |
 | Min SDK | 26 |
-| Target SDK | 34 |
-| Version (this release) | **0.2.20** (versionCode **2020**) |
+| Target SDK | 35 |
+| Version (this release) | **0.2.43** (versionCode **2043**) |
 | Privacy policy URL | https://raw.githubusercontent.com/linuxbased79/FixItGarage/main/PRIVACY.md |
 | Support | https://github.com/linuxbased79/FixItGarage/issues |
 
@@ -41,7 +41,7 @@ Debug-signed builds (default) are for testing only. Set `FIG_KEYSTORE*` for Play
 
 ## 3. Play Console checklist
 
-1. Create app → **App name:** FixItGarage  
+1. Create app → **App name:** Motor Noter  
 2. **App category:** Auto & Vehicles (or Tools)  
 3. **Free** app; declare GPL-3.0 in Store listing / About  
 4. **Privacy policy** URL (above)  

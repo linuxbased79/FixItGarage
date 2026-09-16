@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">FixItGarage</string>
+    <string name="app_name">Motor Noter</string>
     <string name="nav_home">Home</string>
     <string name="nav_vehicles">Vehicles</string>
     <string name="nav_maintenance">Maintenance</string>
@@ -19,5 +19,5 @@
     <string name="export_csv">Export data (CSV)</string>
     <string name="github_issues_url">https://github.com/linuxbased79/FixItGarage/issues</string>
     <string name="donate_url">https://github.com/linuxbased79/FixItGarage#donate</string>
-    <string name="privacy_note">FixItGarage stores data on your device by default. Cloud backup is optional.</string>
+    <string name="privacy_note">Motor Noter stores data on your device by default. Cloud backup is optional.</string>
 </resources>

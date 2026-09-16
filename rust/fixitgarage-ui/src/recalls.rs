@@ -114,7 +114,7 @@ fn agent() -> ureq::Agent {
     ureq::AgentBuilder::new()
         .timeout_connect(Duration::from_secs(15))
         .timeout_read(Duration::from_secs(30))
-        .user_agent("FixItGarage/0.2.38 (Android; NHTSA recall check)")
+        .user_agent("MotorNoter/0.2.43 (Android; NHTSA recall check; org.fixitgarage.app)")
         .build()
 }
 
